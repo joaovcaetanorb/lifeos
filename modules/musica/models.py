@@ -130,6 +130,27 @@ def atualizar_album(album_id: int, nome: str, ano_lancamento: int | None, genero
         conn.close()
 
 
+def buscar_album_por_nome(nome: str, artista_id: int) -> dict | None:
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT * FROM albuns WHERE nome = ? COLLATE NOCASE AND artista_id = ?",
+            (nome, artista_id),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def obter_ou_criar_album(nome: str, artista_id: int, ano_lancamento: int | None, genero: str = "") -> int:
+    """Reaproveita o álbum se já existir pra esse artista (evita duplicar
+    catálogo se o usuário reenviar o formulário sem trocar a seleção)."""
+    existente = buscar_album_por_nome(nome, artista_id)
+    if existente:
+        return int(existente["id"])
+    return inserir_album(nome, artista_id, ano_lancamento, genero)
+
+
 def excluir_album(album_id: int) -> None:
     conn = get_connection()
     try:

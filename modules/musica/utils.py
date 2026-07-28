@@ -7,6 +7,7 @@ calculations.py. Aqui só formatação e constantes de domínio.
 NOTA_MINIMA = 0.5
 NOTA_MAXIMA = 5.0
 NOTA_PASSO = 0.5
+OPCOES_NOTA = [round(NOTA_MINIMA + i * NOTA_PASSO, 1) for i in range(int((NOTA_MAXIMA - NOTA_MINIMA) / NOTA_PASSO) + 1)]
 
 # Tema visual "ledger/terminal": mesmo esquema de cores dos outros módulos
 # do LifeOS, pra manter identidade visual consistente.
