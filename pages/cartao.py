@@ -39,7 +39,7 @@ def _grid_style(fig):
 
 
 def _secao_metricas_e_alerta(hoje: date) -> None:
-    mes_ref = utils.mes_referencia(hoje)
+    mes_ref = calc.mes_referencia_atual(hoje)
     config = models.get_config()
 
     fatura_atual = calc.fatura_do_mes(mes_ref)

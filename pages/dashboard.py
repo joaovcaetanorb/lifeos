@@ -83,7 +83,7 @@ def _secao_dia_pagamento(hoje: date) -> None:
         )
 
     st.markdown("**Vale alimentação**")
-    va = calc.saldo_vale_alimentacao(utils.mes_referencia(hoje))
+    va = calc.saldo_vale_alimentacao(calc.mes_referencia_atual(hoje))
     va1, va2, va3 = st.columns(3)
     va1.metric("VA do mês", utils.formatar_moeda(va["total"]))
     va2.metric("Já gasto com VA", utils.formatar_moeda(va["gasto"]))
@@ -104,7 +104,7 @@ def _secao_dia_pagamento(hoje: date) -> None:
 
 
 def _secao_metricas_gerais(hoje: date) -> None:
-    mes_ref = utils.mes_referencia(hoje)
+    mes_ref = calc.mes_referencia_atual(hoje)
     config = models.get_config()
     fatura_atual = calc.fatura_do_mes(mes_ref)
     comprometido = calc.total_comprometido_cartao(hoje)
@@ -215,78 +215,6 @@ def _grafico_tendencia_diaria(hoje: date) -> None:
     st.plotly_chart(_grid_style(fig), use_container_width=True)
 
 
-def _grafico_dia_semana(hoje: date) -> None:
-    st.markdown("**Gastos por dia da semana (últimos 6 meses)**")
-    ui.explicacao(
-        "Soma tudo que você gastou em cada dia da semana nos últimos 6 meses. "
-        "Ajuda a enxergar padrão, tipo 'gasto mais no fim de semana' ou 'sexta é o dia perigoso'."
-    )
-    df = calc.gasto_por_dia_semana(180, hoje)
-    if df.empty:
-        st.caption("Sem dados suficientes ainda.")
-        return
-
-    fig = px.bar(df, x="dia_semana", y="valor", text=df["valor"].map(utils.formatar_moeda))
-    fig.update_traces(marker_color=utils.COR_REALIZADO, textposition="outside", cliponaxis=False)
-    fig.update_layout(xaxis_title=None, yaxis_title=None)
-    st.plotly_chart(_grid_style(fig), use_container_width=True)
-
-
-def _grafico_parte_mes(hoje: date) -> None:
-    st.markdown("**Gastos por parte do mês (últimos 6 meses)**")
-    ui.explicacao(
-        "Agrupa os gastos pelo dia do mês em que aconteceram: início (dias 1-10), meio "
-        "(11-20) ou fim (21-31). Ajuda a ver se você começa gastando forte logo depois do "
-        "pagamento ou se o aperto vem mais perto do fim do mês."
-    )
-    df = calc.gasto_por_parte_mes(180, hoje)
-    if df.empty:
-        st.caption("Sem dados suficientes ainda.")
-        return
-
-    fig = px.bar(df, x="parte", y="valor", text=df["valor"].map(utils.formatar_moeda))
-    fig.update_traces(marker_color=utils.COR_REALIZADO, textposition="outside", cliponaxis=False)
-    fig.update_layout(xaxis_title=None, yaxis_title=None)
-    st.plotly_chart(_grid_style(fig), use_container_width=True)
-
-
-def _grafico_hora_dia(hoje: date) -> None:
-    st.markdown("**Gastos por hora do dia (últimos 6 meses)**")
-    ui.explicacao(
-        "Baseado na hora que você informar (campo opcional) ao lançar cada gasto. "
-        "Só começa a aparecer conforme você for preenchendo a hora nos próximos lançamentos "
-        "— gastos antigos, lançados antes desse campo existir, não entram na conta."
-    )
-    df = calc.gasto_por_hora(180, hoje)
-    if df.empty:
-        st.caption("Sem dados suficientes ainda — informe a hora ao lançar um gasto em Gastos.")
-        return
-
-    fig = px.bar(df, x="hora", y="valor")
-    fig.update_traces(marker_color=utils.COR_REALIZADO)
-    fig.update_layout(xaxis_title=None, yaxis_title=None)
-    st.plotly_chart(_grid_style(fig), use_container_width=True)
-
-
-def _treemap_categorias(hoje: date) -> None:
-    st.markdown("**Treemap de categorias (últimos 6 meses)**")
-    df = calc.gastos_periodo(180, hoje)
-    if df.empty:
-        st.caption("Sem dados suficientes ainda.")
-        return
-
-    agrupado = df.groupby("categoria", as_index=False)["valor"].sum()
-    fig = px.treemap(
-        agrupado, path=["categoria"], values="valor",
-        color="categoria", color_discrete_map=utils.CATEGORIA_CORES,
-    )
-    fig.update_traces(texttemplate="%{label}<br>%{value:,.2f}")
-    fig.update_layout(margin=dict(l=10, r=10, t=40, b=10), height=340,
-                       paper_bgcolor="rgba(0,0,0,0)",
-                       font=dict(family="JetBrains Mono, monospace", color=utils.COR_TEXTO_MUTED))
-    st.plotly_chart(fig, use_container_width=True)
-
-
 def _sunburst_categoria_forma(hoje: date) -> None:
     st.markdown("**Categoria x forma de pagamento (últimos 6 meses)**")
     df = calc.gastos_periodo(180, hoje)
@@ -308,12 +236,9 @@ def _sunburst_categoria_forma(hoje: date) -> None:
 def _secao_analises_avancadas(hoje: date) -> None:
     ui.eyebrow("análises")
     st.subheader("Análises avançadas")
-    _grafico_tendencia_diaria(hoje)
-    _grafico_dia_semana(hoje)
-    _grafico_parte_mes(hoje)
-    _grafico_hora_dia(hoje)
-    _treemap_categorias(hoje)
-    _sunburst_categoria_forma(hoje)
+    with st.expander("ver gráficos"):
+        _grafico_tendencia_diaria(hoje)
+        _sunburst_categoria_forma(hoje)
 
 
 def _secao_insights(hoje: date) -> None:
@@ -334,7 +259,7 @@ def _secao_relatorio(hoje: date) -> None:
         "bom pra guardar ou olhar depois de fechar o mês."
     )
 
-    opcoes = [utils.mes_referencia(utils.somar_meses(hoje.replace(day=1), -i)) for i in range(6)]
+    opcoes = [calc.mes_referencia_atual(utils.somar_meses(hoje, -i)) for i in range(6)]
     rotulos = {m: utils.nome_mes(m) for m in opcoes}
     mes_relatorio = st.selectbox(
         "Mês do relatório", opcoes, format_func=lambda m: rotulos[m], key="mes_relatorio_pdf",
@@ -440,7 +365,7 @@ def _secao_configuracoes() -> None:
 
 def render() -> None:
     hoje = date.today()
-    mes_ref = utils.mes_referencia(hoje)
+    mes_ref = calc.mes_referencia_atual(hoje)
 
     ui.titulo_pagina("dashboard")
 

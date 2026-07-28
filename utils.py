@@ -70,17 +70,22 @@ def formatar_moeda(valor: float) -> str:
     return f"R$ {texto}"
 
 
-def mes_referencia(data_: date | None = None) -> str:
-    """Retorna a referência do mês no formato 'AAAA-MM'."""
+def mes_referencia(data_: date | None = None, dia_util_pagamento: int = 5) -> str:
+    """Rótulo 'AAAA-MM' do ciclo financeiro (pagamento-a-pagamento) ao qual a
+    data pertence — nomeado pelo mês em que o ciclo COMEÇA (dia do pagamento),
+    não pelo mês civil da data em si."""
     data_ = data_ or date.today()
-    return data_.strftime("%Y-%m")
+    inicio_ciclo = pagamento_anterior(data_, dia_util_pagamento)
+    return inicio_ciclo.strftime("%Y-%m")
 
 
-def intervalo_mes(mes_referencia: str) -> tuple[str, str]:
-    """'2026-07' -> ('2026-07-01', '2026-07-31'), respeitando o nº de dias do mês."""
+def intervalo_mes(mes_referencia: str, dia_util_pagamento: int = 5) -> tuple[str, str]:
+    """'2026-08' -> (data do pagamento de agosto, véspera do pagamento de setembro)."""
     ano, mes = map(int, mes_referencia.split("-"))
-    ultimo_dia = calendar.monthrange(ano, mes)[1]
-    return f"{mes_referencia}-01", f"{mes_referencia}-{ultimo_dia:02d}"
+    inicio = n_esimo_dia_util(ano, mes, dia_util_pagamento)
+    ano_fim, mes_fim = (ano, mes + 1) if mes < 12 else (ano + 1, 1)
+    fim = n_esimo_dia_util(ano_fim, mes_fim, dia_util_pagamento) - timedelta(days=1)
+    return inicio.isoformat(), fim.isoformat()
 
 
 def nome_mes(mes_referencia_str: str) -> str:

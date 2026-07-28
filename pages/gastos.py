@@ -4,6 +4,7 @@ from datetime import date, datetime
 
 import streamlit as st
 
+import calculations as calc
 import database
 import models
 import ui
@@ -49,13 +50,14 @@ def _formulario_novo_gasto() -> None:
 
 
 def _selecionar_mes(hoje: date) -> str:
-    opcoes = [utils.mes_referencia(utils.somar_meses(hoje.replace(day=1), -i)) for i in range(6)]
+    opcoes = [calc.mes_referencia_atual(utils.somar_meses(hoje, -i)) for i in range(6)]
     rotulos = {m: utils.nome_mes(m) for m in opcoes}
     return st.selectbox("Mês", opcoes, format_func=lambda m: rotulos[m])
 
 
 def _tabela_e_exclusao(mes_ref: str) -> None:
-    gastos = models.listar_gastos(data_inicio=f"{mes_ref}-01", data_fim=f"{mes_ref}-31")
+    inicio, fim = calc.intervalo_ciclo(mes_ref)
+    gastos = models.listar_gastos(data_inicio=inicio, data_fim=fim)
 
     total = gastos["valor"].sum() if not gastos.empty else 0.0
     col1, col2 = st.columns(2)

@@ -137,7 +137,8 @@ def _grafico_hora(mes_ref: str) -> Image | None:
 
 def gerar_pdf_mensal(mes_referencia: str) -> bytes:
     """Monta o relatório do mês (resumo, gráficos, insights e nota) e devolve os bytes do PDF."""
-    hoje = date.fromisoformat(f"{mes_referencia}-01")
+    inicio_ciclo, _ = calc.intervalo_ciclo(mes_referencia)
+    hoje = date.fromisoformat(inicio_ciclo)
     config = models.get_config()
 
     fatura = calc.fatura_do_mes(mes_referencia)

@@ -37,7 +37,7 @@ def _selecionar_mes(hoje: date) -> str:
     # meses que ainda faltam, não só um par de meses à frente.
     meses_ate_dezembro = 12 - hoje.month
     opcoes = [
-        utils.mes_referencia(utils.somar_meses(hoje.replace(day=1), i))
+        calc.mes_referencia_atual(utils.somar_meses(hoje, i))
         for i in range(-1, meses_ate_dezembro + 1)
     ]
     rotulos = {m: utils.nome_mes(m) for m in opcoes}

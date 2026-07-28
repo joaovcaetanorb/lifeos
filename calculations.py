@@ -1,7 +1,9 @@
 """Regras de negócio financeiras. Nenhuma função aqui toca o banco direto
 (sempre via models) nem desenha UI (isso fica nas páginas).
 
-Convenção: "mes_referencia" é sempre string 'AAAA-MM'.
+Convenção: "mes_referencia" é sempre string 'AAAA-MM', identificando o ciclo
+financeiro pagamento-a-pagamento pelo mês em que ele COMEÇA (dia do
+pagamento) — não o mês civil. Ver utils.mes_referencia/intervalo_mes.
 """
 
 from datetime import date, timedelta
@@ -17,38 +19,60 @@ PERCENTUAL_LIMITE_RECOMENDADO_CARTAO = 0.30
 
 
 # ---------------------------------------------------------------------------
+# Ciclo financeiro (pagamento-a-pagamento): helpers públicos
+# ---------------------------------------------------------------------------
+
+def dia_util_pagamento_configurado() -> int:
+    """Dia útil do mês configurado como referência de pagamento (ex.: 5 = 5º dia útil)."""
+    return models.get_config()["dia_util_pagamento"]
+
+
+def mes_referencia_atual(data_: date | None = None) -> str:
+    """Rótulo 'AAAA-MM' do ciclo financeiro ao qual a data pertence, usando o
+    dia de pagamento configurado."""
+    return utils.mes_referencia(data_, dia_util_pagamento_configurado())
+
+
+def intervalo_ciclo(mes_referencia: str) -> tuple[str, str]:
+    """Datas (ISO) de início/fim do ciclo identificado por 'mes_referencia'."""
+    return utils.intervalo_mes(mes_referencia, dia_util_pagamento_configurado())
+
+
+# ---------------------------------------------------------------------------
 # Cartão de crédito: faturas calculadas a partir das compras cadastradas
 # ---------------------------------------------------------------------------
 
-def _parcelas_da_compra(compra: pd.Series) -> list[tuple[str, float]]:
+def _parcelas_da_compra(compra: pd.Series, dia_util_pagamento: int) -> list[tuple[str, float]]:
     """Quebra uma compra em (mes_referencia, valor_parcela) para cada parcela."""
     data_compra = date.fromisoformat(compra["data_compra"])
     valor_parcela = compra["valor_total"] / compra["parcelas"]
     resultado = []
     for k in range(compra["parcelas"]):
         data_parcela = utils.somar_meses(data_compra, k)
-        resultado.append((utils.mes_referencia(data_parcela), valor_parcela))
+        resultado.append((utils.mes_referencia(data_parcela, dia_util_pagamento), valor_parcela))
     return resultado
 
 
 def fatura_do_mes(mes_referencia: str | None = None) -> float:
-    """Soma das parcelas (de todas as compras) que caem no mês informado."""
-    mes_referencia = mes_referencia or utils.mes_referencia()
+    """Soma das parcelas (de todas as compras) que caem no ciclo informado."""
+    dia_util = dia_util_pagamento_configurado()
+    mes_referencia = mes_referencia or utils.mes_referencia(dia_util_pagamento=dia_util)
     compras = models.listar_compras_cartao()
     total = 0.0
     for _, compra in compras.iterrows():
-        for mes_parcela, valor in _parcelas_da_compra(compra):
+        for mes_parcela, valor in _parcelas_da_compra(compra, dia_util):
             if mes_parcela == mes_referencia:
                 total += valor
     return round(total, 2)
 
 
 def proximas_faturas(n_meses: int = 6, a_partir_de: date | None = None) -> pd.DataFrame:
-    """Projeta a fatura dos próximos N meses (a partir do mês atual, inclusive)."""
+    """Projeta a fatura dos próximos N ciclos (a partir do ciclo atual, inclusive)."""
     a_partir_de = a_partir_de or date.today()
+    dia_util = dia_util_pagamento_configurado()
     linhas = []
     for i in range(n_meses):
-        mes_alvo = utils.mes_referencia(utils.somar_meses(a_partir_de, i))
+        mes_alvo = utils.mes_referencia(utils.somar_meses(a_partir_de, i), dia_util)
         linhas.append({
             "mes_referencia": mes_alvo,
             "mes_nome": utils.nome_mes(mes_alvo),
@@ -58,13 +82,14 @@ def proximas_faturas(n_meses: int = 6, a_partir_de: date | None = None) -> pd.Da
 
 
 def total_comprometido_cartao(a_partir_de: date | None = None) -> float:
-    """Soma de todas as parcelas futuras (mês atual em diante) ainda não vencidas."""
+    """Soma de todas as parcelas futuras (ciclo atual em diante) ainda não vencidas."""
     a_partir_de = a_partir_de or date.today()
-    mes_atual = utils.mes_referencia(a_partir_de)
+    dia_util = dia_util_pagamento_configurado()
+    mes_atual = utils.mes_referencia(a_partir_de, dia_util)
     compras = models.listar_compras_cartao()
     total = 0.0
     for _, compra in compras.iterrows():
-        for mes_parcela, valor in _parcelas_da_compra(compra):
+        for mes_parcela, valor in _parcelas_da_compra(compra, dia_util):
             if mes_parcela >= mes_atual:
                 total += valor
     return round(total, 2)
@@ -95,14 +120,15 @@ def percentual_limite_cartao(fatura_atual: float, renda_mensal: float) -> dict:
 def detalhe_compras_cartao(hoje: date | None = None) -> pd.DataFrame:
     """Lista as compras do cartão com parcela mensal e quantas já foram pagas."""
     hoje = hoje or date.today()
-    mes_atual = utils.mes_referencia(hoje)
+    dia_util = dia_util_pagamento_configurado()
+    mes_atual = utils.mes_referencia(hoje, dia_util)
     compras = models.listar_compras_cartao()
     if compras.empty:
         return compras.assign(valor_parcela=[], parcelas_pagas=[], parcelas_restantes=[])
 
     linhas = []
     for _, compra in compras.iterrows():
-        parcelas_meses = _parcelas_da_compra(compra)
+        parcelas_meses = _parcelas_da_compra(compra, dia_util)
         parcelas_pagas = sum(1 for mes_p, _ in parcelas_meses if mes_p < mes_atual)
         linha = compra.to_dict()
         linha["valor_parcela"] = round(compra["valor_total"] / compra["parcelas"], 2)
@@ -113,21 +139,22 @@ def detalhe_compras_cartao(hoje: date | None = None) -> pd.DataFrame:
 
 
 def projecao_fatura_atual(hoje: date | None = None) -> float:
-    """Projeta o total da fatura do mês corrente com base no ritmo de gastos
+    """Projeta o total da fatura do ciclo corrente com base no ritmo de gastos
     no crédito até hoje (extrapolação linear simples)."""
     hoje = hoje or date.today()
-    mes_referencia = utils.mes_referencia(hoje)
-    inicio, fim = utils.intervalo_mes(mes_referencia)
+    mes_referencia = mes_referencia_atual(hoje)
+    inicio, fim = intervalo_ciclo(mes_referencia)
+    inicio_data, fim_data = date.fromisoformat(inicio), date.fromisoformat(fim)
     gastos = models.listar_gastos(data_inicio=inicio, data_fim=fim)
     gastos_credito = gastos[gastos["forma_pagamento"] == "Crédito"]["valor"].sum()
 
-    dias_passados = hoje.day
-    dias_no_mes = (utils.somar_meses(hoje.replace(day=1), 1) - hoje.replace(day=1)).days
-    if dias_passados == 0:
+    dias_passados = (hoje - inicio_data).days + 1
+    dias_no_ciclo = (fim_data - inicio_data).days + 1
+    if dias_passados <= 0:
         return round(gastos_credito, 2)
 
     ritmo_diario = gastos_credito / dias_passados
-    projecao = ritmo_diario * dias_no_mes
+    projecao = ritmo_diario * dias_no_ciclo
     # A fatura projetada nunca é menor que o já gasto.
     return round(max(projecao, gastos_credito), 2)
 
@@ -137,15 +164,15 @@ def projecao_fatura_atual(hoje: date | None = None) -> float:
 # ---------------------------------------------------------------------------
 
 def gasto_total_mes(mes_referencia: str | None = None) -> float:
-    mes_referencia = mes_referencia or utils.mes_referencia()
-    inicio, fim = utils.intervalo_mes(mes_referencia)
+    mes_referencia = mes_referencia or mes_referencia_atual()
+    inicio, fim = intervalo_ciclo(mes_referencia)
     gastos = models.listar_gastos(data_inicio=inicio, data_fim=fim)
     return round(gastos["valor"].sum(), 2) if not gastos.empty else 0.0
 
 
 def gasto_por_categoria(mes_referencia: str | None = None) -> pd.DataFrame:
-    mes_referencia = mes_referencia or utils.mes_referencia()
-    inicio, fim = utils.intervalo_mes(mes_referencia)
+    mes_referencia = mes_referencia or mes_referencia_atual()
+    inicio, fim = intervalo_ciclo(mes_referencia)
     gastos = models.listar_gastos(data_inicio=inicio, data_fim=fim)
     if gastos.empty:
         return pd.DataFrame(columns=["categoria", "valor"])
@@ -162,8 +189,8 @@ def evolucao_mensal(n_meses: int = 6, hoje: date | None = None) -> pd.DataFrame:
     hoje = hoje or date.today()
     linhas = []
     for i in range(n_meses - 1, -1, -1):
-        mes_alvo_data = utils.somar_meses(hoje.replace(day=1), -i)
-        mes_alvo = utils.mes_referencia(mes_alvo_data)
+        mes_alvo_data = utils.somar_meses(hoje, -i)
+        mes_alvo = mes_referencia_atual(mes_alvo_data)
         linhas.append({
             "mes_referencia": mes_alvo,
             "mes_nome": utils.nome_mes(mes_alvo),
@@ -174,8 +201,8 @@ def evolucao_mensal(n_meses: int = 6, hoje: date | None = None) -> pd.DataFrame:
 
 def comparativo_mes_anterior(hoje: date | None = None) -> dict:
     hoje = hoje or date.today()
-    mes_atual = utils.mes_referencia(hoje)
-    mes_anterior = utils.mes_referencia(utils.somar_meses(hoje.replace(day=1), -1))
+    mes_atual = mes_referencia_atual(hoje)
+    mes_anterior = mes_referencia_atual(utils.somar_meses(hoje, -1))
 
     gasto_atual = gasto_total_mes(mes_atual)
     gasto_passado = gasto_total_mes(mes_anterior)
@@ -204,33 +231,6 @@ def gastos_periodo(dias: int = 180, hoje: date | None = None) -> pd.DataFrame:
     return models.listar_gastos(data_inicio=inicio.isoformat())
 
 
-DIAS_SEMANA_PT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
-PARTES_MES = ["Início (1-10)", "Meio (11-20)", "Fim (21-31)"]
-
-
-def gasto_por_dia_semana(dias: int = 180, hoje: date | None = None) -> pd.DataFrame:
-    """Total gasto em cada dia da semana (ex.: 'gasto mais no fim de semana?')."""
-    gastos = gastos_periodo(dias, hoje)
-    if gastos.empty:
-        return pd.DataFrame(columns=["dia_semana", "valor"])
-
-    indice = pd.to_datetime(gastos["data"]).dt.dayofweek
-    agrupado = gastos.groupby(indice)["valor"].sum().reindex(range(7), fill_value=0.0)
-    return pd.DataFrame({"dia_semana": DIAS_SEMANA_PT, "valor": agrupado.values})
-
-
-def gasto_por_parte_mes(dias: int = 180, hoje: date | None = None) -> pd.DataFrame:
-    """Total gasto agrupado por início/meio/fim do mês (ex.: 'aperto mais perto do pagamento?')."""
-    gastos = gastos_periodo(dias, hoje)
-    if gastos.empty:
-        return pd.DataFrame(columns=["parte", "valor"])
-
-    dia_do_mes = pd.to_datetime(gastos["data"]).dt.day
-    parte = pd.cut(dia_do_mes, bins=[0, 10, 20, 31], labels=PARTES_MES)
-    agrupado = gastos.groupby(parte, observed=False)["valor"].sum().reindex(PARTES_MES, fill_value=0.0)
-    return pd.DataFrame({"parte": PARTES_MES, "valor": agrupado.values})
-
-
 def _agrupar_por_hora(gastos: pd.DataFrame) -> pd.DataFrame:
     """Total gasto por hora do dia, com base no campo opcional 'hora' de cada lançamento."""
     if gastos.empty or "hora" not in gastos.columns:
@@ -245,15 +245,10 @@ def _agrupar_por_hora(gastos: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame({"hora": [f"{h:02d}h" for h in range(24)], "valor": agrupado.values})
 
 
-def gasto_por_hora(dias: int = 180, hoje: date | None = None) -> pd.DataFrame:
-    """Total gasto por hora do dia, numa janela rolante dos últimos N dias (uso no Dashboard)."""
-    return _agrupar_por_hora(gastos_periodo(dias, hoje))
-
-
 def gasto_por_hora_mes(mes_referencia: str | None = None) -> pd.DataFrame:
-    """Total gasto por hora do dia, dentro de um mês específico (uso no relatório em PDF)."""
-    mes_referencia = mes_referencia or utils.mes_referencia()
-    inicio, fim = utils.intervalo_mes(mes_referencia)
+    """Total gasto por hora do dia, dentro de um ciclo específico (uso no relatório em PDF)."""
+    mes_referencia = mes_referencia or mes_referencia_atual()
+    inicio, fim = intervalo_ciclo(mes_referencia)
     gastos = models.listar_gastos(data_inicio=inicio, data_fim=fim)
     return _agrupar_por_hora(gastos)
 
@@ -281,7 +276,7 @@ def tendencia_diaria(dias: int = 60, hoje: date | None = None) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def planejamento_vs_realizado(mes_referencia: str | None = None) -> pd.DataFrame:
-    mes_referencia = mes_referencia or utils.mes_referencia()
+    mes_referencia = mes_referencia or mes_referencia_atual()
     planejado = models.listar_planejamento(mes_referencia)[["categoria", "valor_planejado"]]
     realizado = gasto_por_categoria(mes_referencia).rename(columns={"valor": "valor_realizado"})
 
@@ -366,10 +361,10 @@ def dividir_por_periodo(valor: float, hoje: date | None = None, dia_util_pagamen
 
 
 def saldo_vale_alimentacao(mes_referencia: str | None = None) -> dict:
-    """Quanto do vale alimentação já foi gasto e quanto ainda resta no mês."""
-    mes_referencia = mes_referencia or utils.mes_referencia()
+    """Quanto do vale alimentação já foi gasto e quanto ainda resta no ciclo."""
+    mes_referencia = mes_referencia or mes_referencia_atual()
     config = models.get_config()
-    inicio, fim = utils.intervalo_mes(mes_referencia)
+    inicio, fim = intervalo_ciclo(mes_referencia)
     gastos = models.listar_gastos(data_inicio=inicio, data_fim=fim)
     gasto_va = gastos[gastos["forma_pagamento"] == "Vale alimentação"]["valor"].sum() if not gastos.empty else 0.0
 
@@ -393,7 +388,7 @@ def saldo_disponivel_hoje(hoje: date | None = None) -> dict:
     # Por isso a fatura e o "já gasto" usam o mês em que o ciclo COMEÇOU,
     # e não o mês civil de "hoje" — assim o valor não pula no meio do ciclo.
     inicio_ciclo = utils.pagamento_anterior(hoje, config["dia_util_pagamento"])
-    mes_referencia_ciclo = utils.mes_referencia(inicio_ciclo)
+    mes_referencia_ciclo = utils.mes_referencia(inicio_ciclo, config["dia_util_pagamento"])
     fatura = fatura_do_mes(mes_referencia_ciclo)
 
     disponivel = dinheiro_disponivel_mes(
@@ -460,7 +455,7 @@ def gerar_insights(hoje: date | None = None) -> list[str]:
                 f"em relação ao mês passado."
             )
 
-    maior = maior_categoria(utils.mes_referencia(hoje))
+    maior = maior_categoria(mes_referencia_atual(hoje))
     if maior:
         insights.append(f"Sua maior categoria de gasto este mês foi {maior[0]} ({utils.formatar_moeda(maior[1])}).")
 
@@ -468,7 +463,7 @@ def gerar_insights(hoje: date | None = None) -> list[str]:
     if projecao > 0:
         insights.append(f"Se continuar nesse ritmo, sua fatura do cartão deve fechar em torno de {utils.formatar_moeda(projecao)}.")
 
-    fatura_atual = fatura_do_mes(utils.mes_referencia(hoje))
+    fatura_atual = fatura_do_mes(mes_referencia_atual(hoje))
     config = models.get_config()
     limite_info = percentual_limite_cartao(fatura_atual, config["salario"] + config["vale_alimentacao"])
     if limite_info["percentual"] >= 80:
@@ -484,8 +479,9 @@ def gerar_insights(hoje: date | None = None) -> list[str]:
 def nota_do_mes(mes_referencia: str | None = None) -> dict:
     """Nota de 0 a 10 pro mês, com detalhamento transparente de cada critério
     (nunca um número mágico sem explicação)."""
-    mes_referencia = mes_referencia or utils.mes_referencia()
-    hoje = date.fromisoformat(f"{mes_referencia}-01")
+    mes_referencia = mes_referencia or mes_referencia_atual()
+    inicio_ciclo, fim_ciclo = intervalo_ciclo(mes_referencia)
+    hoje = date.fromisoformat(inicio_ciclo)
     nota = 10.0
     detalhes = []
 
@@ -512,7 +508,10 @@ def nota_do_mes(mes_referencia: str | None = None) -> dict:
         detalhes.append(f"Fatura do cartão perto do limite recomendado ({limite_info['percentual']:.0f}%): -1")
 
     movimentos = models.listar_movimentos_reserva()
-    do_mes = movimentos[movimentos["data"].str.startswith(mes_referencia)] if not movimentos.empty else movimentos
+    do_mes = (
+        movimentos[(movimentos["data"] >= inicio_ciclo) & (movimentos["data"] <= fim_ciclo)]
+        if not movimentos.empty else movimentos
+    )
     if not do_mes.empty:
         sinal = do_mes["tipo"].map({"Aporte": 1, "Retirada": -1})
         saldo_mes = (do_mes["valor"] * sinal).sum()
