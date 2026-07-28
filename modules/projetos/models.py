@@ -122,6 +122,26 @@ def marcar_item_checklist(item_id: int, concluido: bool) -> None:
         conn.close()
 
 
+def atualizar_detalhes_item_checklist(item_id: int, notas: str, prazo: str, link: str,
+                                       foto_path: str | None = None) -> None:
+    """foto_path=None mantém a foto atual (não a apaga); '' remove a foto."""
+    conn = get_connection()
+    try:
+        if foto_path is None:
+            conn.execute(
+                "UPDATE projeto_checklist SET notas = ?, prazo = ?, link = ? WHERE id = ?",
+                (notas, prazo, link, item_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE projeto_checklist SET notas = ?, prazo = ?, link = ?, foto_path = ? WHERE id = ?",
+                (notas, prazo, link, foto_path, item_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def excluir_item_checklist(item_id: int) -> None:
     conn = get_connection()
     try:

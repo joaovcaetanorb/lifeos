@@ -23,3 +23,11 @@ def formatar_moeda(valor: float) -> str:
     texto = f"{valor:,.2f}"
     texto = texto.replace(",", "_").replace(".", ",").replace("_", ".")
     return f"R$ {texto}"
+
+
+def formatar_data_br(data_iso: str) -> str:
+    """'2026-08-05' -> '05/08'. String vazia retorna vazio."""
+    if not data_iso:
+        return ""
+    ano, mes, dia = data_iso.split("-")
+    return f"{dia}/{mes}"

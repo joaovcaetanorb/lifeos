@@ -32,6 +32,10 @@ CREATE TABLE IF NOT EXISTS projeto_checklist (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     projeto_id INTEGER NOT NULL REFERENCES projetos(id) ON DELETE CASCADE,
     descricao TEXT NOT NULL,
+    notas TEXT DEFAULT '',
+    prazo TEXT DEFAULT '',
+    link TEXT DEFAULT '',
+    foto_path TEXT DEFAULT '',
     concluido INTEGER NOT NULL DEFAULT 0,
     ordem INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -65,12 +69,21 @@ def get_connection() -> sqlite3.Connection:
 def _migrar_schema(conn: sqlite3.Connection) -> None:
     """Garante uma linha em app_meta. Se o banco já existia (tinha projetos)
     antes dessa tabela ser criada, marca como já semeado — sem isso, apagar
-    o último projeto faria o próximo carregamento recriar o exemplo."""
+    o último projeto faria o próximo carregamento recriar o exemplo.
+
+    Também adiciona colunas de detalhe do checklist em bancos já existentes
+    (ALTER TABLE não é coberto pelo CREATE TABLE IF NOT EXISTS)."""
     row = conn.execute("SELECT seeded FROM app_meta WHERE id = 1").fetchone()
     if row is None:
         tinha_projetos = conn.execute("SELECT COUNT(*) AS n FROM projetos").fetchone()["n"] > 0
         conn.execute("INSERT INTO app_meta (id, seeded) VALUES (1, ?)", (1 if tinha_projetos else 0,))
-        conn.commit()
+
+    colunas_checklist = {row["name"] for row in conn.execute("PRAGMA table_info(projeto_checklist)").fetchall()}
+    for coluna in ("notas", "prazo", "link", "foto_path"):
+        if coluna not in colunas_checklist:
+            conn.execute(f"ALTER TABLE projeto_checklist ADD COLUMN {coluna} TEXT DEFAULT ''")
+
+    conn.commit()
 
 
 def init_db() -> None:

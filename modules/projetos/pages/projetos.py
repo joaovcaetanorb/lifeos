@@ -26,6 +26,16 @@ def _salvar_foto(projeto_id: int, arquivo) -> str:
     return str(caminho.relative_to(database.DB_DIR))
 
 
+def _salvar_foto_item(item_id: int, arquivo) -> str:
+    """Mesma lógica de _salvar_foto, com prefixo 'item_' pra não colidir com
+    o nome de arquivo da foto de capa do projeto (ids de tabelas diferentes)."""
+    database.UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    extensao = Path(arquivo.name).suffix
+    caminho = database.UPLOADS_DIR / f"item_{item_id}{extensao}"
+    caminho.write_bytes(arquivo.getbuffer())
+    return str(caminho.relative_to(database.DB_DIR))
+
+
 def _resumo() -> None:
     resumo = calc.resumo_geral()
     st.caption(
@@ -65,23 +75,72 @@ def _toggle_item(item_id: int) -> None:
     models.marcar_item_checklist(item_id, novo_valor)
 
 
+def _rotulo_item(item: dict) -> str:
+    """Anexa indicadores curtos ao título do item (prazo, link, foto, notas)
+    sem precisar abrir os detalhes pra saber que eles existem."""
+    extras = []
+    if item["prazo"]:
+        prefixo = "atrasado" if calc.item_vencido(item["prazo"], bool(item["concluido"])) else "até"
+        extras.append(f"{prefixo} {utils.formatar_data_br(item['prazo'])}")
+    if item["link"]:
+        extras.append("🔗")
+    if item["foto_path"]:
+        extras.append("🖼")
+    if item["notas"]:
+        extras.append("📝")
+    if not extras:
+        return item["descricao"]
+    return f"{item['descricao']}   ({' · '.join(extras)})"
+
+
+def _popover_item(item: dict) -> None:
+    item_id = int(item["id"])
+    with st.popover("✎", use_container_width=False):
+        if item["foto_path"]:
+            caminho_foto = database.DB_DIR / item["foto_path"]
+            if caminho_foto.exists():
+                st.image(str(caminho_foto), use_container_width=True)
+
+        with st.form(f"form_item_detalhe_{item_id}"):
+            notas = st.text_area("Notas", value=item["notas"])
+            sem_prazo = st.checkbox("sem prazo definido", value=not bool(item["prazo"]))
+            valor_prazo_atual = date.fromisoformat(item["prazo"]) if item["prazo"] else date.today()
+            prazo_input = st.date_input("Prazo", value=valor_prazo_atual, format="DD/MM/YYYY")
+            link = st.text_input("Link", value=item["link"], placeholder="https://...")
+            nova_foto = st.file_uploader("Foto (opcional)", type=["png", "jpg", "jpeg"], key=f"foto_item_{item_id}")
+
+            c1, c2 = st.columns(2)
+            salvar = c1.form_submit_button("salvar")
+            excluir = c2.form_submit_button("excluir item")
+
+        if salvar:
+            prazo_final = "" if sem_prazo else prazo_input.isoformat()
+            caminho = _salvar_foto_item(item_id, nova_foto) if nova_foto is not None else None
+            models.atualizar_detalhes_item_checklist(
+                item_id, notas.strip(), prazo_final, link.strip(), foto_path=caminho
+            )
+            st.rerun()
+        if excluir:
+            models.excluir_item_checklist(item_id)
+            st.rerun()
+
+
 def _secao_checklist(pid: int) -> None:
     itens = models.listar_checklist(pid)
     if itens.empty:
         st.caption("Nenhum item ainda.")
     else:
         for _, item in itens.iterrows():
-            item_id = int(item["id"])
-            col_chk, col_del = st.columns([8, 1])
+            item_dict = dict(item)
+            item_id = int(item_dict["id"])
+            col_chk, col_pop = st.columns([8, 1])
             with col_chk:
                 st.checkbox(
-                    item["descricao"], value=bool(item["concluido"]),
+                    _rotulo_item(item_dict), value=bool(item_dict["concluido"]),
                     key=f"chk_{item_id}", on_change=_toggle_item, args=(item_id,),
                 )
-            with col_del:
-                if st.button("🗑", key=f"del_item_{item_id}"):
-                    models.excluir_item_checklist(item_id)
-                    st.rerun()
+            with col_pop:
+                _popover_item(item_dict)
 
     with st.form(f"form_add_item_{pid}", clear_on_submit=True):
         nova_descricao = st.text_input("Novo item", placeholder="Ex.: comprar passagem")

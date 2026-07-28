@@ -2,7 +2,16 @@
 checklist e resumo geral. Sem acesso direto a SQL — usa models.py.
 """
 
+from datetime import date
+
 import models
+
+
+def item_vencido(prazo_iso: str, concluido: bool) -> bool:
+    """True se o item tem prazo definido, já passou, e ainda não foi concluído."""
+    if not prazo_iso or concluido:
+        return False
+    return date.fromisoformat(prazo_iso) < date.today()
 
 
 def valor_acumulado(projeto_id: int) -> float:
