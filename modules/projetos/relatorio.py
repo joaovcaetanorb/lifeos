@@ -11,6 +11,7 @@ from datetime import date
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from PIL import Image as PILImage
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -19,6 +20,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import HRFlowable, Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 import calculations as calc
+import database
 import models
 import utils
 
@@ -77,6 +79,44 @@ def _cabecalho(story: list, eyebrow: str, titulo: str) -> None:
     story.append(Spacer(1, 0.4 * cm))
 
 
+def _thumbnail(foto_path: str, largura_cm: float = 2.5, largura_px: int = 400) -> Image | None:
+    """Miniatura de tamanho padronizado: redimensiona de verdade (não só a
+    exibição) antes de embutir no PDF, senão uma foto de câmera de alguns MB
+    infla o arquivo inteiro mesmo aparecendo pequena na página."""
+    if not foto_path:
+        return None
+    caminho = database.DB_DIR / foto_path
+    if not caminho.exists():
+        return None
+    with PILImage.open(caminho) as img:
+        img = img.convert("RGB")
+        proporcao = img.height / img.width
+        img = img.resize((largura_px, max(1, int(largura_px * proporcao))))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=80)
+        buf.seek(0)
+    largura = largura_cm * cm
+    return Image(buf, width=largura, height=largura * proporcao)
+
+
+def _bloco_item_checklist(story: list, item, estilo_titulo: ParagraphStyle) -> None:
+    marca = "[x]" if item["concluido"] else "[ ]"
+    vencido = calc.item_vencido(item["prazo"], bool(item["concluido"]))
+    prazo_txt = f" — prazo: {utils.formatar_data_br(item['prazo'])}" if item["prazo"] else ""
+    if vencido:
+        prazo_txt += " (atrasado)"
+    story.append(Paragraph(f"{marca} {item['descricao']}{prazo_txt}", estilo_titulo))
+    if item["notas"]:
+        story.append(Paragraph(item["notas"], _ESTILO_MUTED_RECUADO))
+    if item["link"]:
+        story.append(Paragraph(item["link"], _ESTILO_MUTED_RECUADO))
+    thumb = _thumbnail(item["foto_path"], largura_cm=2.5)
+    if thumb is not None:
+        story.append(Spacer(1, 0.1 * cm))
+        story.append(thumb)
+        story.append(Spacer(1, 0.1 * cm))
+
+
 def _build(story: list) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -126,6 +166,7 @@ def gerar_pdf_lista(filtro_status: str | None) -> bytes:
             "nome": row["nome"],
             "descricao": row["descricao"],
             "observacoes": row["observacoes"],
+            "foto_path": row["foto_path"],
             "status": row["status"],
             "orcamento": row["orcamento"],
             "valor_acumulado": calc.valor_acumulado(pid),
@@ -164,16 +205,20 @@ def gerar_pdf_lista(filtro_status: str | None) -> bytes:
     story.append(Paragraph("DETALHES", _ESTILO_EYEBROW))
     for p in projetos:
         story.append(Paragraph(p["nome"], _ESTILO_SUBTITULO))
+
+        capa = _thumbnail(p["foto_path"], largura_cm=2.5)
+        if capa is not None:
+            story.append(capa)
+            story.append(Spacer(1, 0.15 * cm))
+
         if p["descricao"]:
             story.append(Paragraph(p["descricao"], _ESTILO_CORPO))
         if p["observacoes"]:
             story.append(Paragraph(p["observacoes"], _ESTILO_MUTED))
 
         itens = models.listar_checklist(p["id"])
-        if not itens.empty:
-            for _, item in itens.iterrows():
-                marca = "[x]" if item["concluido"] else "[ ]"
-                story.append(Paragraph(f"{marca} {item['descricao']}", _ESTILO_MUTED))
+        for _, item in itens.iterrows():
+            _bloco_item_checklist(story, item, _ESTILO_MUTED)
         story.append(Spacer(1, 0.3 * cm))
 
     return _build(story)
@@ -206,6 +251,11 @@ def gerar_pdf_projeto(projeto_id: int) -> bytes:
 
     story = []
     _cabecalho(story, "PROJETO", projeto["nome"])
+
+    capa = _thumbnail(projeto["foto_path"], largura_cm=4.5)
+    if capa is not None:
+        story.append(capa)
+        story.append(Spacer(1, 0.4 * cm))
 
     dados_resumo = [
         ["status", projeto["status"]],
@@ -242,16 +292,7 @@ def gerar_pdf_projeto(projeto_id: int) -> bytes:
         story.append(Paragraph("Nenhum item cadastrado.", _ESTILO_MUTED))
     else:
         for _, item in itens.iterrows():
-            marca = "[x]" if item["concluido"] else "[ ]"
-            vencido = calc.item_vencido(item["prazo"], bool(item["concluido"]))
-            prazo_txt = f" — prazo: {utils.formatar_data_br(item['prazo'])}" if item["prazo"] else ""
-            if vencido:
-                prazo_txt += " (atrasado)"
-            story.append(Paragraph(f"{marca} {item['descricao']}{prazo_txt}", _ESTILO_CORPO))
-            if item["notas"]:
-                story.append(Paragraph(item["notas"], _ESTILO_MUTED_RECUADO))
-            if item["link"]:
-                story.append(Paragraph(item["link"], _ESTILO_MUTED_RECUADO))
+            _bloco_item_checklist(story, item, _ESTILO_CORPO)
     story.append(Spacer(1, 0.5 * cm))
 
     story.append(Paragraph("APORTES", _ESTILO_EYEBROW))

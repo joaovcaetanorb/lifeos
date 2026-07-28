@@ -100,7 +100,7 @@ def _popover_item(item: dict) -> None:
         if item["foto_path"]:
             caminho_foto = database.DB_DIR / item["foto_path"]
             if caminho_foto.exists():
-                st.image(str(caminho_foto), use_column_width=True)
+                st.image(str(caminho_foto), width=220)
 
         with st.form(f"form_item_detalhe_{item_id}"):
             notas = st.text_area("Notas", value=item["notas"])
@@ -232,7 +232,7 @@ def _card_projeto(projeto: dict) -> None:
             with col_foto:
                 caminho_foto = database.DB_DIR / projeto["foto_path"]
                 if caminho_foto.exists():
-                    st.image(str(caminho_foto), use_column_width=True)
+                    st.image(str(caminho_foto), width=140)
 
         with col_main:
             st.subheader(projeto["nome"])
