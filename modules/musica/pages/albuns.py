@@ -44,9 +44,9 @@ def _resumo() -> None:
 
 def _campo_faixa_favorita(spotify_id: str, valor_atual: str, key: str) -> str:
     """Se o álbum tem spotify_id e o Spotify está disponível, busca a
-    tracklist real (cacheada por spotify_id) e oferece multiselect pra
-    marcar as favoritas. Senão, cai pro texto livre. Sempre retorna a
-    string final (faixas separadas por ', ')."""
+    tracklist real (cacheada por spotify_id) e mostra uma faixa por
+    checkbox pra marcar as favoritas. Senão, cai pro texto livre. Sempre
+    retorna a string final (faixas separadas por ', ')."""
     faixas = []
     if spotify_id and spotify_client.disponivel():
         cache_key = f"faixas_{spotify_id}"
@@ -57,11 +57,12 @@ def _campo_faixa_favorita(spotify_id: str, valor_atual: str, key: str) -> str:
     if not faixas:
         return st.text_input("Faixa favorita (opcional)", value=valor_atual, key=key)
 
-    atuais = [f.strip() for f in valor_atual.split(",") if f.strip()]
-    default_validos = [f for f in atuais if f in faixas]
-    escolhidas = st.multiselect(
-        "Faixas favoritas (opcional)", options=faixas, default=default_validos, key=key,
-    )
+    atuais = {f.strip() for f in valor_atual.split(",") if f.strip()}
+    st.caption("faixas favoritas (opcional)")
+    escolhidas = [
+        faixa for i, faixa in enumerate(faixas)
+        if st.checkbox(faixa, value=faixa in atuais, key=f"{key}_faixa_{i}")
+    ]
     return ", ".join(escolhidas)
 
 
