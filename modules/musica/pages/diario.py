@@ -8,6 +8,7 @@ import streamlit as st
 import calculations as calc
 import database
 import models
+import spotify_client
 import ui
 import utils
 
@@ -22,6 +23,53 @@ def _salvar_capa(album_id: int, arquivo) -> str:
     caminho = database.UPLOADS_DIR / f"{album_id}{extensao}"
     caminho.write_bytes(arquivo.getbuffer())
     return str(caminho.relative_to(database.DB_DIR))
+
+
+def _salvar_capa_de_bytes(album_id: int, conteudo: bytes) -> str:
+    database.UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    caminho = database.UPLOADS_DIR / f"{album_id}.jpg"
+    caminho.write_bytes(conteudo)
+    return str(caminho.relative_to(database.DB_DIR))
+
+
+def _secao_busca_spotify() -> dict:
+    """Busca opcional no Spotify pra pré-preencher os campos do álbum novo.
+    Retorna o resultado escolhido (vazio se nada foi escolhido/buscado)."""
+    if not spotify_client.disponivel():
+        return {}
+
+    st.caption("buscar no Spotify (opcional — preenche os campos abaixo)")
+    c1, c2 = st.columns([4, 1])
+    query = c1.text_input(
+        "Buscar álbum", key="spotify_query_escuta", label_visibility="collapsed",
+        placeholder="Ex.: OK Computer Radiohead",
+    )
+    if c2.button("buscar", key="spotify_buscar_escuta"):
+        st.session_state["spotify_resultados_escuta"] = spotify_client.buscar_albuns(query)
+
+    resultados = st.session_state.get("spotify_resultados_escuta", [])
+    if resultados:
+        for i, r in enumerate(resultados):
+            col_capa, col_info, col_btn = st.columns([1, 5, 1])
+            with col_capa:
+                if r["capa_url"]:
+                    st.image(r["capa_url"], width=50)
+            with col_info:
+                st.caption(f"{r['nome']} — {r['artista']} ({r['ano'] or '?'})")
+            with col_btn:
+                if st.button("usar", key=f"spotify_usar_escuta_{i}"):
+                    st.session_state["spotify_escolha_escuta"] = r
+                    st.session_state["spotify_resultados_escuta"] = []
+                    st.rerun()
+
+    escolha = st.session_state.get("spotify_escolha_escuta", {})
+    if escolha:
+        col_msg, col_limpar = st.columns([5, 1])
+        col_msg.success(f"selecionado: {escolha['nome']} — {escolha['artista']}")
+        if col_limpar.button("limpar", key="spotify_limpar_escuta"):
+            st.session_state["spotify_escolha_escuta"] = {}
+            st.rerun()
+    return escolha
 
 
 def _resumo() -> None:
@@ -46,17 +94,31 @@ def _formulario_nova_escuta() -> None:
         novo_artista = novo_album = novo_genero = ""
         novo_ano = 0
         nova_capa = None
+        escolha_spotify = {}
         if album_selecionado == -1:
+            escolha_spotify = _secao_busca_spotify()
+            # sufixo muda o "key" dos campos quando uma nova escolha do Spotify
+            # é feita, forçando os widgets a reassumir o value= pré-preenchido
+            # (senão o key antigo já teria estado salvo e o value seria ignorado)
+            sufixo = escolha_spotify.get("spotify_id", "manual")
+
             c1, c2 = st.columns(2)
-            novo_artista = c1.text_input("Artista", key="novo_artista_escuta")
-            novo_album = c2.text_input("Álbum", key="novo_album_escuta")
+            novo_artista = c1.text_input(
+                "Artista", value=escolha_spotify.get("artista", ""), key=f"novo_artista_escuta_{sufixo}",
+            )
+            novo_album = c2.text_input(
+                "Álbum", value=escolha_spotify.get("nome", ""), key=f"novo_album_escuta_{sufixo}",
+            )
             c3, c4 = st.columns(2)
             novo_ano = c3.number_input(
-                "Ano de lançamento (opcional)", min_value=0, max_value=2100, step=1, value=0,
-                key="novo_ano_escuta",
+                "Ano de lançamento (opcional)", min_value=0, max_value=2100, step=1,
+                value=escolha_spotify.get("ano") or 0, key=f"novo_ano_escuta_{sufixo}",
             )
-            novo_genero = c4.text_input("Gênero (opcional)", key="novo_genero_escuta")
-            nova_capa = st.file_uploader("Capa (opcional)", type=["png", "jpg", "jpeg"], key="nova_capa_escuta")
+            novo_genero = c4.text_input("Gênero (opcional)", key=f"novo_genero_escuta_{sufixo}")
+            nova_capa = st.file_uploader(
+                "Capa manual (opcional — substitui a do Spotify, se houver)",
+                type=["png", "jpg", "jpeg"], key=f"nova_capa_escuta_{sufixo}",
+            )
 
         with st.form("form_nova_escuta", clear_on_submit=True):
             c1, c2 = st.columns(2)
@@ -71,16 +133,30 @@ def _formulario_nova_escuta() -> None:
                     if not novo_artista.strip() or not novo_album.strip():
                         st.warning("Informe artista e nome do álbum.")
                         st.stop()
-                    artista_id = models.obter_ou_criar_artista(novo_artista.strip())
+                    artista_id = models.obter_ou_criar_artista(
+                        novo_artista.strip(), spotify_id=escolha_spotify.get("artista_spotify_id", ""),
+                    )
                     album_id = models.obter_ou_criar_album(
                         novo_album.strip(), artista_id, int(novo_ano) if novo_ano else None, novo_genero.strip(),
+                        spotify_id=escolha_spotify.get("spotify_id", ""),
+                        spotify_url=escolha_spotify.get("spotify_url", ""),
                     )
+
+                    caminho = None
                     if nova_capa is not None:
                         caminho = _salvar_capa(album_id, nova_capa)
+                    elif escolha_spotify.get("capa_url"):
+                        conteudo = spotify_client.baixar_capa(escolha_spotify["capa_url"])
+                        if conteudo is not None:
+                            caminho = _salvar_capa_de_bytes(album_id, conteudo)
+
+                    if caminho is not None:
                         models.atualizar_album(
                             album_id, novo_album.strip(), int(novo_ano) if novo_ano else None,
                             novo_genero.strip(), capa_path=caminho,
                         )
+
+                    st.session_state["spotify_escolha_escuta"] = {}
                 else:
                     album_id = album_selecionado
 

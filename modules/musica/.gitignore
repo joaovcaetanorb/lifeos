@@ -5,3 +5,4 @@ database/*.db.bak_*
 database/uploads/*
 !database/uploads/.gitkeep
 .streamlit/secrets.toml
+.cache

@@ -53,12 +53,12 @@ def inserir_artista(nome: str, spotify_id: str = "") -> int:
         conn.close()
 
 
-def obter_ou_criar_artista(nome: str) -> int:
+def obter_ou_criar_artista(nome: str, spotify_id: str = "") -> int:
     """Reaproveita o artista se já existir (mesmo nome), senão cria."""
     existente = buscar_artista_por_nome(nome)
     if existente:
         return int(existente["id"])
-    return inserir_artista(nome)
+    return inserir_artista(nome, spotify_id)
 
 
 # ---------------------------------------------------------------------------
@@ -96,13 +96,13 @@ def obter_album(album_id: int) -> dict | None:
 
 
 def inserir_album(nome: str, artista_id: int, ano_lancamento: int | None, genero: str = "",
-                   capa_path: str = "") -> int:
+                   capa_path: str = "", spotify_id: str = "", spotify_url: str = "") -> int:
     conn = get_connection()
     try:
         cur = conn.execute(
-            """INSERT INTO albuns (nome, artista_id, ano_lancamento, genero, capa_path)
-               VALUES (?, ?, ?, ?, ?)""",
-            (nome, artista_id, ano_lancamento, genero, capa_path),
+            """INSERT INTO albuns (nome, artista_id, ano_lancamento, genero, capa_path, spotify_id, spotify_url)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (nome, artista_id, ano_lancamento, genero, capa_path, spotify_id, spotify_url),
         )
         conn.commit()
         return cur.lastrowid
@@ -142,13 +142,14 @@ def buscar_album_por_nome(nome: str, artista_id: int) -> dict | None:
         conn.close()
 
 
-def obter_ou_criar_album(nome: str, artista_id: int, ano_lancamento: int | None, genero: str = "") -> int:
+def obter_ou_criar_album(nome: str, artista_id: int, ano_lancamento: int | None, genero: str = "",
+                          spotify_id: str = "", spotify_url: str = "") -> int:
     """Reaproveita o álbum se já existir pra esse artista (evita duplicar
     catálogo se o usuário reenviar o formulário sem trocar a seleção)."""
     existente = buscar_album_por_nome(nome, artista_id)
     if existente:
         return int(existente["id"])
-    return inserir_album(nome, artista_id, ano_lancamento, genero)
+    return inserir_album(nome, artista_id, ano_lancamento, genero, spotify_id=spotify_id, spotify_url=spotify_url)
 
 
 def excluir_album(album_id: int) -> None:
