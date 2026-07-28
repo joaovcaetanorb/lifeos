@@ -9,6 +9,7 @@ import streamlit as st
 import calculations as calc
 import database
 import models
+import spotify_client
 import ui
 import utils
 
@@ -41,7 +42,30 @@ def _resumo() -> None:
     )
 
 
-def _popover_escuta(escuta: dict) -> None:
+def _campo_faixa_favorita(spotify_id: str, valor_atual: str, key: str) -> str:
+    """Se o álbum tem spotify_id e o Spotify está disponível, busca a
+    tracklist real (cacheada por spotify_id) e oferece multiselect pra
+    marcar as favoritas. Senão, cai pro texto livre. Sempre retorna a
+    string final (faixas separadas por ', ')."""
+    faixas = []
+    if spotify_id and spotify_client.disponivel():
+        cache_key = f"faixas_{spotify_id}"
+        if cache_key not in st.session_state:
+            st.session_state[cache_key] = spotify_client.buscar_faixas(spotify_id)
+        faixas = st.session_state[cache_key]
+
+    if not faixas:
+        return st.text_input("Faixa favorita (opcional)", value=valor_atual, key=key)
+
+    atuais = [f.strip() for f in valor_atual.split(",") if f.strip()]
+    default_validos = [f for f in atuais if f in faixas]
+    escolhidas = st.multiselect(
+        "Faixas favoritas (opcional)", options=faixas, default=default_validos, key=key,
+    )
+    return ", ".join(escolhidas)
+
+
+def _popover_escuta(escuta: dict, spotify_id: str) -> None:
     escuta_id = int(escuta["id"])
     with st.popover("✎"):
         with st.form(f"form_editar_escuta_{escuta_id}"):
@@ -53,7 +77,9 @@ def _popover_escuta(escuta: dict) -> None:
             nota_val = st.select_slider(
                 "Nota", options=utils.OPCOES_NOTA, value=nota_atual, format_func=utils.formatar_nota,
             )
-            faixa = st.text_input("Faixa favorita", value=escuta["faixa_favorita"])
+            faixa = _campo_faixa_favorita(
+                spotify_id, escuta["faixa_favorita"], f"faixa_favorita_editar_album_{escuta_id}",
+            )
             review = st.text_area("Review", value=escuta["review"])
 
             c1, c2 = st.columns(2)
@@ -70,26 +96,26 @@ def _popover_escuta(escuta: dict) -> None:
             st.rerun()
 
 
-def _linha_escuta(escuta: dict) -> None:
+def _linha_escuta(escuta: dict, spotify_id: str) -> None:
     col_texto, col_acao = st.columns([8, 1])
     with col_texto:
         linha = f"{utils.formatar_data_br(escuta['data'])} · {utils.formatar_nota(escuta['nota'])}"
         if escuta["faixa_favorita"]:
-            linha += f" · faixa favorita: {escuta['faixa_favorita']}"
+            linha += f" · faixa(s) favorita(s): {escuta['faixa_favorita']}"
         st.markdown(linha)
         if escuta["review"]:
             st.caption(escuta["review"])
     with col_acao:
-        _popover_escuta(escuta)
+        _popover_escuta(escuta, spotify_id)
 
 
-def _secao_escutas(album_id: int) -> None:
+def _secao_escutas(album_id: int, spotify_id: str) -> None:
     escutas = models.listar_escutas(album_id)
     if escutas.empty:
         st.caption("Nenhuma escuta registrada ainda pra esse álbum.")
     else:
         for _, escuta in escutas.iterrows():
-            _linha_escuta(dict(escuta))
+            _linha_escuta(dict(escuta), spotify_id)
             st.divider()
 
     with st.form(f"form_nova_escuta_{album_id}", clear_on_submit=True):
@@ -98,7 +124,7 @@ def _secao_escutas(album_id: int) -> None:
         data_escuta = c1.date_input("Data", value=date.today(), format="DD/MM/YYYY")
         sem_nota = c2.checkbox("ainda sem nota")
         nota = st.select_slider("Nota", options=utils.OPCOES_NOTA, value=4.0, format_func=utils.formatar_nota)
-        faixa_favorita = st.text_input("Faixa favorita (opcional)")
+        faixa_favorita = _campo_faixa_favorita(spotify_id, "", f"faixa_favorita_nova_album_{album_id}")
         review = st.text_area("Review (opcional)")
 
         if st.form_submit_button("registrar escuta"):
@@ -158,7 +184,7 @@ def _card_album(album: dict) -> None:
         with st.expander("histórico e gestão"):
             tab_escutas, tab_editar = st.tabs(["escutas", "editar / excluir"])
             with tab_escutas:
-                _secao_escutas(album_id)
+                _secao_escutas(album_id, album["spotify_id"])
             with tab_editar:
                 _secao_editar(album)
 

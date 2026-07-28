@@ -48,6 +48,12 @@ button, input, textarea, select,
 
 hr { opacity: 0.35; }
 
+/* capas em miniatura não precisam do botão de tela cheia do Streamlit
+   (some junto com hover e quebra o layout em imagens pequenas) */
+button[title="View fullscreen"] {
+    display: none;
+}
+
 /* rótulo de seção estilo "eyebrow" de ledger */
 .ledger-eyebrow {
     font-family: 'Courier Prime', monospace;

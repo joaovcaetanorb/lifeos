@@ -55,6 +55,19 @@ def buscar_albuns(query: str, limit: int = 5) -> list[dict]:
     return albuns
 
 
+def buscar_faixas(album_spotify_id: str) -> list[str]:
+    """Nomes das faixas do álbum, na ordem do disco. Lista vazia se
+    indisponível, id inválido, ou erro de rede."""
+    sp = _get_client()
+    if sp is None or not album_spotify_id:
+        return []
+    try:
+        resultado = sp.album_tracks(album_spotify_id)
+    except Exception:
+        return []
+    return [faixa["name"] for faixa in resultado.get("items", [])]
+
+
 def baixar_capa(url: str) -> bytes | None:
     if not url:
         return None
