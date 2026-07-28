@@ -12,6 +12,11 @@ DB_PATH = DB_DIR / "projetos.db"
 UPLOADS_DIR = DB_DIR / "uploads"
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS app_meta (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    seeded INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS projetos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nome TEXT NOT NULL,
@@ -57,21 +62,35 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+def _migrar_schema(conn: sqlite3.Connection) -> None:
+    """Garante uma linha em app_meta. Se o banco já existia (tinha projetos)
+    antes dessa tabela ser criada, marca como já semeado — sem isso, apagar
+    o último projeto faria o próximo carregamento recriar o exemplo."""
+    row = conn.execute("SELECT seeded FROM app_meta WHERE id = 1").fetchone()
+    if row is None:
+        tinha_projetos = conn.execute("SELECT COUNT(*) AS n FROM projetos").fetchone()["n"] > 0
+        conn.execute("INSERT INTO app_meta (id, seeded) VALUES (1, ?)", (1 if tinha_projetos else 0,))
+        conn.commit()
+
+
 def init_db() -> None:
-    """Cria as tabelas caso não existam. Idempotente."""
+    """Cria as tabelas caso não existam e aplica migrações. Idempotente."""
     conn = get_connection()
     try:
         conn.executescript(SCHEMA)
         conn.commit()
+        _migrar_schema(conn)
     finally:
         conn.close()
 
 
 def banco_esta_vazio() -> bool:
+    """True apenas se o app nunca foi semeado — não reflete se o usuário
+    apagou todos os projetos manualmente (isso é um estado válido)."""
     conn = get_connection()
     try:
-        cur = conn.execute("SELECT COUNT(*) AS n FROM projetos")
-        return cur.fetchone()["n"] == 0
+        row = conn.execute("SELECT seeded FROM app_meta WHERE id = 1").fetchone()
+        return row is None or row["seeded"] == 0
     finally:
         conn.close()
 
@@ -104,6 +123,7 @@ def seed_dados_iniciais() -> None:
             (projeto_id, (hoje - timedelta(days=10)).isoformat(), 300.0, "Aporte inicial (exemplo)"),
         )
 
+        conn.execute("UPDATE app_meta SET seeded = 1 WHERE id = 1")
         conn.commit()
     finally:
         conn.close()
