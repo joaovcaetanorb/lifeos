@@ -201,6 +201,7 @@ def _formulario_nova_escuta() -> None:
 def _popover_escuta(escuta: dict) -> None:
     escuta_id = int(escuta["id"])
     with st.popover("✎"):
+        st.caption(f"{escuta['album_nome']} — {escuta['artista_nome']}")
         with st.form(f"form_editar_escuta_{escuta_id}"):
             data_val = st.date_input(
                 "Data", value=date.fromisoformat(escuta["data"]), format="DD/MM/YYYY",
@@ -216,8 +217,8 @@ def _popover_escuta(escuta: dict) -> None:
             review = st.text_area("Review", value=escuta["review"])
 
             c1, c2 = st.columns(2)
-            salvar = c1.form_submit_button("salvar")
-            excluir = c2.form_submit_button("excluir")
+            salvar = c1.form_submit_button("salvar", use_container_width=True)
+            excluir = c2.form_submit_button("excluir", use_container_width=True)
 
         if salvar:
             models.atualizar_escuta(
@@ -231,13 +232,13 @@ def _popover_escuta(escuta: dict) -> None:
 
 def _card_escuta(escuta: dict) -> None:
     with st.container(border=True):
-        col_capa, col_texto, col_acao = st.columns([1, 7, 1])
+        col_capa, col_texto, col_acao = st.columns([1, 6.5, 0.5], gap="small")
 
         with col_capa:
             if escuta["capa_path"]:
                 caminho_capa = database.DB_DIR / escuta["capa_path"]
                 if caminho_capa.exists():
-                    st.image(str(caminho_capa), width=80)
+                    st.image(str(caminho_capa), width=120)
 
         with col_texto:
             st.markdown(f"**{escuta['album_nome']}** — {escuta['artista_nome']}")

@@ -169,7 +169,7 @@ def _card_album(album: dict) -> None:
             if album["capa_path"]:
                 caminho_capa = database.DB_DIR / album["capa_path"]
                 if caminho_capa.exists():
-                    st.image(str(caminho_capa), width=100)
+                    st.image(str(caminho_capa), width=140)
 
         with col_texto:
             st.subheader(album["nome"])
