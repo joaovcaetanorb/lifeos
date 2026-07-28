@@ -19,9 +19,15 @@ COR_HAIRLINE = "#2A2D23"
 COR_ACENTO = "#3FA66B"
 
 
+def nota_ausente(nota: float | None) -> bool:
+    """True pra None ou NaN — pandas lê NULL do SQLite como NaN (float),
+    não None, e "nota != nota" só é True quando o valor é NaN."""
+    return nota is None or nota != nota
+
+
 def formatar_nota(nota: float | None) -> str:
-    """4.5 -> '★ 4.5'. None -> 'sem nota'."""
-    if nota is None:
+    """4.5 -> '★ 4.5'. None/NaN -> 'sem nota'."""
+    if nota_ausente(nota):
         return "sem nota"
     return f"★ {nota:g}"
 

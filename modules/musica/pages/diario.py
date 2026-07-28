@@ -99,8 +99,8 @@ def _popover_escuta(escuta: dict) -> None:
             data_val = st.date_input(
                 "Data", value=date.fromisoformat(escuta["data"]), format="DD/MM/YYYY",
             )
-            sem_nota = st.checkbox("sem nota", value=escuta["nota"] is None)
-            nota_atual = float(escuta["nota"]) if escuta["nota"] is not None else 4.0
+            sem_nota = st.checkbox("sem nota", value=utils.nota_ausente(escuta["nota"]))
+            nota_atual = 4.0 if utils.nota_ausente(escuta["nota"]) else float(escuta["nota"])
             nota_val = st.select_slider(
                 "Nota", options=utils.OPCOES_NOTA, value=nota_atual, format_func=utils.formatar_nota,
             )
