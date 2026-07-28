@@ -43,13 +43,24 @@ def resumo_geral() -> dict:
     }
 
 
-def escutas_por_mes(meses: int = 12) -> pd.DataFrame:
-    """Contagem de escutas por mês nos últimos N meses — inclui meses sem
-    nenhuma escuta (com total 0), pra não sumir com o eixo do gráfico."""
-    hoje = date.today()
-    periodos = [utils.somar_meses(hoje, -i).strftime("%Y-%m") for i in range(meses - 1, -1, -1)]
+def _filtrar_periodo(escutas: pd.DataFrame, data_inicio: str, data_fim: str) -> pd.DataFrame:
+    if escutas.empty:
+        return escutas
+    return escutas[(escutas["data"] >= data_inicio) & (escutas["data"] <= data_fim)]
 
-    escutas = models.listar_escutas_com_album()
+
+def escutas_por_mes(data_inicio: str, data_fim: str) -> pd.DataFrame:
+    """Contagem de escutas por mês dentro do período — inclui meses sem
+    nenhuma escuta (total 0), pra não sumir com o eixo do gráfico."""
+    inicio = date.fromisoformat(data_inicio)
+    fim = date.fromisoformat(data_fim)
+    periodos = []
+    cursor = date(inicio.year, inicio.month, 1)
+    while cursor <= fim:
+        periodos.append(cursor.strftime("%Y-%m"))
+        cursor = utils.somar_meses(cursor, 1)
+
+    escutas = _filtrar_periodo(models.listar_escutas_com_album(), data_inicio, data_fim)
     contagem_por_periodo = {}
     if not escutas.empty:
         periodo_da_escuta = escutas["data"].str.slice(0, 7)
@@ -62,9 +73,9 @@ def escutas_por_mes(meses: int = 12) -> pd.DataFrame:
     })
 
 
-def distribuicao_notas() -> pd.DataFrame:
-    """Quantas escutas caíram em cada nota possível (0.5 a 5.0)."""
-    escutas = models.listar_escutas_com_album()
+def distribuicao_notas(data_inicio: str, data_fim: str) -> pd.DataFrame:
+    """Quantas escutas caíram em cada nota possível (0.5 a 5.0), dentro do período."""
+    escutas = _filtrar_periodo(models.listar_escutas_com_album(), data_inicio, data_fim)
     notas_validas = escutas["nota"].dropna() if not escutas.empty else pd.Series(dtype=float)
     contagem = notas_validas.value_counts().to_dict()
 
@@ -74,10 +85,11 @@ def distribuicao_notas() -> pd.DataFrame:
     })
 
 
-def top_artistas(limit: int = 8) -> pd.DataFrame:
-    """Artistas com mais escutas registradas (não álbuns distintos — um
-    artista ouvido muitas vezes no mesmo álbum ainda conta bastante)."""
-    escutas = models.listar_escutas_com_album()
+def top_artistas(data_inicio: str, data_fim: str, limit: int = 8) -> pd.DataFrame:
+    """Artistas com mais escutas registradas dentro do período (não álbuns
+    distintos — um artista ouvido muitas vezes no mesmo álbum ainda conta
+    bastante)."""
+    escutas = _filtrar_periodo(models.listar_escutas_com_album(), data_inicio, data_fim)
     if escutas.empty:
         return pd.DataFrame(columns=["artista_nome", "total"])
     contagem = escutas.groupby("artista_nome").size().reset_index(name="total")
@@ -88,16 +100,12 @@ def top_albuns_periodo(data_inicio: str, data_fim: str, limite: int) -> pd.DataF
     """Álbuns mais escutados no período [data_inicio, data_fim] (ISO,
     ambos inclusive), rankeados por número de escutas — pra colagem."""
     colunas = ["album_id", "album_nome", "artista_nome", "capa_path", "total"]
-    escutas = models.listar_escutas_com_album()
+    escutas = _filtrar_periodo(models.listar_escutas_com_album(), data_inicio, data_fim)
     if escutas.empty:
         return pd.DataFrame(columns=colunas)
 
-    no_periodo = escutas[(escutas["data"] >= data_inicio) & (escutas["data"] <= data_fim)]
-    if no_periodo.empty:
-        return pd.DataFrame(columns=colunas)
-
     agrupado = (
-        no_periodo.groupby(["album_id", "album_nome", "artista_nome", "capa_path"])
+        escutas.groupby(["album_id", "album_nome", "artista_nome", "capa_path"])
         .size()
         .reset_index(name="total")
         .sort_values("total", ascending=False)
@@ -105,32 +113,30 @@ def top_albuns_periodo(data_inicio: str, data_fim: str, limite: int) -> pd.DataF
     return agrupado.head(limite)
 
 
-def resumo_ano_atual(ano: int | None = None) -> dict:
-    """Números do ano corrente: álbuns novos no catálogo, escutas
-    registradas, nota média do ano e o artista mais escutado no período."""
-    ano = ano or date.today().year
-    prefixo = str(ano)
-
-    escutas = models.listar_escutas_com_album()
-    escutas_ano = escutas[escutas["data"].str.startswith(prefixo)] if not escutas.empty else escutas
+def resumo_periodo(data_inicio: str, data_fim: str) -> dict:
+    """Números do período: álbuns novos no catálogo, escutas registradas,
+    nota média e o artista mais escutado dentro dele."""
+    escutas = _filtrar_periodo(models.listar_escutas_com_album(), data_inicio, data_fim)
 
     albuns = models.listar_albuns()
-    albuns_ano = albuns[albuns["created_at"].str.startswith(prefixo)] if not albuns.empty else albuns
+    albuns_periodo = pd.DataFrame()
+    if not albuns.empty:
+        criado_em = albuns["created_at"].str.slice(0, 10)
+        albuns_periodo = albuns[(criado_em >= data_inicio) & (criado_em <= data_fim)]
 
-    nota_media_ano = None
+    nota_media = None
     artista_destaque = None
-    if not escutas_ano.empty:
-        notas = escutas_ano["nota"].dropna()
+    if not escutas.empty:
+        notas = escutas["nota"].dropna()
         if not notas.empty:
-            nota_media_ano = round(notas.mean(), 2)
-        top = escutas_ano.groupby("artista_nome").size().sort_values(ascending=False)
+            nota_media = round(notas.mean(), 2)
+        top = escutas.groupby("artista_nome").size().sort_values(ascending=False)
         if not top.empty:
             artista_destaque = top.index[0]
 
     return {
-        "ano": ano,
-        "albuns_novos": len(albuns_ano),
-        "escutas": len(escutas_ano),
-        "nota_media": nota_media_ano,
+        "albuns_novos": len(albuns_periodo),
+        "escutas": len(escutas),
+        "nota_media": nota_media,
         "artista_destaque": artista_destaque,
     }

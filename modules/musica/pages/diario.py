@@ -242,7 +242,8 @@ def _card_escuta(escuta: dict) -> None:
 
         with col_texto:
             st.markdown(f"**{escuta['album_nome']}** — {escuta['artista_nome']}")
-            linha = f"{utils.formatar_data_br(escuta['data'])} · {utils.formatar_nota(escuta['nota'])}"
+            ui.nota_destaque(utils.formatar_nota(escuta["nota"]))
+            linha = utils.formatar_data_br(escuta["data"])
             if escuta["faixa_favorita"]:
                 linha += f" · faixa(s) favorita(s): {escuta['faixa_favorita']}"
             st.caption(linha)

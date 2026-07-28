@@ -64,6 +64,16 @@ button[title="View fullscreen"] {
     margin-bottom: 0.25rem;
 }
 
+/* nota em estrelas: destaque maior que o resto da linha muted */
+.nota-destaque {
+    font-family: 'Courier Prime', monospace;
+    font-weight: 700;
+    font-size: 1.2rem;
+    color: #3FA66B;
+    letter-spacing: 0.02em;
+    margin: 0.1rem 0 0.2rem 0;
+}
+
 /* celular: menos padding lateral, números menores */
 @media (max-width: 640px) {
     [data-testid="stAppViewContainer"] .block-container {
@@ -89,3 +99,7 @@ def titulo_pagina(nome: str) -> None:
 
 def eyebrow(texto: str) -> None:
     st.markdown(f'<div class="ledger-eyebrow">{texto}</div>', unsafe_allow_html=True)
+
+
+def nota_destaque(texto: str) -> None:
+    st.markdown(f'<div class="nota-destaque">{texto}</div>', unsafe_allow_html=True)

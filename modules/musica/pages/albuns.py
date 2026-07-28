@@ -100,10 +100,11 @@ def _popover_escuta(escuta: dict, spotify_id: str) -> None:
 def _linha_escuta(escuta: dict, spotify_id: str) -> None:
     col_texto, col_acao = st.columns([8, 1])
     with col_texto:
-        linha = f"{utils.formatar_data_br(escuta['data'])} · {utils.formatar_nota(escuta['nota'])}"
+        ui.nota_destaque(utils.formatar_nota(escuta["nota"]))
+        linha = utils.formatar_data_br(escuta["data"])
         if escuta["faixa_favorita"]:
             linha += f" · faixa(s) favorita(s): {escuta['faixa_favorita']}"
-        st.markdown(linha)
+        st.caption(linha)
         if escuta["review"]:
             st.caption(escuta["review"])
     with col_acao:
@@ -180,7 +181,7 @@ def _card_album(album: dict) -> None:
 
             nota_media = calc.nota_media_album(album_id)
             total = calc.total_escutas_album(album_id)
-            st.caption(f"{utils.formatar_nota(nota_media)} · {total} escuta(s)")
+            ui.nota_destaque(f"{utils.formatar_nota(nota_media)}  ({total} escuta(s))")
 
         with st.expander("histórico e gestão"):
             tab_escutas, tab_editar = st.tabs(["escutas", "editar / excluir"])

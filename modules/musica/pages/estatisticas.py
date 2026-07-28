@@ -1,10 +1,14 @@
-"""Estatísticas: poucos números que importam sobre a jornada musical."""
+"""Estatísticas: poucos números que importam sobre a jornada musical,
+filtráveis por período."""
+
+from datetime import date
 
 import plotly.graph_objects as go
 import streamlit as st
 
 import calculations as calc
 import database
+import models
 import ui
 import utils
 
@@ -28,9 +32,35 @@ def _grid_style(fig):
     return fig
 
 
-def _secao_resumo_ano() -> None:
-    resumo = calc.resumo_ano_atual()
-    ui.eyebrow(f"resumo de {resumo['ano']}")
+def _periodo_selecionado() -> tuple[str, str, str]:
+    """Retorna (data_inicio_iso, data_fim_iso, rótulo pra exibição)."""
+    hoje = date.today()
+    atalho = st.radio(
+        "Período", ["Este mês", "Este ano", "Todos os tempos", "Personalizado"],
+        horizontal=True, label_visibility="collapsed", key="stats_periodo",
+    )
+
+    if atalho == "Este mês":
+        inicio = hoje.replace(day=1)
+        return inicio.isoformat(), hoje.isoformat(), "este mês"
+    if atalho == "Este ano":
+        inicio = date(hoje.year, 1, 1)
+        return inicio.isoformat(), hoje.isoformat(), str(hoje.year)
+    if atalho == "Todos os tempos":
+        intervalo = models.intervalo_datas_escutas()
+        if intervalo is None:
+            return hoje.isoformat(), hoje.isoformat(), "todos os tempos"
+        return intervalo[0], intervalo[1], "todos os tempos"
+
+    c1, c2 = st.columns(2)
+    inicio = c1.date_input("De", value=date(hoje.year, 1, 1), format="DD/MM/YYYY", key="stats_data_inicio")
+    fim = c2.date_input("Até", value=hoje, format="DD/MM/YYYY", key="stats_data_fim")
+    return inicio.isoformat(), fim.isoformat(), "período personalizado"
+
+
+def _secao_resumo(data_inicio: str, data_fim: str, rotulo: str) -> None:
+    resumo = calc.resumo_periodo(data_inicio, data_fim)
+    ui.eyebrow(f"resumo — {rotulo}")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Álbuns novos", resumo["albuns_novos"])
     c2.metric("Escutas", resumo["escutas"])
@@ -38,24 +68,24 @@ def _secao_resumo_ano() -> None:
     c4.metric("Artista destaque", resumo["artista_destaque"] or "—")
 
 
-def _grafico_escutas_por_mes() -> None:
+def _grafico_escutas_por_mes(data_inicio: str, data_fim: str) -> None:
     ui.eyebrow("atividade")
     st.subheader("Escutas por mês")
-    df = calc.escutas_por_mes(12)
+    df = calc.escutas_por_mes(data_inicio, data_fim)
     if df["total"].sum() == 0:
-        st.caption("Nenhuma escuta registrada nos últimos 12 meses.")
+        st.caption("Nenhuma escuta registrada nesse período.")
         return
     fig = go.Figure()
     fig.add_trace(go.Bar(x=df["mes_nome"], y=df["total"], marker_color=utils.COR_ACENTO))
     st.plotly_chart(_grid_style(fig), use_container_width=True)
 
 
-def _grafico_distribuicao_notas() -> None:
+def _grafico_distribuicao_notas(data_inicio: str, data_fim: str) -> None:
     ui.eyebrow("avaliações")
     st.subheader("Distribuição de notas")
-    df = calc.distribuicao_notas()
+    df = calc.distribuicao_notas(data_inicio, data_fim)
     if df["total"].sum() == 0:
-        st.caption("Nenhuma escuta avaliada ainda.")
+        st.caption("Nenhuma escuta avaliada nesse período.")
         return
     fig = go.Figure()
     fig.add_trace(go.Bar(
@@ -64,12 +94,12 @@ def _grafico_distribuicao_notas() -> None:
     st.plotly_chart(_grid_style(fig), use_container_width=True)
 
 
-def _grafico_top_artistas() -> None:
+def _grafico_top_artistas(data_inicio: str, data_fim: str) -> None:
     ui.eyebrow("recorrência")
     st.subheader("Artistas mais escutados")
-    df = calc.top_artistas(8)
+    df = calc.top_artistas(data_inicio, data_fim, 8)
     if df.empty:
-        st.caption("Nenhuma escuta registrada ainda.")
+        st.caption("Nenhuma escuta registrada nesse período.")
         return
     df = df.sort_values("total")
     fig = go.Figure()
@@ -80,13 +110,16 @@ def _grafico_top_artistas() -> None:
 def render() -> None:
     ui.titulo_pagina("estatísticas")
 
-    _secao_resumo_ano()
+    data_inicio, data_fim, rotulo = _periodo_selecionado()
     st.divider()
-    _grafico_escutas_por_mes()
+
+    _secao_resumo(data_inicio, data_fim, rotulo)
     st.divider()
-    _grafico_distribuicao_notas()
+    _grafico_escutas_por_mes(data_inicio, data_fim)
     st.divider()
-    _grafico_top_artistas()
+    _grafico_distribuicao_notas(data_inicio, data_fim)
+    st.divider()
+    _grafico_top_artistas(data_inicio, data_fim)
 
 
 render()

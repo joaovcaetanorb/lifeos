@@ -194,6 +194,20 @@ def listar_escutas_com_album() -> pd.DataFrame:
         conn.close()
 
 
+def intervalo_datas_escutas() -> tuple[str, str] | None:
+    """(data mais antiga, data mais recente) entre todas as escutas, ou
+    None se não há nenhuma — usado pra resolver "todos os tempos" com
+    datas reais em vez de sentinelas arbitrárias."""
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT MIN(data) AS minima, MAX(data) AS maxima FROM escutas").fetchone()
+        if row is None or row["minima"] is None:
+            return None
+        return row["minima"], row["maxima"]
+    finally:
+        conn.close()
+
+
 def inserir_escuta(album_id: int, data: str, nota: float | None, review: str = "",
                     faixa_favorita: str = "") -> None:
     conn = get_connection()
