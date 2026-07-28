@@ -8,6 +8,7 @@ import streamlit as st
 import calculations as calc
 import database
 import models
+import relatorio
 import ui
 import utils
 
@@ -99,7 +100,7 @@ def _popover_item(item: dict) -> None:
         if item["foto_path"]:
             caminho_foto = database.DB_DIR / item["foto_path"]
             if caminho_foto.exists():
-                st.image(str(caminho_foto), use_container_width=True)
+                st.image(str(caminho_foto), use_column_width=True)
 
         with st.form(f"form_item_detalhe_{item_id}"):
             notas = st.text_area("Notas", value=item["notas"])
@@ -231,7 +232,7 @@ def _card_projeto(projeto: dict) -> None:
             with col_foto:
                 caminho_foto = database.DB_DIR / projeto["foto_path"]
                 if caminho_foto.exists():
-                    st.image(str(caminho_foto), use_container_width=True)
+                    st.image(str(caminho_foto), use_column_width=True)
 
         with col_main:
             st.subheader(projeto["nome"])
@@ -269,12 +270,57 @@ def _card_projeto(projeto: dict) -> None:
                 _secao_editar(projeto)
 
 
+def _secao_relatorio() -> None:
+    with st.expander("relatório em PDF"):
+        st.caption(
+            "Gera um PDF no mesmo estilo do módulo financeiro — bom pra guardar ou "
+            "compartilhar o andamento de um projeto."
+        )
+
+        projetos_df = models.listar_projetos()
+        opcoes_escopo = ["Todos", "Ativo", "Pausado", "Concluído", "Um projeto específico"]
+        escopo = st.selectbox("Escopo do relatório", opcoes_escopo, key="escopo_relatorio_projetos")
+
+        opcoes_projeto = {}
+        projeto_especifico_id = None
+        if escopo == "Um projeto específico":
+            if projetos_df.empty:
+                st.caption("Nenhum projeto cadastrado ainda.")
+                return
+            opcoes_projeto = {int(row["id"]): row["nome"] for _, row in projetos_df.iterrows()}
+            projeto_especifico_id = st.selectbox(
+                "Projeto", list(opcoes_projeto.keys()), format_func=lambda i: opcoes_projeto[i],
+                key="projeto_relatorio_especifico",
+            )
+
+        if st.button("gerar relatório", key="gerar_relatorio_projetos"):
+            if escopo == "Um projeto específico":
+                pdf_bytes = relatorio.gerar_pdf_projeto(projeto_especifico_id)
+                nome_arquivo = f"relatorio_{opcoes_projeto[projeto_especifico_id]}.pdf".replace(" ", "_")
+            else:
+                filtro = None if escopo == "Todos" else escopo
+                pdf_bytes = relatorio.gerar_pdf_lista(filtro)
+                nome_arquivo = f"relatorio_projetos_{escopo.lower()}.pdf"
+            st.session_state["pdf_relatorio_projetos"] = pdf_bytes
+            st.session_state["pdf_relatorio_projetos_nome"] = nome_arquivo
+
+        if st.session_state.get("pdf_relatorio_projetos"):
+            st.download_button(
+                "baixar PDF",
+                data=st.session_state["pdf_relatorio_projetos"],
+                file_name=st.session_state["pdf_relatorio_projetos_nome"],
+                mime="application/pdf",
+                key="baixar_relatorio_projetos",
+            )
+
+
 def render() -> None:
     ui.titulo_pagina("projetos")
     _resumo()
 
     st.divider()
     _formulario_novo_projeto()
+    _secao_relatorio()
 
     st.divider()
     ui.eyebrow("seus projetos")

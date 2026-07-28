@@ -4,6 +4,8 @@ checklist e resumo geral. Sem acesso direto a SQL — usa models.py.
 
 from datetime import date
 
+import pandas as pd
+
 import models
 
 
@@ -35,6 +37,16 @@ def progresso_checklist(projeto_id: int) -> float | None:
     if itens.empty:
         return None
     return round(itens["concluido"].sum() / len(itens) * 100, 1)
+
+
+def evolucao_aportes(projeto_id: int) -> pd.DataFrame:
+    """Saldo acumulado de aportes ao longo do tempo, pra gráfico de linha."""
+    aportes = models.listar_aportes(projeto_id)
+    if aportes.empty:
+        return pd.DataFrame(columns=["data", "saldo_acumulado"])
+    aportes = aportes.sort_values("data").copy()
+    aportes["saldo_acumulado"] = aportes["valor"].cumsum()
+    return aportes[["data", "saldo_acumulado"]]
 
 
 def resumo_geral() -> dict:
