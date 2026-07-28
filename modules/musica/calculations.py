@@ -84,6 +84,27 @@ def top_artistas(limit: int = 8) -> pd.DataFrame:
     return contagem.sort_values("total", ascending=False).head(limit)
 
 
+def top_albuns_periodo(data_inicio: str, data_fim: str, limite: int) -> pd.DataFrame:
+    """Álbuns mais escutados no período [data_inicio, data_fim] (ISO,
+    ambos inclusive), rankeados por número de escutas — pra colagem."""
+    colunas = ["album_id", "album_nome", "artista_nome", "capa_path", "total"]
+    escutas = models.listar_escutas_com_album()
+    if escutas.empty:
+        return pd.DataFrame(columns=colunas)
+
+    no_periodo = escutas[(escutas["data"] >= data_inicio) & (escutas["data"] <= data_fim)]
+    if no_periodo.empty:
+        return pd.DataFrame(columns=colunas)
+
+    agrupado = (
+        no_periodo.groupby(["album_id", "album_nome", "artista_nome", "capa_path"])
+        .size()
+        .reset_index(name="total")
+        .sort_values("total", ascending=False)
+    )
+    return agrupado.head(limite)
+
+
 def resumo_ano_atual(ano: int | None = None) -> dict:
     """Números do ano corrente: álbuns novos no catálogo, escutas
     registradas, nota média do ano e o artista mais escutado no período."""
