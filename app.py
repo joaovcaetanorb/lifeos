@@ -28,7 +28,7 @@ MODULES_DIR = Path(__file__).resolve().parent / "modules"
 # "database" (ou "calculations", "models"...) que outro módulo carregou antes.
 _NOMES_COMPARTILHADOS = [
     "database", "models", "calculations", "utils", "ui", "relatorio",
-    "spotify_client", "colagem",
+    "spotify_client", "colagem", "groq_client",
 ]
 
 # sys.path/sys.modules são globais do processo, mas o Streamlit roda cada
@@ -38,13 +38,36 @@ _NOMES_COMPARTILHADOS = [
 # o que causou o "database sem inicializar_banco" visto em produção).
 _LOCK_IMPORTACAO = threading.Lock()
 
-# st.set_page_config só pode ser chamado uma vez por sessão — mas cada
-# página, pensada pra rodar sozinha, chama isso no próprio topo. Aqui a
-# config já foi feita (layout wide vale pra todas as páginas mesmo assim),
-# então viramos as chamadas seguintes em no-op em vez de editar 17 arquivos
-# pra tirar essa linha.
+# st.set_page_config só pode ser chamado uma vez por execução de script —
+# mas cada página, pensada pra rodar sozinha, chama isso no próprio topo.
+# A config já foi feita aqui em cima (layout wide vale pra todas as páginas
+# mesmo assim), então a chamada da própria página precisa virar no-op — só
+# que `st.set_page_config` é atributo do módulo `streamlit`, COMPARTILHADO
+# por todas as sessões/abas do processo (Streamlit roda cada sessão numa
+# thread própria, mas é o mesmo processo Python). Um monkeypatch comum
+# (`st.set_page_config = lambda: None`, mesmo desfeito depois via
+# try/finally com lock) ainda abre uma janela onde a chamada "de verdade"
+# de QUALQUER outra sessão em andamento nesse exato instante acaba caindo
+# nesse no-op — foi exatamente o bug visto em produção: a 1ª aba pegava
+# wide, e se uma 2ª sessão chamasse st.set_page_config() (na raiz do
+# app.py, fora de qualquer lock) enquanto a 1ª ainda estivesse dentro da
+# janela de supressão, a 2ª ficava com layout "centered" pra sempre, e o
+# título/ícone customizados também sumiam. threading.local() resolve isso
+# de verdade: cada sessão (thread) só suprime a própria chamada, nunca a
+# de outra rodando ao mesmo tempo — sem precisar de lock aqui.
+if not hasattr(st, "_lifeos_set_page_config_original"):
+    st._lifeos_set_page_config_original = st.set_page_config
+    st._lifeos_contexto_pagina = threading.local()
+
+    def _set_page_config_seguro(*args, **kwargs):
+        if getattr(st._lifeos_contexto_pagina, "suprimir", False):
+            return None
+        return st._lifeos_set_page_config_original(*args, **kwargs)
+
+    st.set_page_config = _set_page_config_seguro
+
+_contexto_pagina = st._lifeos_contexto_pagina
 st.set_page_config(page_title="LifeOS", page_icon="🧭", layout="wide")
-st.set_page_config = lambda *args, **kwargs: None
 
 
 def _executar_pagina(modulo_dir: Path, script: Path) -> None:
@@ -59,11 +82,13 @@ def _executar_pagina(modulo_dir: Path, script: Path) -> None:
         if not ja_no_path:
             sys.path.insert(0, caminho_str)
         try:
+            _contexto_pagina.suprimir = True
             nome_unico = f"_pagina_{script.as_posix().replace('/', '_').replace(':', '')}"
             spec = importlib.util.spec_from_file_location(nome_unico, script)
             modulo = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(modulo)
         finally:
+            _contexto_pagina.suprimir = False
             if not ja_no_path:
                 sys.path.remove(caminho_str)
 
@@ -85,6 +110,12 @@ paginas = {
         st.Page(_pagina("dashboard_geral", "app.py"),
                 title="Dashboard Geral", icon="🧭", url_path="geral", default=True),
     ],
+    "Analytics": [
+        st.Page(_pagina("analytics", "app.py"),
+                title="Como funciona", icon="📈", url_path="analytics"),
+        st.Page(_pagina("analytics", "pages/analytics.py"),
+                title="Analytics", icon="🔍", url_path="analytics-tendencias"),
+    ],
     "Financeiro": [
         st.Page(_pagina("financeiro", "app.py"),
                 title="Como funciona", icon="💰", url_path="financeiro"),
@@ -105,6 +136,12 @@ paginas = {
         st.Page(_pagina("projetos", "pages/projetos.py"),
                 title="Projetos", icon="📋", url_path="projetos-lista"),
     ],
+    "Humor": [
+        st.Page(_pagina("humor", "app.py"),
+                title="Como funciona", icon="🙂", url_path="humor"),
+        st.Page(_pagina("humor", "pages/humor.py"),
+                title="Humor", icon="📅", url_path="humor-registro"),
+    ],
     "Hábitos": [
         st.Page(_pagina("habitos", "app.py"),
                 title="Como funciona", icon="✅", url_path="habitos"),
@@ -118,6 +155,8 @@ paginas = {
                 title="Estante", icon="📖", url_path="livros-estante"),
         st.Page(_pagina("livros", "pages/diario.py"),
                 title="Diário", icon="📝", url_path="livros-diario"),
+        st.Page(_pagina("livros", "pages/estatisticas.py"),
+                title="Estatísticas", icon="📈", url_path="livros-estatisticas"),
     ],
     "Música": [
         st.Page(_pagina("musica", "app.py"),

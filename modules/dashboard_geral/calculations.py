@@ -1,6 +1,14 @@
 """Agregações somente-leitura sobre os bancos dos demais módulos do LifeOS,
 para montar os cards e gráficos do Dashboard Geral. Nenhuma escrita ocorre
 aqui — cada módulo continua sendo o único dono dos seus dados.
+
+Cada função abaixo devolve None em caso de qualquer falha (credenciais não
+configuradas, módulo nunca aberto/schema inexistente, erro de rede) — o
+card correspondente vira "módulo ainda não usado" em vez de derrubar a
+página inteira. Isso é mais importante agora do que era com SQLite local:
+antes "banco inexistente" era o único jeito de faltar dado; com Turso o
+banco sempre existe (foi criado manualmente), só a tabela pode não existir
+ainda, e isso só aparece como exceção na hora da query, não antes.
 """
 
 from datetime import date, timedelta
@@ -31,17 +39,20 @@ def _fatura_do_mes(conn, mes_referencia: str, dia_util: int) -> float:
 def resumo_financeiro(hoje: date | None = None) -> dict | None:
     """Saldo restante até o próximo pagamento + gasto do ciclo atual.
 
-    None se o módulo Financeiro ainda nunca foi executado (banco inexistente).
+    None se o módulo Financeiro ainda não tem dado disponível.
     """
     hoje = hoje or date.today()
     conn = database.get_connection("financeiro")
     if conn is None:
         return None
     try:
-        config = dict(conn.execute("SELECT * FROM config WHERE id = 1").fetchone())
+        cursor = conn.execute("SELECT * FROM config WHERE id = 1")
+        config = database.linha_para_dict(cursor, cursor.fetchone())
+        if config is None:
+            return None
         contas_fixas = conn.execute(
             "SELECT COALESCE(SUM(valor), 0) AS total FROM contas_fixas WHERE ativo = 1"
-        ).fetchone()["total"]
+        ).fetchone()[0]
 
         dia_util = config["dia_util_pagamento"]
         inicio_ciclo = utils.pagamento_anterior(hoje, dia_util)
@@ -69,6 +80,7 @@ def resumo_financeiro(hoje: date | None = None) -> dict | None:
 
         proximo_pagamento = utils.proximo_pagamento(hoje, dia_util)
         dias_restantes = utils.dias_ate(proximo_pagamento, hoje)
+        por_dia = round(saldo_restante / dias_restantes, 2) if dias_restantes else round(saldo_restante, 2)
 
         return {
             "saldo_restante": round(saldo_restante, 2),
@@ -76,37 +88,10 @@ def resumo_financeiro(hoje: date | None = None) -> dict | None:
             "dias_restantes": dias_restantes,
             "proximo_pagamento": proximo_pagamento,
             "controle_ativo": controle_ativo,
+            "por_dia": por_dia,
         }
-    finally:
-        conn.close()
-
-
-def evolucao_gastos(n_meses: int = 6, hoje: date | None = None) -> pd.DataFrame:
-    """Total gasto por ciclo de pagamento, últimos N meses."""
-    hoje = hoje or date.today()
-    conn = database.get_connection("financeiro")
-    if conn is None:
-        return pd.DataFrame(columns=["mes_nome", "valor"])
-    try:
-        config = dict(conn.execute("SELECT * FROM config WHERE id = 1").fetchone())
-        dia_util = config["dia_util_pagamento"]
-        gastos = pd.read_sql_query("SELECT * FROM gastos", conn)
-
-        linhas = []
-        for i in range(n_meses - 1, -1, -1):
-            mes_alvo_data = utils.somar_meses(hoje, -i)
-            inicio_ciclo = utils.pagamento_anterior(mes_alvo_data, dia_util)
-            mes_ref = utils.mes_referencia(inicio_ciclo, dia_util)
-            inicio, fim = utils.intervalo_mes(mes_ref, dia_util)
-            if gastos.empty:
-                valor = 0.0
-            else:
-                no_periodo = gastos[(gastos["data"] >= inicio) & (gastos["data"] <= fim)]
-                valor = no_periodo["valor"].sum()
-            linhas.append({"mes_nome": utils.nome_mes(mes_ref), "valor": round(valor, 2)})
-        return pd.DataFrame(linhas)
-    finally:
-        conn.close()
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -143,37 +128,38 @@ def resumo_projetos() -> dict | None:
             "total_investido": round(total_investido, 2),
             "progresso_medio": progresso_medio,
         }
-    finally:
-        conn.close()
+    except Exception:
+        return None
 
 
-def progresso_projetos_ativos() -> pd.DataFrame:
-    """Progresso financeiro (%) de cada projeto ativo com orçamento definido."""
+def proxima_tarefa_projeto() -> dict | None:
+    """Primeiro item de checklist ainda não concluído, entre os projetos
+    ativos — prioriza quem tem prazo mais próximo, depois ordem/criação.
+    None se não há projeto ativo ou nenhum tem pendência."""
     conn = database.get_connection("projetos")
     if conn is None:
-        return pd.DataFrame(columns=["nome", "progresso"])
+        return None
     try:
-        projetos = pd.read_sql_query("SELECT * FROM projetos WHERE status = 'Ativo'", conn)
-        if projetos.empty:
-            return pd.DataFrame(columns=["nome", "progresso"])
-        aportes = pd.read_sql_query("SELECT * FROM projeto_aportes", conn)
+        pendentes = pd.read_sql_query(
+            """SELECT projeto_checklist.*, projetos.nome AS projeto_nome
+               FROM projeto_checklist
+               JOIN projetos ON projetos.id = projeto_checklist.projeto_id
+               WHERE projeto_checklist.concluido = 0 AND projetos.status = 'Ativo'""",
+            conn,
+        )
+    except Exception:
+        return None
 
-        linhas = []
-        for _, projeto in projetos.iterrows():
-            if projeto["orcamento"] <= 0:
-                continue
-            investido = (
-                aportes[aportes["projeto_id"] == projeto["id"]]["valor"].sum()
-                if not aportes.empty else 0.0
-            )
-            progresso = min(investido / projeto["orcamento"] * 100, 100)
-            linhas.append({"nome": projeto["nome"], "progresso": round(progresso, 1)})
+    if pendentes.empty:
+        return None
 
-        if not linhas:
-            return pd.DataFrame(columns=["nome", "progresso"])
-        return pd.DataFrame(linhas).sort_values("progresso", ascending=True)
-    finally:
-        conn.close()
+    com_prazo = pendentes[pendentes["prazo"] != ""].sort_values("prazo")
+    escolhida = com_prazo.iloc[0] if not com_prazo.empty else pendentes.sort_values(["ordem", "id"]).iloc[0]
+    return {
+        "descricao": escolhida["descricao"],
+        "projeto_nome": escolhida["projeto_nome"],
+        "prazo": escolhida["prazo"] or None,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -204,8 +190,29 @@ def resumo_habitos(hoje: date | None = None) -> dict | None:
             "ativos": int(len(habitos)),
             "percentual_medio": round(sum(percentuais) / len(percentuais), 1),
         }
-    finally:
-        conn.close()
+    except Exception:
+        return None
+
+
+def habitos_faltantes_hoje(hoje: date | None = None) -> list[str] | None:
+    """Nomes dos hábitos ativos ainda não marcados hoje. None se o módulo
+    nunca foi usado (distinto de lista vazia, que significa 'já fez tudo')."""
+    hoje = hoje or date.today()
+    conn = database.get_connection("habitos")
+    if conn is None:
+        return None
+    try:
+        habitos = pd.read_sql_query("SELECT * FROM habitos WHERE ativo = 1", conn)
+        if habitos.empty:
+            return []
+        feitos_hoje = pd.read_sql_query(
+            "SELECT habito_id FROM habito_registros WHERE data = ?", conn, params=[hoje.isoformat()],
+        )
+    except Exception:
+        return None
+
+    ids_feitos = set(feitos_hoje["habito_id"]) if not feitos_hoje.empty else set()
+    return [h["nome"] for _, h in habitos.iterrows() if h["id"] not in ids_feitos]
 
 
 # ---------------------------------------------------------------------------
@@ -240,8 +247,36 @@ def resumo_livros() -> dict | None:
             "titulos_lendo": lendo["livro_nome"].tolist(),
             "lidos_ano": int(len(lidos_ano)),
         }
-    finally:
-        conn.close()
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Humor
+# ---------------------------------------------------------------------------
+
+def resumo_humor(hoje: date | None = None) -> dict | None:
+    hoje = hoje or date.today()
+    conn = database.get_connection("humor")
+    if conn is None:
+        return None
+    try:
+        registros = pd.read_sql_query(
+            "SELECT * FROM registros_humor ORDER BY data DESC, hora DESC, id DESC", conn,
+        )
+        if registros.empty:
+            return {"registrado_hoje": False, "nota_hoje": None, "tags_hoje": []}
+
+        hoje_iso = hoje.isoformat()
+        registros_hoje = registros[registros["data"] == hoje_iso]
+        if registros_hoje.empty:
+            return {"registrado_hoje": False, "nota_hoje": None, "tags_hoje": []}
+
+        ultimo = registros_hoje.iloc[0]
+        tags = [t for t in ultimo["tags"].split(",") if t]
+        return {"registrado_hoje": True, "nota_hoje": int(ultimo["nota"]), "tags_hoje": tags}
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -273,5 +308,53 @@ def resumo_musica() -> dict | None:
             "albuns_mes": int(albuns_mes),
             "ultimo_album": f"{ultima['album_nome']} — {ultima['artista_nome']}",
         }
-    finally:
-        conn.close()
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Contexto de hoje — o que vira a saudação por IA (nunca tendência/histórico,
+# isso é trabalho do Analytics)
+# ---------------------------------------------------------------------------
+
+def contexto_hoje() -> str:
+    """Resumo textual compacto só do AGORA — sem números agregados de meses
+    passados. É isso que vira o contexto da saudação gerada por IA."""
+    blocos = []
+
+    fin = resumo_financeiro()
+    if fin is not None:
+        blocos.append(
+            f"FINANCEIRO — pode gastar hoje: {utils.formatar_moeda(fin['por_dia'])}, "
+            f"faltam {fin['dias_restantes']} dia(s) pro próximo pagamento."
+        )
+
+    tarefa = proxima_tarefa_projeto()
+    if tarefa is not None:
+        prazo_txt = f", prazo {tarefa['prazo']}" if tarefa["prazo"] else ""
+        blocos.append(f"PROJETOS — próxima tarefa pendente: '{tarefa['descricao']}' ({tarefa['projeto_nome']}{prazo_txt}).")
+
+    faltantes = habitos_faltantes_hoje()
+    if faltantes is not None:
+        txt = ", ".join(faltantes) if faltantes else "nenhum — todos cumpridos hoje"
+        blocos.append(f"HÁBITOS — ainda faltam hoje: {txt}.")
+
+    humor = resumo_humor()
+    if humor is not None:
+        if humor["registrado_hoje"]:
+            tags_txt = ", ".join(humor["tags_hoje"]) if humor["tags_hoje"] else "sem tags"
+            blocos.append(f"HUMOR — hoje: {humor['nota_hoje']}/10 ({tags_txt}).")
+        else:
+            blocos.append("HUMOR — ainda sem registro hoje.")
+
+    livros = resumo_livros()
+    if livros is not None and livros["lendo_agora"] > 0:
+        blocos.append(f"LIVROS — lendo agora: {', '.join(livros['titulos_lendo'])}.")
+
+    musica = resumo_musica()
+    if musica is not None and musica["ultimo_album"]:
+        blocos.append(f"MÚSICA — último álbum ouvido: {musica['ultimo_album']}.")
+
+    if not blocos:
+        return "Nenhum módulo tem dado suficiente ainda."
+    return "\n".join(blocos)

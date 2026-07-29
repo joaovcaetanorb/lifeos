@@ -10,18 +10,11 @@ como tupla simples. Por isso `linha_para_dict()` abaixo: sempre que o
 código precisar acessar uma coluna pelo nome (não só por posição), usa essa
 função em vez de `dict(row)` ou `row["coluna"]`. A conexão é compartilhada
 (cache_resource) — nenhuma função em models.py chama `conn.close()`.
-
-Capas de álbum (UPLOADS_DIR) continuam em disco local — só os dados SQL
-migraram pro Turso.
 """
 
 import libsql
 import streamlit as st
-from pathlib import Path
 from datetime import date, timedelta
-
-DB_DIR = Path(__file__).parent / "database"
-UPLOADS_DIR = DB_DIR / "uploads"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS app_meta (
@@ -29,33 +22,13 @@ CREATE TABLE IF NOT EXISTS app_meta (
     seeded INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS artistas (
+CREATE TABLE IF NOT EXISTS registros_humor (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT NOT NULL,
-    spotify_id TEXT DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS albuns (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT NOT NULL,
-    artista_id INTEGER NOT NULL REFERENCES artistas(id) ON DELETE CASCADE,
-    ano_lancamento INTEGER,
-    genero TEXT DEFAULT '',
-    capa_path TEXT DEFAULT '',
-    spotify_id TEXT DEFAULT '',
-    spotify_url TEXT DEFAULT '',
-    favorito INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS escutas (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    album_id INTEGER NOT NULL REFERENCES albuns(id) ON DELETE CASCADE,
     data TEXT NOT NULL,
-    nota REAL,
-    review TEXT DEFAULT '',
-    faixa_favorita TEXT DEFAULT '',
+    hora TEXT NOT NULL DEFAULT '',
+    nota INTEGER NOT NULL CHECK (nota BETWEEN 1 AND 10),
+    tags TEXT NOT NULL DEFAULT '',
+    nota_livre TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 """
@@ -63,12 +36,10 @@ CREATE TABLE IF NOT EXISTS escutas (
 
 @st.cache_resource(show_spinner=False)
 def _conexao_compartilhada():
-    conn = libsql.connect(
-        database=st.secrets["TURSO_MUSICA_URL"],
-        auth_token=st.secrets["TURSO_MUSICA_TOKEN"],
+    return libsql.connect(
+        database=st.secrets["TURSO_HUMOR_URL"],
+        auth_token=st.secrets["TURSO_HUMOR_TOKEN"],
     )
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
 
 
 def get_connection():
@@ -88,18 +59,13 @@ def linha_para_dict(cursor, row: tuple | None) -> dict | None:
 
 
 def _migrar_schema(conn) -> None:
-    """Garante uma linha em app_meta. Não basear "já foi semeado?" em
-    tabelas que o usuário pode esvaziar (ver bug corrigido em Projetos) —
-    apagar o último álbum não pode fazer o exemplo voltar sozinho."""
+    """Garante uma linha em app_meta. Se o banco já existia (tinha registros)
+    antes dessa tabela ser criada, marca como já semeado — sem isso, apagar
+    o último registro faria o próximo carregamento recriar o exemplo."""
     row = conn.execute("SELECT seeded FROM app_meta WHERE id = 1").fetchone()
     if row is None:
-        tinha_dados = conn.execute("SELECT COUNT(*) AS n FROM albuns").fetchone()[0] > 0
+        tinha_dados = conn.execute("SELECT COUNT(*) AS n FROM registros_humor").fetchone()[0] > 0
         conn.execute("INSERT INTO app_meta (id, seeded) VALUES (1, ?)", (1 if tinha_dados else 0,))
-
-    colunas_albuns = {r[1] for r in conn.execute("PRAGMA table_info(albuns)").fetchall()}
-    if "favorito" not in colunas_albuns:
-        conn.execute("ALTER TABLE albuns ADD COLUMN favorito INTEGER NOT NULL DEFAULT 0")
-
     conn.commit()
 
 
@@ -113,35 +79,26 @@ def init_db() -> None:
 
 def banco_esta_vazio() -> bool:
     """True apenas se o app nunca foi semeado — não reflete se o usuário
-    apagou todos os álbuns manualmente (isso é um estado válido)."""
+    apagou todos os registros manualmente (isso é um estado válido)."""
     conn = get_connection()
     row = conn.execute("SELECT seeded FROM app_meta WHERE id = 1").fetchone()
     return row is None or row[0] == 0
 
 
 def seed_dados_iniciais() -> None:
-    """Popula o banco com um álbum fictício na primeira execução, só para
-    a tela não nascer vazia — não são dados reais do usuário."""
+    """Popula o banco com alguns registros fictícios na primeira execução,
+    só para a tela não nascer vazia — não são dados reais do usuário."""
     conn = get_connection()
-    cur = conn.execute("INSERT INTO artistas (nome) VALUES (?)", ("Radiohead",))
-    artista_id = cur.lastrowid
-
-    cur = conn.execute(
-        """INSERT INTO albuns (nome, artista_id, ano_lancamento, genero)
-           VALUES (?, ?, ?, ?)""",
-        ("OK Computer (exemplo)", artista_id, 1997, "rock alternativo"),
-    )
-    album_id = cur.lastrowid
-
     hoje = date.today()
-    conn.execute(
-        """INSERT INTO escutas (album_id, data, nota, review, faixa_favorita)
+    exemplos = [
+        (hoje - timedelta(days=4), "09:00", 6, "Cansado,Focado", ""),
+        (hoje - timedelta(days=2), "20:30", 8, "Animado,Grato", "Registro de exemplo."),
+        (hoje - timedelta(days=1), "13:00", 5, "Ansioso", ""),
+    ]
+    conn.executemany(
+        """INSERT INTO registros_humor (data, hora, nota, tags, nota_livre)
            VALUES (?, ?, ?, ?, ?)""",
-        (
-            album_id, (hoje - timedelta(days=30)).isoformat(), 4.5,
-            "Primeira escuta completa, impressionante de cabo a rabo. (exemplo)",
-            "Paranoid Android",
-        ),
+        [(d.isoformat(), h, n, t, o) for d, h, n, t, o in exemplos],
     )
 
     conn.execute("UPDATE app_meta SET seeded = 1 WHERE id = 1")

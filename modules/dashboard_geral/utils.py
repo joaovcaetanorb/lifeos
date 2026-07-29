@@ -6,7 +6,7 @@ outros módulos — cada módulo do LifeOS é uma aplicação independente).
 """
 
 import calendar
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 # Tema visual "ledger/terminal": mesmo esquema de cores dos demais módulos.
 COR_FUNDO = "#0D0F0C"
@@ -111,3 +111,11 @@ def dias_ate(data_alvo: date, hoje: date | None = None) -> int:
     """Dias restantes até uma data (mínimo 1, para evitar divisão por zero)."""
     hoje = hoje or date.today()
     return max((data_alvo - hoje).days, 1)
+
+
+def horas_desde(timestamp_iso: str) -> float:
+    """Horas decorridas desde um timestamp 'YYYY-MM-DD HH:MM:SS' gravado
+    via CURRENT_TIMESTAMP do SQLite — que é sempre UTC, por isso compara
+    com utcnow() e não now() (senão o fuso horário local desvia a conta)."""
+    gerado_em = datetime.fromisoformat(timestamp_iso)
+    return (datetime.utcnow() - gerado_em).total_seconds() / 3600

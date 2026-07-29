@@ -161,10 +161,14 @@ def _secao_editar(album: dict) -> None:
         st.rerun()
 
 
+def _toggle_favorito(album_id: int) -> None:
+    models.favoritar_album(album_id, st.session_state[f"favorito_{album_id}"])
+
+
 def _card_album(album: dict) -> None:
     album_id = int(album["id"])
     with st.container(border=True):
-        col_capa, col_texto = st.columns([1, 5])
+        col_capa, col_texto, col_favorito = st.columns([1, 5, 1])
 
         with col_capa:
             if album["capa_path"]:
@@ -183,6 +187,12 @@ def _card_album(album: dict) -> None:
             total = calc.total_escutas_album(album_id)
             ui.nota_destaque(f"{utils.formatar_nota(nota_media)}  ({total} escuta(s))")
 
+        with col_favorito:
+            st.checkbox(
+                "★ favorito", value=bool(album["favorito"]), key=f"favorito_{album_id}",
+                on_change=_toggle_favorito, args=(album_id,),
+            )
+
         with st.expander("histórico e gestão"):
             tab_escutas, tab_editar = st.tabs(["escutas", "editar / excluir"])
             with tab_escutas:
@@ -196,9 +206,13 @@ def render() -> None:
     _resumo()
 
     st.divider()
-    busca = st.text_input("Buscar por álbum ou artista", placeholder="Ex.: Radiohead")
+    c1, c2 = st.columns([4, 1])
+    busca = c1.text_input("Buscar por álbum ou artista", placeholder="Ex.: Radiohead", label_visibility="collapsed")
+    so_favoritos = c2.checkbox("★ só favoritos")
 
     albuns = models.listar_albuns()
+    if so_favoritos:
+        albuns = albuns[albuns["favorito"] == 1]
     if busca.strip():
         termo = busca.strip().lower()
         albuns = albuns[

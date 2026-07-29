@@ -33,8 +33,8 @@ def _grid_style(fig: go.Figure) -> go.Figure:
     return fig
 
 
-def _resumo() -> None:
-    resumo = calc.resumo_geral()
+def _resumo(registros, habitos) -> None:
+    resumo = calc.resumo_geral(registros=registros, habitos=habitos)
     if resumo["ativos"] == 0:
         st.caption("Nenhum hábito cadastrado ainda.")
         return
@@ -80,10 +80,10 @@ def _secao_editar(habito: dict) -> None:
         st.rerun()
 
 
-def _card_habito(habito: dict, hoje: date) -> None:
+def _card_habito(habito: dict, hoje: date, registros) -> None:
     hid = int(habito["id"])
     hoje_iso = hoje.isoformat()
-    resumo = calc.resumo_habito(hid, hoje)
+    resumo = calc.resumo_habito(hid, hoje, registros)
 
     with st.container(border=True):
         col_chk, col_main = st.columns([1, 5])
@@ -105,35 +105,118 @@ def _card_habito(habito: dict, hoje: date) -> None:
             _secao_editar(habito)
 
 
-def _secao_analises() -> None:
+def _grafico_heatmap_diario(hoje: date, registros, habitos) -> None:
+    st.markdown("**Calendário de cumprimento (últimos 6 meses)**")
+    df = calc.heatmap_diario(182, hoje, registros, habitos)
+    if df.empty:
+        st.caption("Sem dados suficientes ainda.")
+        return
+
+    df = df.copy()
+    df["dia_semana"] = df["data"].dt.dayofweek
+    primeiro_dia_semana = int(df["data"].min().dayofweek)
+    df["semana"] = ((df["data"] - df["data"].min()).dt.days + primeiro_dia_semana) // 7
+
+    dias_semana_labels = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+    pivot = df.pivot(index="dia_semana", columns="semana", values="percentual").reindex(index=range(7))
+
+    # Rótulo de mês só na primeira semana em que ele aparece (igual ao
+    # calendário do GitHub) — repetir em toda semana poluiria o eixo.
+    nomes_mes = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+    primeiro_dia_por_semana = df.groupby("semana")["data"].min().sort_index()
+    tick_vals, tick_texts = [], []
+    mes_anterior = None
+    for semana, primeiro_dia in primeiro_dia_por_semana.items():
+        mes_atual = (primeiro_dia.year, primeiro_dia.month)
+        if mes_atual != mes_anterior:
+            tick_vals.append(semana)
+            tick_texts.append(nomes_mes[primeiro_dia.month - 1])
+            mes_anterior = mes_atual
+
+    fig = go.Figure(data=go.Heatmap(
+        z=pivot.values,
+        y=dias_semana_labels,
+        colorscale=[[0, utils.COR_HAIRLINE], [1, utils.COR_ACENTO]],
+        showscale=False,
+        xgap=3, ygap=3,
+        hovertemplate="%{z:.0f}%<extra></extra>",
+        zmin=0, zmax=100,
+    ))
+    fig.update_xaxes(tickmode="array", tickvals=tick_vals, ticktext=tick_texts, showgrid=False)
+    fig.update_layout(
+        margin=dict(l=10, r=10, t=10, b=10), height=220,
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="JetBrains Mono, monospace", color=utils.COR_TEXTO_MUTED),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _periodo_selecionado() -> tuple[str, str, str]:
+    """Retorna (data_inicio_iso, data_fim_iso, rótulo pra exibição)."""
+    hoje = date.today()
+    atalho = st.radio(
+        "Período", ["Este mês", "Este ano", "Todos os tempos", "Personalizado"],
+        horizontal=True, label_visibility="collapsed", key="habitos_stats_periodo",
+    )
+
+    if atalho == "Este mês":
+        inicio = hoje.replace(day=1)
+        return inicio.isoformat(), hoje.isoformat(), "este mês"
+    if atalho == "Este ano":
+        inicio = date(hoje.year, 1, 1)
+        return inicio.isoformat(), hoje.isoformat(), str(hoje.year)
+    if atalho == "Todos os tempos":
+        intervalo = models.intervalo_datas_registros()
+        if intervalo is None:
+            return hoje.isoformat(), hoje.isoformat(), "todos os tempos"
+        return intervalo[0], intervalo[1], "todos os tempos"
+
+    c1, c2 = st.columns(2)
+    inicio = c1.date_input("De", value=date(hoje.year, 1, 1), format="DD/MM/YYYY", key="habitos_stats_data_inicio")
+    fim = c2.date_input("Até", value=hoje, format="DD/MM/YYYY", key="habitos_stats_data_fim")
+    return inicio.isoformat(), fim.isoformat(), "período personalizado"
+
+
+def _grafico_progresso_habito(data_inicio: str, data_fim: str, registros, habitos) -> None:
+    st.markdown("**% cumprido por hábito**")
+    df = calc.progresso_por_habito_periodo(data_inicio, data_fim, registros, habitos)
+    if df.empty:
+        st.caption("Nenhum hábito cadastrado ainda.")
+        return
+    fig = px.bar(
+        df, x="percentual", y="nome", orientation="h",
+        text=df["percentual"].map(lambda v: f"{v:.0f}%"),
+    )
+    fig.update_traces(marker_color=utils.COR_ACENTO, textposition="outside", cliponaxis=False)
+    fig.update_layout(xaxis_title=None, yaxis_title=None, xaxis_range=[0, 100])
+    st.plotly_chart(_grid_style(fig), use_container_width=True)
+
+
+def _grafico_cumprimento_mensal(data_inicio: str, data_fim: str, registros, habitos) -> None:
+    st.markdown("**Cumprimento por mês (todos os hábitos)**")
+    df = calc.cumprimento_por_mes(data_inicio, data_fim, registros, habitos)
+    if df.empty or df["percentual"].sum() == 0:
+        st.caption("Sem dados suficientes ainda.")
+        return
+    fig = px.bar(df, x="mes_nome", y="percentual", text=df["percentual"].map(lambda v: f"{v:.0f}%"))
+    fig.update_traces(marker_color=utils.COR_REALIZADO, textposition="outside", cliponaxis=False)
+    fig.update_layout(xaxis_title=None, yaxis_title=None, yaxis_range=[0, 100])
+    st.plotly_chart(_grid_style(fig), use_container_width=True)
+
+
+def _secao_analises(registros, habitos) -> None:
     ui.eyebrow("análises")
     st.subheader("Progresso e evolução")
     with st.expander("ver gráficos"):
+        st.caption("Calendário sempre mostra os últimos 6 meses — o filtro abaixo vale pros gráficos seguintes.")
+        _grafico_heatmap_diario(date.today(), registros, habitos)
+        st.divider()
+        data_inicio, data_fim, _ = _periodo_selecionado()
         col_a, col_b = st.columns(2)
         with col_a:
-            st.markdown("**% cumprido por hábito (30 dias)**")
-            df = calc.progresso_por_habito(30)
-            if df.empty:
-                st.caption("Nenhum hábito cadastrado ainda.")
-            else:
-                fig = px.bar(
-                    df, x="percentual", y="nome", orientation="h",
-                    text=df["percentual"].map(lambda v: f"{v:.0f}%"),
-                )
-                fig.update_traces(marker_color=utils.COR_ACENTO, textposition="outside", cliponaxis=False)
-                fig.update_layout(xaxis_title=None, yaxis_title=None, xaxis_range=[0, 100])
-                st.plotly_chart(_grid_style(fig), use_container_width=True)
-
+            _grafico_progresso_habito(data_inicio, data_fim, registros, habitos)
         with col_b:
-            st.markdown("**Evolução semanal (todos os hábitos)**")
-            df = calc.evolucao_semanal(8)
-            if df.empty or df["percentual"].sum() == 0:
-                st.caption("Sem dados suficientes ainda.")
-            else:
-                fig = px.bar(df, x="semana", y="percentual", text=df["percentual"].map(lambda v: f"{v:.0f}%"))
-                fig.update_traces(marker_color=utils.COR_REALIZADO, textposition="outside", cliponaxis=False)
-                fig.update_layout(xaxis_title=None, yaxis_title=None, yaxis_range=[0, 100])
-                st.plotly_chart(_grid_style(fig), use_container_width=True)
+            _grafico_cumprimento_mensal(data_inicio, data_fim, registros, habitos)
 
 
 def _secao_relatorio() -> None:
@@ -170,23 +253,25 @@ def _secao_relatorio() -> None:
 
 def render() -> None:
     hoje = date.today()
+    habitos = calc.buscar_habitos()
+    registros = calc.buscar_registros_todos()
+
     ui.titulo_pagina("hábitos")
-    _resumo()
+    _resumo(registros, habitos)
 
     st.divider()
     _formulario_novo_habito()
 
     st.divider()
     ui.eyebrow("check-in de hoje")
-    habitos = models.listar_habitos()
     if habitos.empty:
         st.caption("Nenhum hábito cadastrado ainda.")
     else:
         for _, habito in habitos.iterrows():
-            _card_habito(dict(habito), hoje)
+            _card_habito(dict(habito), hoje, registros)
 
     st.divider()
-    _secao_analises()
+    _secao_analises(registros, habitos)
 
     st.divider()
     _secao_relatorio()

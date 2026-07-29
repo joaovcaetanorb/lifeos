@@ -140,10 +140,14 @@ def _secao_editar(livro: dict) -> None:
         st.rerun()
 
 
-def _card_livro(livro: dict) -> None:
+def _toggle_favorito_livro(livro_id: int) -> None:
+    models.favoritar_livro(livro_id, st.session_state[f"favorito_livro_{livro_id}"])
+
+
+def _card_livro(livro: dict, status_atual: str) -> None:
     livro_id = int(livro["id"])
     with st.container(border=True):
-        col_capa, col_texto = st.columns([1, 5])
+        col_capa, col_texto, col_favorito = st.columns([1, 5, 1])
 
         with col_capa:
             if livro["capa_path"]:
@@ -158,10 +162,15 @@ def _card_livro(livro: dict) -> None:
             genero_txt = livro["genero"] if livro["genero"] else "sem gênero"
             st.caption(f"{livro['autor_nome']} · {ano_txt} · {genero_txt}")
 
-            status_atual = calc.status_atual_livro(livro_id)
             nota_media = calc.nota_media_livro(livro_id)
             total = calc.total_leituras_livro(livro_id)
             ui.nota_destaque(f"{status_atual} · {utils.formatar_nota(nota_media)} ({total} leitura(s))")
+
+        with col_favorito:
+            st.checkbox(
+                "★ favorito", value=bool(livro["favorito"]), key=f"favorito_livro_{livro_id}",
+                on_change=_toggle_favorito_livro, args=(livro_id,),
+            )
 
         with st.expander("histórico e gestão"):
             tab_leituras, tab_editar = st.tabs(["leituras", "editar / excluir"])
@@ -171,14 +180,52 @@ def _card_livro(livro: dict) -> None:
                 _secao_editar(livro)
 
 
+def _secao_melhores_avaliados() -> None:
+    top = calc.top_livros_avaliados(5)
+    if top.empty:
+        return
+    ui.eyebrow("destaque")
+    st.subheader("Melhores avaliados")
+    cols = st.columns(len(top))
+    for col, (_, livro) in zip(cols, top.iterrows()):
+        with col:
+            if livro["capa_path"]:
+                caminho_capa = database.DB_DIR / livro["capa_path"]
+                if caminho_capa.exists():
+                    st.image(str(caminho_capa), use_container_width=True)
+            st.caption(f"**{livro['livro_nome']}**  \n{livro['autor_nome']}  \n{utils.formatar_nota(livro['nota_media'])}")
+
+
+FILTRO_STATUS_OPCOES = ["Todos", "Lendo", "Concluído", "Abandonado", "Não iniciado"]
+
+
 def render() -> None:
     ui.titulo_pagina("estante")
     _resumo()
 
     st.divider()
-    busca = st.text_input("Buscar por livro ou autor", placeholder="Ex.: Machado de Assis")
+    _secao_melhores_avaliados()
+
+    st.divider()
+    filtro_status = st.radio(
+        "Status", FILTRO_STATUS_OPCOES, horizontal=True, label_visibility="collapsed", key="estante_filtro_status",
+    )
+    c1, c2 = st.columns([4, 1])
+    busca = c1.text_input(
+        "Buscar por livro ou autor", placeholder="Ex.: Machado de Assis", label_visibility="collapsed",
+    )
+    so_favoritos = c2.checkbox("★ só favoritos")
 
     livros = models.listar_livros()
+    status_todos = calc.status_por_livro()
+    livros = livros.assign(
+        status_atual=livros["id"].map(lambda lid: status_todos.get(lid, "Não iniciado"))
+    )
+
+    if filtro_status != "Todos":
+        livros = livros[livros["status_atual"] == filtro_status]
+    if so_favoritos:
+        livros = livros[livros["favorito"] == 1]
     if busca.strip():
         termo = busca.strip().lower()
         livros = livros[
@@ -190,7 +237,7 @@ def render() -> None:
         st.caption("Nenhum livro encontrado.")
     else:
         for _, livro in livros.iterrows():
-            _card_livro(dict(livro))
+            _card_livro(dict(livro), livro["status_atual"])
 
 
 render()

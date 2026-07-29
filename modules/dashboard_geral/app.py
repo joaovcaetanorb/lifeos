@@ -7,31 +7,18 @@ das telas de uso — a própria home É o resumo, pra caber no princípio de
 
 from datetime import date
 
-import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
 
 import calculations as calc
+import database
+import groq_client
+import models
 import ui
 import utils
 
 st.set_page_config(page_title="Dashboard Geral", page_icon="🧭", layout="wide")
+database.inicializar_banco()
 ui.aplicar_tema()
-
-CHART_LAYOUT = dict(
-    margin=dict(l=10, r=10, t=30, b=10),
-    height=280,
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(family="JetBrains Mono, monospace", color=utils.COR_TEXTO_MUTED),
-)
-
-
-def _grid_style(fig: go.Figure) -> go.Figure:
-    fig.update_xaxes(showgrid=True, gridcolor=utils.COR_HAIRLINE, zeroline=False)
-    fig.update_yaxes(showgrid=False, zeroline=False)
-    fig.update_layout(**CHART_LAYOUT)
-    return fig
 
 
 def _card_financeiro() -> None:
@@ -41,9 +28,9 @@ def _card_financeiro() -> None:
         if resumo is None:
             st.caption("Módulo ainda não usado.")
             return
-        st.metric("Saldo até o pagamento", utils.formatar_moeda(resumo["saldo_restante"]))
+        st.metric("Pode gastar hoje", utils.formatar_moeda(resumo["por_dia"]))
         st.caption(
-            f"Gasto no ciclo: {utils.formatar_moeda(resumo['gasto_mes'])} · "
+            f"Saldo até o pagamento: {utils.formatar_moeda(resumo['saldo_restante'])} · "
             f"faltam {resumo['dias_restantes']} dia(s) para "
             f"{resumo['proximo_pagamento'].strftime('%d/%m')}"
         )
@@ -63,11 +50,12 @@ def _card_projetos() -> None:
             st.caption("Nenhum projeto ativo no momento.")
             return
         st.metric("Projetos ativos", resumo["ativos"])
-        progresso_txt = f"{resumo['progresso_medio']:.0f}%" if resumo["progresso_medio"] is not None else "—"
-        st.caption(
-            f"{utils.formatar_moeda(resumo['total_investido'])} investidos no total · "
-            f"progresso médio: {progresso_txt}"
-        )
+        tarefa = calc.proxima_tarefa_projeto()
+        if tarefa is not None:
+            st.caption(f"Próxima tarefa: {tarefa['descricao']} ({tarefa['projeto_nome']})")
+        else:
+            progresso_txt = f"{resumo['progresso_medio']:.0f}%" if resumo["progresso_medio"] is not None else "—"
+            st.caption(f"progresso médio: {progresso_txt}")
 
 
 def _card_habitos() -> None:
@@ -82,7 +70,11 @@ def _card_habitos() -> None:
             st.caption("Nenhum hábito cadastrado ainda.")
             return
         st.metric("Hábitos ativos", resumo["ativos"])
-        st.caption(f"cumprimento médio (30 dias): {resumo['percentual_medio']:.0f}%")
+        faltantes = calc.habitos_faltantes_hoje()
+        if not faltantes:
+            st.caption("Tudo cumprido hoje ✓")
+        else:
+            st.caption(f"Faltam hoje: {', '.join(faltantes)}")
 
 
 def _card_livros() -> None:
@@ -115,31 +107,34 @@ def _card_musica() -> None:
             st.caption("Nenhum álbum registrado ainda.")
 
 
-def _grafico_evolucao_gastos() -> None:
-    st.markdown("**Evolução de gastos (Financeiro)**")
-    df = calc.evolucao_gastos(6)
-    if df.empty or df["valor"].sum() == 0:
-        st.caption("Sem dados suficientes ainda.")
-        return
-    fig = px.bar(df, x="mes_nome", y="valor", text=df["valor"].map(utils.formatar_moeda))
-    fig.update_traces(marker_color=utils.COR_REALIZADO, textposition="outside", cliponaxis=False)
-    fig.update_layout(xaxis_title=None, yaxis_title=None)
-    st.plotly_chart(_grid_style(fig), use_container_width=True)
+def _card_humor() -> None:
+    with st.container(border=True, key="card_humor"):
+        st.markdown("**🙂 Humor**")
+        resumo = calc.resumo_humor()
+        if resumo is None:
+            st.caption("Módulo ainda não usado.")
+            return
+        if not resumo["registrado_hoje"]:
+            st.metric("Humor hoje", "—")
+            st.caption("Ainda sem registro hoje.")
+            return
+        st.metric("Humor hoje", f"{resumo['nota_hoje']}/10")
+        st.caption(", ".join(resumo["tags_hoje"]) if resumo["tags_hoje"] else "sem tags")
 
 
-def _grafico_progresso_projetos() -> None:
-    st.markdown("**Progresso dos projetos ativos**")
-    df = calc.progresso_projetos_ativos()
-    if df.empty:
-        st.caption("Nenhum projeto ativo com orçamento definido.")
+def _secao_saudacao() -> None:
+    if not groq_client.disponivel():
         return
-    fig = px.bar(
-        df, x="progresso", y="nome", orientation="h",
-        text=df["progresso"].map(lambda v: f"{v:.0f}%"),
-    )
-    fig.update_traces(marker_color=utils.COR_ACENTO, textposition="outside", cliponaxis=False)
-    fig.update_layout(xaxis_title=None, yaxis_title=None, xaxis_range=[0, 100])
-    st.plotly_chart(_grid_style(fig), use_container_width=True)
+    saudacao = models.obter_saudacao_mais_recente()
+    desatualizada = saudacao is None or utils.horas_desde(saudacao["gerado_em"]) >= 24
+    if desatualizada:
+        contexto = calc.contexto_hoje()
+        texto = groq_client.gerar_saudacao(contexto)
+        if texto:
+            models.salvar_saudacao(texto)
+            saudacao = models.obter_saudacao_mais_recente()
+    if saudacao:
+        st.info(saudacao["texto"])
 
 
 def render() -> None:
@@ -147,7 +142,9 @@ def render() -> None:
     ui.eyebrow(date.today().strftime("%d/%m/%Y"))
     st.caption("Um resumo rápido de cada área — abra o módulo correspondente para ver os detalhes.")
 
-    c1, c2, c3, c4, c5 = st.columns(5)
+    _secao_saudacao()
+
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
     with c1:
         _card_financeiro()
     with c2:
@@ -155,17 +152,11 @@ def render() -> None:
     with c3:
         _card_habitos()
     with c4:
-        _card_livros()
+        _card_humor()
     with c5:
+        _card_livros()
+    with c6:
         _card_musica()
-
-    st.divider()
-
-    col_a, col_b = st.columns(2)
-    with col_a:
-        _grafico_evolucao_gastos()
-    with col_b:
-        _grafico_progresso_projetos()
 
 
 render()

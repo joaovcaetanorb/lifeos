@@ -38,6 +38,20 @@ def intervalo_ciclo(mes_referencia: str) -> tuple[str, str]:
     return utils.intervalo_mes(mes_referencia, dia_util_pagamento_configurado())
 
 
+def _resolver_ciclo(mes_referencia: str | None) -> tuple[str, str, str]:
+    """Usa o ciclo atual se 'mes_referencia' for None; devolve (mes_referencia,
+    inicio, fim) — repetido em toda função que lê gastos por ciclo."""
+    mes_referencia = mes_referencia or mes_referencia_atual()
+    inicio, fim = intervalo_ciclo(mes_referencia)
+    return mes_referencia, inicio, fim
+
+
+def _gastos_do_ciclo(mes_referencia: str | None = None) -> pd.DataFrame:
+    """Todos os gastos lançados dentro do ciclo (ciclo atual se None)."""
+    _, inicio, fim = _resolver_ciclo(mes_referencia)
+    return models.listar_gastos(data_inicio=inicio, data_fim=fim)
+
+
 # ---------------------------------------------------------------------------
 # Cartão de crédito: faturas calculadas a partir das compras cadastradas
 # ---------------------------------------------------------------------------
@@ -53,11 +67,16 @@ def _parcelas_da_compra(compra: pd.Series, dia_util_pagamento: int) -> list[tupl
     return resultado
 
 
-def fatura_do_mes(mes_referencia: str | None = None) -> float:
-    """Soma das parcelas (de todas as compras) que caem no ciclo informado."""
+def fatura_do_mes(mes_referencia: str | None = None, compras: pd.DataFrame | None = None) -> float:
+    """Soma das parcelas (de todas as compras) que caem no ciclo informado.
+
+    `compras` pode ser pré-buscado (ver `proximas_faturas`) pra evitar
+    refazer a mesma query de "todas as compras" uma vez por mês projetado —
+    contra um banco remoto (Turso) isso é bem mais caro do que era local."""
     dia_util = dia_util_pagamento_configurado()
     mes_referencia = mes_referencia or utils.mes_referencia(dia_util_pagamento=dia_util)
-    compras = models.listar_compras_cartao()
+    if compras is None:
+        compras = models.listar_compras_cartao()
     total = 0.0
     for _, compra in compras.iterrows():
         for mes_parcela, valor in _parcelas_da_compra(compra, dia_util):
@@ -70,23 +89,25 @@ def proximas_faturas(n_meses: int = 6, a_partir_de: date | None = None) -> pd.Da
     """Projeta a fatura dos próximos N ciclos (a partir do ciclo atual, inclusive)."""
     a_partir_de = a_partir_de or date.today()
     dia_util = dia_util_pagamento_configurado()
+    compras = models.listar_compras_cartao()
     linhas = []
     for i in range(n_meses):
         mes_alvo = utils.mes_referencia(utils.somar_meses(a_partir_de, i), dia_util)
         linhas.append({
             "mes_referencia": mes_alvo,
             "mes_nome": utils.nome_mes(mes_alvo),
-            "valor": fatura_do_mes(mes_alvo),
+            "valor": fatura_do_mes(mes_alvo, compras),
         })
     return pd.DataFrame(linhas)
 
 
-def total_comprometido_cartao(a_partir_de: date | None = None) -> float:
+def total_comprometido_cartao(a_partir_de: date | None = None, compras: pd.DataFrame | None = None) -> float:
     """Soma de todas as parcelas futuras (ciclo atual em diante) ainda não vencidas."""
     a_partir_de = a_partir_de or date.today()
     dia_util = dia_util_pagamento_configurado()
     mes_atual = utils.mes_referencia(a_partir_de, dia_util)
-    compras = models.listar_compras_cartao()
+    if compras is None:
+        compras = models.listar_compras_cartao()
     total = 0.0
     for _, compra in compras.iterrows():
         for mes_parcela, valor in _parcelas_da_compra(compra, dia_util):
@@ -142,8 +163,7 @@ def projecao_fatura_atual(hoje: date | None = None) -> float:
     """Projeta o total da fatura do ciclo corrente com base no ritmo de gastos
     no crédito até hoje (extrapolação linear simples)."""
     hoje = hoje or date.today()
-    mes_referencia = mes_referencia_atual(hoje)
-    inicio, fim = intervalo_ciclo(mes_referencia)
+    _, inicio, fim = _resolver_ciclo(mes_referencia_atual(hoje))
     inicio_data, fim_data = date.fromisoformat(inicio), date.fromisoformat(fim)
     gastos = models.listar_gastos(data_inicio=inicio, data_fim=fim)
     gastos_credito = gastos[gastos["forma_pagamento"] == "Crédito"]["valor"].sum()
@@ -164,16 +184,12 @@ def projecao_fatura_atual(hoje: date | None = None) -> float:
 # ---------------------------------------------------------------------------
 
 def gasto_total_mes(mes_referencia: str | None = None) -> float:
-    mes_referencia = mes_referencia or mes_referencia_atual()
-    inicio, fim = intervalo_ciclo(mes_referencia)
-    gastos = models.listar_gastos(data_inicio=inicio, data_fim=fim)
+    gastos = _gastos_do_ciclo(mes_referencia)
     return round(gastos["valor"].sum(), 2) if not gastos.empty else 0.0
 
 
 def gasto_por_categoria(mes_referencia: str | None = None) -> pd.DataFrame:
-    mes_referencia = mes_referencia or mes_referencia_atual()
-    inicio, fim = intervalo_ciclo(mes_referencia)
-    gastos = models.listar_gastos(data_inicio=inicio, data_fim=fim)
+    gastos = _gastos_do_ciclo(mes_referencia)
     if gastos.empty:
         return pd.DataFrame(columns=["categoria", "valor"])
     return (
@@ -247,10 +263,7 @@ def _agrupar_por_hora(gastos: pd.DataFrame) -> pd.DataFrame:
 
 def gasto_por_hora_mes(mes_referencia: str | None = None) -> pd.DataFrame:
     """Total gasto por hora do dia, dentro de um ciclo específico (uso no relatório em PDF)."""
-    mes_referencia = mes_referencia or mes_referencia_atual()
-    inicio, fim = intervalo_ciclo(mes_referencia)
-    gastos = models.listar_gastos(data_inicio=inicio, data_fim=fim)
-    return _agrupar_por_hora(gastos)
+    return _agrupar_por_hora(_gastos_do_ciclo(mes_referencia))
 
 
 def tendencia_diaria(dias: int = 60, hoje: date | None = None) -> pd.DataFrame:
@@ -293,22 +306,28 @@ def planejamento_vs_realizado(mes_referencia: str | None = None) -> pd.DataFrame
 # Reserva financeira
 # ---------------------------------------------------------------------------
 
+_SINAL_MOVIMENTO_RESERVA = {"Aporte": 1, "Retirada": -1}
+
+
+def _valor_com_sinal(movimentos: pd.DataFrame) -> pd.Series:
+    """Valor de cada movimento de reserva, positivo se Aporte e negativo se
+    Retirada — repetido em todo cálculo de saldo/evolução da reserva."""
+    return movimentos["valor"] * movimentos["tipo"].map(_SINAL_MOVIMENTO_RESERVA)
+
+
 def saldo_reserva() -> float:
     movimentos = models.listar_movimentos_reserva()
     if movimentos.empty:
         return 0.0
-    sinal = movimentos["tipo"].map({"Aporte": 1, "Retirada": -1})
-    return round((movimentos["valor"] * sinal).sum(), 2)
+    return round(_valor_com_sinal(movimentos).sum(), 2)
 
 
 def evolucao_reserva() -> pd.DataFrame:
     movimentos = models.listar_movimentos_reserva()
     if movimentos.empty:
         return pd.DataFrame(columns=["data", "saldo_acumulado"])
-    sinal = movimentos["tipo"].map({"Aporte": 1, "Retirada": -1})
     movimentos = movimentos.copy()
-    movimentos["valor_com_sinal"] = movimentos["valor"] * sinal
-    movimentos["saldo_acumulado"] = movimentos["valor_com_sinal"].cumsum()
+    movimentos["saldo_acumulado"] = _valor_com_sinal(movimentos).cumsum()
     return movimentos[["data", "saldo_acumulado"]]
 
 
@@ -479,8 +498,7 @@ def gerar_insights(hoje: date | None = None) -> list[str]:
 def nota_do_mes(mes_referencia: str | None = None) -> dict:
     """Nota de 0 a 10 pro mês, com detalhamento transparente de cada critério
     (nunca um número mágico sem explicação)."""
-    mes_referencia = mes_referencia or mes_referencia_atual()
-    inicio_ciclo, fim_ciclo = intervalo_ciclo(mes_referencia)
+    mes_referencia, inicio_ciclo, fim_ciclo = _resolver_ciclo(mes_referencia)
     hoje = date.fromisoformat(inicio_ciclo)
     nota = 10.0
     detalhes = []
@@ -513,8 +531,7 @@ def nota_do_mes(mes_referencia: str | None = None) -> dict:
         if not movimentos.empty else movimentos
     )
     if not do_mes.empty:
-        sinal = do_mes["tipo"].map({"Aporte": 1, "Retirada": -1})
-        saldo_mes = (do_mes["valor"] * sinal).sum()
+        saldo_mes = _valor_com_sinal(do_mes).sum()
         if saldo_mes > 0:
             nota += 1
             detalhes.append(f"Reserva cresceu {utils.formatar_moeda(saldo_mes)} no mês: +1")
