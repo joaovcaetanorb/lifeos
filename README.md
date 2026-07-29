@@ -18,20 +18,38 @@ Python, Streamlit, SQLite, SQLAlchemy, Pandas (Plotly só quando necessário).
 
 ```
 modules/
-  financeiro/   # controle financeiro pessoal (pronto)
+  financeiro/      # controle financeiro pessoal (pronto)
+  projetos/        # metas e projetos com orçamento e checklist (pronto)
+  habitos/         # check-in diário de hábitos, streak e % cumprido (pronto)
+  livros/          # estante e diário de leitura (pronto)
+  musica/          # catálogo e diário de escutas (pronto)
+  dashboard_geral/ # visão consolidada das áreas acima (pronto)
 ```
 
-Cada módulo vive em `modules/<nome>/` como uma aplicação independente.
+Cada módulo vive em `modules/<nome>/` como uma aplicação independente (roda
+sozinho com `streamlit run app.py` de dentro da própria pasta).
+
+## Como rodar
+
+```
+streamlit run app.py
+```
+
+Isso sobe o LifeOS inteiro num processo só: `app.py`, na raiz, junta todos os
+módulos numa sidebar única (Geral, Financeiro, Projetos, Hábitos, Livros,
+Música) via `st.navigation`. Nenhum módulo precisa ser alterado pra isso — cada um
+continua funcionando sozinho (`streamlit run app.py` dentro de
+`modules/<nome>/`) se precisar depurar um em isolamento.
 
 ## Roadmap
 
 1. Fundação/arquitetura
 2. **Financeiro** — pronto
-3. Projetos
-4. Dashboard Geral
-5. Hábitos
+3. **Projetos** — pronto
+4. **Dashboard Geral** — pronto
+5. **Hábitos** — pronto
 6. Humor
-7. Livros
-8. Música
+7. **Livros** — pronto
+8. **Música** — pronto
 9. Analytics
 10. IA e Insights
