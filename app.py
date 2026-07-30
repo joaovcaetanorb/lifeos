@@ -17,6 +17,7 @@ script da página com o diretório do módulo correto na frente do sys.path.
 import importlib.util
 import sys
 import threading
+import time
 from pathlib import Path
 
 import streamlit as st
@@ -72,25 +73,44 @@ st.set_page_config(page_title="LifeOS", page_icon="🧭", layout="wide")
 
 def _executar_pagina(modulo_dir: Path, script: Path) -> None:
     """Executa o script de uma página isolado do sys.path/sys.modules de
-    qualquer outro módulo já carregado nesta mesma sessão."""
-    with _LOCK_IMPORTACAO:
-        for nome in _NOMES_COMPARTILHADOS:
-            sys.modules.pop(nome, None)
+    qualquer outro módulo já carregado nesta mesma sessão.
 
-        caminho_str = str(modulo_dir)
-        ja_no_path = caminho_str in sys.path
-        if not ja_no_path:
-            sys.path.insert(0, caminho_str)
-        try:
-            _contexto_pagina.suprimir = True
-            nome_unico = f"_pagina_{script.as_posix().replace('/', '_').replace(':', '')}"
-            spec = importlib.util.spec_from_file_location(nome_unico, script)
-            modulo = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(modulo)
-        finally:
-            _contexto_pagina.suprimir = False
+    O import por trás disso (pop de sys.modules + sys.path + `import` normal
+    dentro do script da página) depende do mecanismo de import do próprio
+    CPython, que usa locks internos por nome de módulo — locks que
+    persistem entre chamadas e não são cobertos pelo `_LOCK_IMPORTACAO`
+    daqui. Sob concorrência real (Streamlit inicia um novo rerun antes do
+    anterior terminar, ex.: enquanto uma página ainda está no meio de um
+    `conn.sync()` lento do embedded replica), isso pode disparar um
+    `KeyError` vindo de dentro de `importlib._bootstrap` mesmo com o lock —
+    sintoma transitório, não um erro da aplicação. Por isso a *reexecução*
+    inteira (pop + path + exec) é tentada de novo algumas vezes antes de
+    desistir, em vez de só deixar o erro subir na primeira falha."""
+    ultimo_erro = None
+    for tentativa in range(3):
+        with _LOCK_IMPORTACAO:
+            for nome in _NOMES_COMPARTILHADOS:
+                sys.modules.pop(nome, None)
+
+            caminho_str = str(modulo_dir)
+            ja_no_path = caminho_str in sys.path
             if not ja_no_path:
-                sys.path.remove(caminho_str)
+                sys.path.insert(0, caminho_str)
+            try:
+                _contexto_pagina.suprimir = True
+                nome_unico = f"_pagina_{script.as_posix().replace('/', '_').replace(':', '')}"
+                spec = importlib.util.spec_from_file_location(nome_unico, script)
+                modulo = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(modulo)
+                return
+            except KeyError as e:
+                ultimo_erro = e
+            finally:
+                _contexto_pagina.suprimir = False
+                if not ja_no_path and caminho_str in sys.path:
+                    sys.path.remove(caminho_str)
+        time.sleep(0.05 * (tentativa + 1))
+    raise ultimo_erro
 
 
 def _pagina(modulo: str, script_relativo: str):
