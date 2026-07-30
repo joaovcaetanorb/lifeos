@@ -27,9 +27,14 @@ MODULES_DIR = Path(__file__).resolve().parent / "modules"
 # Nomes de arquivo reaproveitados por mais de um módulo — têm que ser
 # removidos do cache antes de cada página rodar, senão uma página herda o
 # "database" (ou "calculations", "models"...) que outro módulo carregou antes.
+# A ORDEM importa: é a ordem de dependência real entre esses arquivos
+# (conferida nos imports de cada um) — utils/database não dependem de
+# nada daqui, models depende de database, calculations depende de
+# models+utils(+database em alguns módulos), relatorio depende de tudo
+# isso. _preload_nomes_compartilhados() carrega nessa ordem.
 _NOMES_COMPARTILHADOS = [
-    "database", "models", "calculations", "utils", "ui", "relatorio",
-    "spotify_client", "colagem", "groq_client",
+    "utils", "database", "models", "calculations", "ui",
+    "colagem", "relatorio", "spotify_client", "groq_client",
 ]
 
 # sys.path/sys.modules são globais do processo, mas o Streamlit roda cada
@@ -71,21 +76,39 @@ _contexto_pagina = st._lifeos_contexto_pagina
 st.set_page_config(page_title="LifeOS", page_icon="🧭", layout="wide")
 
 
+def _preload_nomes_compartilhados(modulo_dir: Path) -> None:
+    """Carrega database.py/models.py/calculations.py/etc. manualmente, na
+    ordem de dependência certa, e injeta direto em sys.modules — em vez de
+    deixar o `import database` (etc.) de dentro do script da página
+    disparar o mecanismo de import normal do CPython.
+
+    Motivo: o mecanismo normal de import usa locks internos por NOME de
+    módulo (não por arquivo), que persistem entre chamadas. Como vários
+    módulos têm arquivos de mesmo nome, uma sessão carregando "database" de
+    um módulo pode colidir com outra sessão carregando "database" de um
+    módulo diferente ao mesmo tempo — visto em produção como `KeyError`
+    (dentro de `importlib._bootstrap`) e também como `ModuleNotFoundError`
+    (`import utils` falhando mesmo com o diretório certo no sys.path).
+    Pré-carregar manualmente e colocar em sys.modules ANTES do script da
+    página rodar faz o `import database`/`import utils` dele virar um
+    simples lookup em sys.modules (dict, atômico) — nunca mais aciona o
+    loader nem o lock por nome do CPython pra esses arquivos."""
+    for nome in _NOMES_COMPARTILHADOS:
+        caminho = modulo_dir / f"{nome}.py"
+        if not caminho.exists():
+            continue
+        spec = importlib.util.spec_from_file_location(nome, caminho)
+        modulo = importlib.util.module_from_spec(spec)
+        sys.modules[nome] = modulo
+        spec.loader.exec_module(modulo)
+
+
 def _executar_pagina(modulo_dir: Path, script: Path) -> None:
     """Executa o script de uma página isolado do sys.path/sys.modules de
-    qualquer outro módulo já carregado nesta mesma sessão.
-
-    O import por trás disso (pop de sys.modules + sys.path + `import` normal
-    dentro do script da página) depende do mecanismo de import do próprio
-    CPython, que usa locks internos por nome de módulo — locks que
-    persistem entre chamadas e não são cobertos pelo `_LOCK_IMPORTACAO`
-    daqui. Sob concorrência real (Streamlit inicia um novo rerun antes do
-    anterior terminar, ex.: enquanto uma página ainda está no meio de um
-    `conn.sync()` lento do embedded replica), isso pode disparar um
-    `KeyError` vindo de dentro de `importlib._bootstrap` mesmo com o lock —
-    sintoma transitório, não um erro da aplicação. Por isso a *reexecução*
-    inteira (pop + path + exec) é tentada de novo algumas vezes antes de
-    desistir, em vez de só deixar o erro subir na primeira falha."""
+    qualquer outro módulo já carregado nesta mesma sessão (ver
+    _preload_nomes_compartilhados). Reexecuta algumas vezes em caso de
+    falha transitória (ex.: Streamlit interrompe um rerun no meio de um
+    `conn.sync()` lento do embedded replica) antes de desistir."""
     ultimo_erro = None
     for tentativa in range(3):
         with _LOCK_IMPORTACAO:
@@ -98,12 +121,13 @@ def _executar_pagina(modulo_dir: Path, script: Path) -> None:
                 sys.path.insert(0, caminho_str)
             try:
                 _contexto_pagina.suprimir = True
+                _preload_nomes_compartilhados(modulo_dir)
                 nome_unico = f"_pagina_{script.as_posix().replace('/', '_').replace(':', '')}"
                 spec = importlib.util.spec_from_file_location(nome_unico, script)
                 modulo = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(modulo)
                 return
-            except KeyError as e:
+            except (KeyError, ModuleNotFoundError, ImportError) as e:
                 ultimo_erro = e
             finally:
                 _contexto_pagina.suprimir = False

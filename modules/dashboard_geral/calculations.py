@@ -196,7 +196,11 @@ def resumo_habitos(hoje: date | None = None) -> dict | None:
 
 def habitos_faltantes_hoje(hoje: date | None = None) -> list[str] | None:
     """Nomes dos hábitos ativos ainda não marcados hoje. None se o módulo
-    nunca foi usado (distinto de lista vazia, que significa 'já fez tudo')."""
+    nunca foi usado OU não tem nenhum hábito ativo cadastrado — distinto de
+    lista vazia, que significa 'tem hábito(s) e todos já foram cumpridos
+    hoje'. Sem essa distinção, 0 hábitos cadastrados virava lista vazia
+    igual a 'tudo cumprido', e a saudação gerada por IA (contexto_hoje())
+    chegava a parabenizar o usuário por cumprir hábitos que nem existem."""
     hoje = hoje or date.today()
     conn = database.get_connection("habitos")
     if conn is None:
@@ -204,7 +208,7 @@ def habitos_faltantes_hoje(hoje: date | None = None) -> list[str] | None:
     try:
         habitos = pd.read_sql_query("SELECT * FROM habitos WHERE ativo = 1", conn)
         if habitos.empty:
-            return []
+            return None
         feitos_hoje = pd.read_sql_query(
             "SELECT habito_id FROM habito_registros WHERE data = ?", conn, params=[hoje.isoformat()],
         )

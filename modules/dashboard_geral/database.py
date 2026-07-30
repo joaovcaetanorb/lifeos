@@ -82,8 +82,19 @@ def get_connection(modulo: str):
     criado (módulo nunca aberto), a conexão é retornada normalmente, mas
     a query subsequente pode falhar — por isso todo `calculations.py`
     daqui envolve a leitura num try/except, não só no `is None`.
+
+    Re-sincroniza a cada chamada (não só na criação): a conexão em si é
+    cacheada (`st.cache_resource`, dura o container inteiro), mas sem
+    ressincronizar aqui os cards ficariam presos no estado de quando o
+    container ligou — visto na prática como "Hábitos ativos: 0" no
+    Dashboard Geral mesmo depois do usuário cadastrar hábitos de verdade
+    no módulo Hábitos. Um `sync()` incremental (sem mudança real) é
+    barato perto do ganho de nunca mais mostrar dado cross-módulo velho.
     """
-    return _conexao_modulo_compartilhada(modulo)
+    conn = _conexao_modulo_compartilhada(modulo)
+    if conn is not None:
+        conn.sync()
+    return conn
 
 
 @st.cache_resource(show_spinner=False)

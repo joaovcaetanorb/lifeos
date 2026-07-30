@@ -110,8 +110,17 @@ def get_connection_modulo(modulo: str):
     criado (nunca aberto), a conexão volta normalmente mas a query pode
     falhar — por isso `calculations.py` envolve cada leitura num
     try/except, não só no `is None`.
+
+    Re-sincroniza a cada chamada (não só na criação) — senão os
+    cruzamentos/gráficos cross-módulo ficariam presos no estado de quando
+    o container ligou, ignorando dado novo lançado depois nos módulos
+    donos (mesmo problema visto no Dashboard Geral, ver
+    modules/dashboard_geral/database.py).
     """
-    return _conexao_modulo_compartilhada(modulo)
+    conn = _conexao_modulo_compartilhada(modulo)
+    if conn is not None:
+        conn.sync()
+    return conn
 
 
 def linha_para_dict(cursor, row: tuple | None) -> dict | None:
