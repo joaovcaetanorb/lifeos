@@ -6,8 +6,30 @@ convenção de código — Turso ainda não tem token somente-leitura configurad
 por módulo aqui).
 """
 
+import os
+
 import libsql
 import streamlit as st
+
+# 2026-07-30: trocado pra "embedded replica" (sync_url) — ver
+# modules/financeiro/database.py pro detalhe completo. Conexões
+# cross-módulo são só leitura (nunca escrevem), então usam embedded
+# replica sem wrapper de sync-no-commit — só a conexão PRÓPRIA (que grava
+# respostas/sugestões) precisa disso.
+_REPLICA_DIR = os.path.join(os.path.dirname(__file__), "database", "replicas_cross_modulo")
+
+
+class _ConexaoComSyncNoCommit:
+    def __init__(self, conn):
+        self._conn = conn
+
+    def commit(self):
+        self._conn.commit()
+        self._conn.sync()
+
+    def __getattr__(self, nome):
+        return getattr(self._conn, nome)
+
 
 DB_PATHS_SECRETS = {
     "financeiro": ("TURSO_FINANCEIRO_URL", "TURSO_FINANCEIRO_TOKEN"),
@@ -36,10 +58,15 @@ CREATE TABLE IF NOT EXISTS sugestoes (
 
 @st.cache_resource(show_spinner=False)
 def _conexao_propria_compartilhada():
-    return libsql.connect(
-        database=st.secrets["TURSO_ANALYTICS_URL"],
+    replica_path = os.path.join(os.path.dirname(__file__), "database", "analytics_replica.db")
+    os.makedirs(os.path.dirname(replica_path), exist_ok=True)
+    conn = libsql.connect(
+        database=replica_path,
+        sync_url=st.secrets["TURSO_ANALYTICS_URL"],
         auth_token=st.secrets["TURSO_ANALYTICS_TOKEN"],
     )
+    conn.sync()
+    return _ConexaoComSyncNoCommit(conn)
 
 
 def get_connection():
@@ -56,7 +83,14 @@ def _conexao_modulo_compartilhada(modulo: str):
         token = st.secrets[chave_token]
     except (KeyError, FileNotFoundError):
         return None
-    return libsql.connect(database=url, auth_token=token)
+    os.makedirs(_REPLICA_DIR, exist_ok=True)
+    conn = libsql.connect(
+        database=os.path.join(_REPLICA_DIR, f"{modulo}_replica.db"),
+        sync_url=url,
+        auth_token=token,
+    )
+    conn.sync()
+    return conn
 
 
 def get_connection_modulo(modulo: str):

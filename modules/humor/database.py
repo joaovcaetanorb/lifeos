@@ -12,9 +12,28 @@ função em vez de `dict(row)` ou `row["coluna"]`. A conexão é compartilhada
 (cache_resource) — nenhuma função em models.py chama `conn.close()`.
 """
 
+import os
+
 import libsql
 import streamlit as st
 from datetime import date, timedelta
+
+# 2026-07-30: trocado pra "embedded replica" (sync_url) — ver
+# modules/financeiro/database.py pro detalhe completo da mudança.
+_REPLICA_PATH = os.path.join(os.path.dirname(__file__), "database", "humor_replica.db")
+
+
+class _ConexaoComSyncNoCommit:
+    def __init__(self, conn):
+        self._conn = conn
+
+    def commit(self):
+        self._conn.commit()
+        self._conn.sync()
+
+    def __getattr__(self, nome):
+        return getattr(self._conn, nome)
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS app_meta (
@@ -36,10 +55,14 @@ CREATE TABLE IF NOT EXISTS registros_humor (
 
 @st.cache_resource(show_spinner=False)
 def _conexao_compartilhada():
-    return libsql.connect(
-        database=st.secrets["TURSO_HUMOR_URL"],
+    os.makedirs(os.path.dirname(_REPLICA_PATH), exist_ok=True)
+    conn = libsql.connect(
+        database=_REPLICA_PATH,
+        sync_url=st.secrets["TURSO_HUMOR_URL"],
         auth_token=st.secrets["TURSO_HUMOR_TOKEN"],
     )
+    conn.sync()
+    return _ConexaoComSyncNoCommit(conn)
 
 
 def get_connection():

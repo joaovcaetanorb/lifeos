@@ -10,11 +10,43 @@ como tupla simples. Por isso `linha_para_dict()` abaixo: sempre que o
 código precisar acessar uma coluna pelo nome (não só por posição), usa essa
 função em vez de `dict(row)` ou `row["coluna"]`. A conexão é compartilhada
 (cache_resource) — nenhuma função em models.py chama `conn.close()`.
+
+Trocado de conexão remota pura pra "embedded replica" em 2026-07-30: a
+conexão remota direta media ~275ms por query (medido contra o Turso real),
+porque cada `execute()` era uma ida-e-volta de rede até aws-us-east-1. Com
+`sync_url`, o driver mantém um arquivo SQLite local (recriado do zero a
+cada cold start, já que o disco do Streamlit Cloud é efêmero — não tem
+problema, o primeiro `conn.sync()` reidrata tudo a partir do Turso) e as
+leituras passam a ser locais (~0,1ms, medido). O ganho só existe porque
+todo `commit()` já era chamado explicitamente em models.py — a
+`_ConexaoComSyncNoCommit` abaixo aproveita isso: intercepta `commit()` e
+dispara `sync()` (push) logo em seguida, senão a escrita ficaria só no
+disco efêmero e se perderia num restart antes do próximo sync.
 """
+
+import os
 
 import libsql
 import streamlit as st
 from datetime import date, timedelta
+
+_REPLICA_PATH = os.path.join(os.path.dirname(__file__), "database", "financeiro_replica.db")
+
+
+class _ConexaoComSyncNoCommit:
+    """Encapsula a conexão embedded replica: todo `commit()` dispara um
+    `sync()` (push) logo em seguida, pra escrita nunca ficar só no disco
+    efêmero sem chegar no Turso. Repassa o resto pro driver original."""
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def commit(self):
+        self._conn.commit()
+        self._conn.sync()
+
+    def __getattr__(self, nome):
+        return getattr(self._conn, nome)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS config (
@@ -76,12 +108,15 @@ CREATE TABLE IF NOT EXISTS reserva_movimentos (
 
 @st.cache_resource(show_spinner=False)
 def _conexao_compartilhada():
+    os.makedirs(os.path.dirname(_REPLICA_PATH), exist_ok=True)
     conn = libsql.connect(
-        database=st.secrets["TURSO_FINANCEIRO_URL"],
+        database=_REPLICA_PATH,
+        sync_url=st.secrets["TURSO_FINANCEIRO_URL"],
         auth_token=st.secrets["TURSO_FINANCEIRO_TOKEN"],
     )
+    conn.sync()
     conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    return _ConexaoComSyncNoCommit(conn)
 
 
 def get_connection():

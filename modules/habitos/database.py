@@ -13,6 +13,8 @@ sempre que o código precisar acessar uma coluna pelo nome (não só por
 posição), usa essa função em vez de `dict(row)` ou `row["coluna"]`.
 """
 
+import os
+
 import libsql
 import streamlit as st
 from datetime import date, timedelta
@@ -22,6 +24,28 @@ from datetime import date, timedelta
 # contra o Turso) — reaproveitar uma única conexão via cache_resource evita
 # pagar esse custo em toda chamada. Por isso models.py NÃO fecha mais a
 # conexão depois de usar (fechar quebraria a próxima chamada da sessão).
+#
+# 2026-07-30: trocado pra "embedded replica" (sync_url) — conexão remota
+# pura media ~275ms por query; com um arquivo local sincronizado do Turso,
+# leitura vira local (~0,1ms). Ver modules/financeiro/database.py pro
+# detalhe completo da mudança. `_ConexaoComSyncNoCommit` faz todo
+# `commit()` disparar um `sync()` (push) logo em seguida, senão a escrita
+# ficaria só no disco efêmero e se perderia num restart antes do próximo
+# sync — não muda nada em models.py, que já chama `commit()` explicitamente.
+
+_REPLICA_PATH = os.path.join(os.path.dirname(__file__), "database", "habitos_replica.db")
+
+
+class _ConexaoComSyncNoCommit:
+    def __init__(self, conn):
+        self._conn = conn
+
+    def commit(self):
+        self._conn.commit()
+        self._conn.sync()
+
+    def __getattr__(self, nome):
+        return getattr(self._conn, nome)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS app_meta (
@@ -48,12 +72,15 @@ CREATE TABLE IF NOT EXISTS habito_registros (
 
 @st.cache_resource(show_spinner=False)
 def _conexao_compartilhada():
+    os.makedirs(os.path.dirname(_REPLICA_PATH), exist_ok=True)
     conn = libsql.connect(
-        database=st.secrets["TURSO_HABITOS_URL"],
+        database=_REPLICA_PATH,
+        sync_url=st.secrets["TURSO_HABITOS_URL"],
         auth_token=st.secrets["TURSO_HABITOS_TOKEN"],
     )
+    conn.sync()
     conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    return _ConexaoComSyncNoCommit(conn)
 
 
 def get_connection():

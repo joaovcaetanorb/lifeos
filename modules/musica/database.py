@@ -15,6 +15,8 @@ Capas de álbum (UPLOADS_DIR) continuam em disco local — só os dados SQL
 migraram pro Turso.
 """
 
+import os
+
 import libsql
 import streamlit as st
 from pathlib import Path
@@ -22,6 +24,22 @@ from datetime import date, timedelta
 
 DB_DIR = Path(__file__).parent / "database"
 UPLOADS_DIR = DB_DIR / "uploads"
+
+# 2026-07-30: trocado pra "embedded replica" (sync_url) — ver
+# modules/financeiro/database.py pro detalhe completo da mudança.
+_REPLICA_PATH = os.path.join(DB_DIR, "musica_replica.db")
+
+
+class _ConexaoComSyncNoCommit:
+    def __init__(self, conn):
+        self._conn = conn
+
+    def commit(self):
+        self._conn.commit()
+        self._conn.sync()
+
+    def __getattr__(self, nome):
+        return getattr(self._conn, nome)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS app_meta (
@@ -63,12 +81,15 @@ CREATE TABLE IF NOT EXISTS escutas (
 
 @st.cache_resource(show_spinner=False)
 def _conexao_compartilhada():
+    os.makedirs(DB_DIR, exist_ok=True)
     conn = libsql.connect(
-        database=st.secrets["TURSO_MUSICA_URL"],
+        database=_REPLICA_PATH,
+        sync_url=st.secrets["TURSO_MUSICA_URL"],
         auth_token=st.secrets["TURSO_MUSICA_TOKEN"],
     )
+    conn.sync()
     conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    return _ConexaoComSyncNoCommit(conn)
 
 
 def get_connection():
