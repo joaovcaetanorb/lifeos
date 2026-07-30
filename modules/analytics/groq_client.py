@@ -62,6 +62,20 @@ def responder_pergunta(pergunta: str, contexto: str) -> str | None:
     return _chamar(prompt)
 
 
+def narrar_correlacao(descricao: str) -> str | None:
+    """Traduz em 1-2 frases uma comparação estatística JÁ CALCULADA em
+    Python (ver calculations.correlacoes_humor) — a IA nunca calcula nem
+    inventa o número aqui, só explica o que ele sugere."""
+    prompt = (
+        f"Aqui está uma comparação estatística real, já calculada a partir dos dados "
+        f"do usuário (não invente nada além do que está descrito abaixo):\n\n{descricao}\n\n"
+        "Escreva 1-2 frases curtas, em tom direto, explicando o que essa diferença "
+        "sugere. Se a diferença for pequena ou pouco conclusiva, diga isso em vez de "
+        "forçar uma leitura forte."
+    )
+    return _chamar(prompt)
+
+
 def gerar_sugestoes(contexto: str) -> str | None:
     prompt = (
         f"Dados do usuário (últimos meses, agregados por módulo):\n\n{contexto}\n\n"

@@ -292,6 +292,171 @@ def musica_resumo(data_inicio: str, data_fim: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Cruzamentos — comparações reais (calculadas aqui, não pela IA) entre
+# módulos, por dia. A IA (groq_client.narrar_correlacao) só traduz o
+# resultado já calculado em uma frase — nunca inventa o número.
+# ---------------------------------------------------------------------------
+
+_MIN_DIAS_POR_GRUPO = 7
+
+
+def _serie_diaria_humor(data_inicio: str, data_fim: str) -> pd.Series:
+    """Nota média de humor por dia (index=date) — múltiplos registros no
+    mesmo dia viram uma média, igual ao calendário do próprio módulo Humor."""
+    conn = database.get_connection_modulo("humor")
+    if conn is None:
+        return pd.Series(dtype=float)
+    try:
+        registros = pd.read_sql_query(
+            "SELECT data, nota FROM registros_humor WHERE data >= ? AND data <= ?",
+            conn, params=[data_inicio, data_fim],
+        )
+    except Exception:
+        return pd.Series(dtype=float)
+    if registros.empty:
+        return pd.Series(dtype=float)
+
+    serie = registros.groupby("data")["nota"].mean()
+    serie.index = pd.to_datetime(serie.index).date
+    return serie
+
+
+def _dias_com_habito_cumprido(data_inicio: str, data_fim: str) -> set:
+    """Dias (date) com pelo menos 1 hábito marcado como cumprido."""
+    conn = database.get_connection_modulo("habitos")
+    if conn is None:
+        return set()
+    try:
+        registros = pd.read_sql_query(
+            "SELECT DISTINCT data FROM habito_registros WHERE data >= ? AND data <= ?",
+            conn, params=[data_inicio, data_fim],
+        )
+    except Exception:
+        return set()
+    if registros.empty:
+        return set()
+    return set(pd.to_datetime(registros["data"]).dt.date)
+
+
+def _dias_gasto_por_data(data_inicio: str, data_fim: str) -> pd.Series:
+    """Total gasto por dia (index=date)."""
+    conn = database.get_connection_modulo("financeiro")
+    if conn is None:
+        return pd.Series(dtype=float)
+    try:
+        gastos = pd.read_sql_query(
+            "SELECT data, valor FROM gastos WHERE data >= ? AND data <= ?",
+            conn, params=[data_inicio, data_fim],
+        )
+    except Exception:
+        return pd.Series(dtype=float)
+    if gastos.empty:
+        return pd.Series(dtype=float)
+
+    serie = gastos.groupby("data")["valor"].sum()
+    serie.index = pd.to_datetime(serie.index).date
+    return serie
+
+
+def _dias_com_atividade_cultural(data_inicio: str, data_fim: str) -> set:
+    """Dias (date) com pelo menos 1 leitura (livros) ou 1 escuta (música)."""
+    dias: set = set()
+
+    conn_livros = database.get_connection_modulo("livros")
+    if conn_livros is not None:
+        try:
+            leituras = pd.read_sql_query(
+                "SELECT DISTINCT data FROM leituras WHERE data >= ? AND data <= ?",
+                conn_livros, params=[data_inicio, data_fim],
+            )
+            if not leituras.empty:
+                dias |= set(pd.to_datetime(leituras["data"]).dt.date)
+        except Exception:
+            pass
+
+    conn_musica = database.get_connection_modulo("musica")
+    if conn_musica is not None:
+        try:
+            escutas = pd.read_sql_query(
+                "SELECT DISTINCT data FROM escutas WHERE data >= ? AND data <= ?",
+                conn_musica, params=[data_inicio, data_fim],
+            )
+            if not escutas.empty:
+                dias |= set(pd.to_datetime(escutas["data"]).dt.date)
+        except Exception:
+            pass
+
+    return dias
+
+
+def _split_por_mediana(serie_numerica: pd.Series) -> set:
+    """Dias (date) cujo valor está acima da mediana da série — usado pra
+    transformar uma métrica contínua (ex.: gasto do dia) em dois grupos
+    comparáveis com _comparar_grupos."""
+    if serie_numerica.empty:
+        return set()
+    mediana = serie_numerica.median()
+    return set(serie_numerica[serie_numerica > mediana].index)
+
+
+def _comparar_grupos(
+    serie_humor: pd.Series, dias_grupo_a: set, label_a: str, label_b: str,
+    min_n: int = _MIN_DIAS_POR_GRUPO,
+) -> dict | None:
+    """Compara a nota média de humor entre dias que estão em `dias_grupo_a`
+    e os que não estão, dentro dos dias em que HÁ registro de humor. Só
+    retorna resultado se os dois grupos tiverem pelo menos `min_n` dias —
+    caso contrário, `None` (sinal pra não mostrar nada em vez de um número
+    baseado em amostra pequena demais pra significar algo)."""
+    if serie_humor.empty:
+        return None
+
+    em_a = serie_humor.index.isin(dias_grupo_a)
+    grupo_a = serie_humor[em_a]
+    grupo_b = serie_humor[~em_a]
+
+    if len(grupo_a) < min_n or len(grupo_b) < min_n:
+        return None
+
+    return {
+        "label_a": label_a, "media_a": round(grupo_a.mean(), 1), "n_a": len(grupo_a),
+        "label_b": label_b, "media_b": round(grupo_b.mean(), 1), "n_b": len(grupo_b),
+    }
+
+
+def correlacoes_humor(data_inicio: str, data_fim: str) -> list[dict]:
+    """Roda os cruzamentos Humor×Hábitos, Humor×Financeiro e
+    Humor×Livros/Música — cada um só entra na lista se houver dado
+    suficiente (ver _comparar_grupos)."""
+    serie_humor = _serie_diaria_humor(data_inicio, data_fim)
+    resultados = []
+
+    r = _comparar_grupos(
+        serie_humor, _dias_com_habito_cumprido(data_inicio, data_fim),
+        "dias com hábito cumprido", "dias sem hábito cumprido",
+    )
+    if r:
+        resultados.append({"par": "humor_habitos", **r})
+
+    dias_gasto = _dias_gasto_por_data(data_inicio, data_fim)
+    r = _comparar_grupos(
+        serie_humor, _split_por_mediana(dias_gasto),
+        "dias de gasto acima da mediana", "dias de gasto na mediana ou abaixo",
+    )
+    if r:
+        resultados.append({"par": "humor_financeiro", **r})
+
+    r = _comparar_grupos(
+        serie_humor, _dias_com_atividade_cultural(data_inicio, data_fim),
+        "dias com leitura ou escuta musical", "dias sem atividade cultural",
+    )
+    if r:
+        resultados.append({"par": "humor_cultura", **r})
+
+    return resultados
+
+
+# ---------------------------------------------------------------------------
 # Contexto agregado — o que a IA recebe (perguntas e sugestões)
 # ---------------------------------------------------------------------------
 

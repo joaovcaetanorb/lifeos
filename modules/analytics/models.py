@@ -51,3 +51,22 @@ def salvar_sugestao(texto: str) -> None:
     conn = get_connection()
     conn.execute("INSERT INTO sugestoes (texto) VALUES (?)", (texto,))
     conn.commit()
+
+
+def obter_correlacao_cacheada(par: str) -> dict | None:
+    conn = get_connection()
+    cursor = conn.execute("SELECT * FROM correlacoes_texto WHERE par = ?", (par,))
+    return linha_para_dict(cursor, cursor.fetchone())
+
+
+def salvar_correlacao(par: str, texto: str) -> None:
+    """Uma linha por `par` — chamadas seguintes atualizam em vez de
+    acumular (diferente de sugestoes/respostas_perguntas, que guardam
+    histórico)."""
+    conn = get_connection()
+    conn.execute(
+        """INSERT INTO correlacoes_texto (par, texto) VALUES (?, ?)
+           ON CONFLICT(par) DO UPDATE SET texto = excluded.texto, gerado_em = CURRENT_TIMESTAMP""",
+        (par, texto),
+    )
+    conn.commit()

@@ -119,6 +119,12 @@ def _grafico_heatmap_diario(hoje: date, registros, habitos) -> None:
 
     dias_semana_labels = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
     pivot = df.pivot(index="dia_semana", columns="semana", values="percentual").reindex(index=range(7))
+    pivot_nomes = (
+        df.pivot(index="dia_semana", columns="semana", values="nomes")
+        .reindex(index=range(7))
+        .fillna("")
+        .map(lambda n: n if n else "nenhum hábito cumprido")
+    )
 
     # Rótulo de mês só na primeira semana em que ele aparece (igual ao
     # calendário do GitHub) — repetir em toda semana poluiria o eixo.
@@ -139,7 +145,8 @@ def _grafico_heatmap_diario(hoje: date, registros, habitos) -> None:
         colorscale=[[0, utils.COR_HAIRLINE], [1, utils.COR_ACENTO]],
         showscale=False,
         xgap=3, ygap=3,
-        hovertemplate="%{z:.0f}%<extra></extra>",
+        customdata=pivot_nomes.values,
+        hovertemplate="%{z:.0f}%<br>%{customdata}<extra></extra>",
         zmin=0, zmax=100,
     ))
     fig.update_xaxes(tickmode="array", tickvals=tick_vals, ticktext=tick_texts, showgrid=False)

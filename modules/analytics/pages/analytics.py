@@ -201,6 +201,62 @@ def _secao_sugestoes(data_inicio: str, data_fim: str) -> None:
             st.rerun()
 
 
+_TITULOS_PAR = {
+    "humor_habitos": "Humor × Hábitos",
+    "humor_financeiro": "Humor × Financeiro",
+    "humor_cultura": "Humor × Livros/Música",
+}
+
+
+def _descricao_comparacao(r: dict) -> str:
+    return (
+        f"Nos {r['label_a']} (n={r['n_a']} dias), a nota média de humor foi {r['media_a']}/10. "
+        f"Nos {r['label_b']} (n={r['n_b']} dias), foi {r['media_b']}/10."
+    )
+
+
+def _cruzamento(r: dict) -> None:
+    st.markdown(f"**{_TITULOS_PAR.get(r['par'], r['par'])}**")
+    descricao = _descricao_comparacao(r)
+
+    col_a, col_b = st.columns(2)
+    col_a.metric(r["label_a"].capitalize(), f"{r['media_a']}/10", help=f"{r['n_a']} dias")
+    col_b.metric(r["label_b"].capitalize(), f"{r['media_b']}/10", help=f"{r['n_b']} dias")
+
+    if groq_client.disponivel():
+        cache = models.obter_correlacao_cacheada(r["par"])
+        desatualizado = cache is None or utils.horas_desde(cache["gerado_em"]) >= 24
+        if desatualizado:
+            with st.spinner("Gerando explicação..."):
+                texto = groq_client.narrar_correlacao(descricao)
+            if texto:
+                models.salvar_correlacao(r["par"], texto)
+                cache = models.obter_correlacao_cacheada(r["par"])
+        if cache:
+            st.caption(cache["texto"])
+
+
+def _secao_correlacoes(data_inicio: str, data_fim: str) -> None:
+    ui.eyebrow("cruzamentos")
+    st.subheader("Isso se relaciona com seu humor?")
+    st.caption(
+        "Comparações reais (calculadas a partir dos seus dados, não \"achismo\" da IA) — "
+        "só aparecem quando já há dias suficientes em cada grupo pra significar algo."
+    )
+
+    resultados = calc.correlacoes_humor(data_inicio, data_fim)
+    if not resultados:
+        st.caption(
+            "Ainda não há dados suficientes pra cruzar hábitos, financeiro ou atividades "
+            "culturais com o humor — continue registrando por mais algumas semanas."
+        )
+        return
+
+    for r in resultados:
+        _cruzamento(r)
+        st.divider()
+
+
 def render() -> None:
     ui.titulo_pagina("analytics")
     data_inicio, data_fim, _ = _periodo_selecionado()
@@ -213,6 +269,9 @@ def render() -> None:
 
     st.divider()
     _secao_sugestoes(data_inicio, data_fim)
+
+    st.divider()
+    _secao_correlacoes(data_inicio, data_fim)
 
 
 render()

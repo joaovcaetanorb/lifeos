@@ -2,6 +2,7 @@
 
 from datetime import date
 
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -153,7 +154,7 @@ def _grafico_heatmap_diario(hoje: date) -> None:
     fig = go.Figure(data=go.Heatmap(
         z=pivot.values,
         y=dias_semana_labels,
-        colorscale=[[0, utils.COR_HAIRLINE], [1, utils.COR_ACENTO]],
+        colorscale=[[0, utils.COR_TAG_NEGATIVO], [0.5, utils.COR_NEUTRO], [1, utils.COR_TAG_POSITIVO]],
         showscale=False,
         xgap=3, ygap=3,
         hovertemplate="%{z:.1f}/10<extra></extra>",
@@ -194,6 +195,19 @@ def _periodo_selecionado() -> tuple[str, str, str]:
     return inicio.isoformat(), fim.isoformat(), "período personalizado"
 
 
+def _range_eixo_tempo(datetimes: pd.Series, margem: pd.Timedelta = pd.Timedelta(hours=1)) -> list:
+    """Range manual do eixo X com margem mínima — o autorange do Plotly
+    colapsa pra uma janela de frações de milissegundo quando os pontos
+    ficam muito próximos (ou é só 1 ponto), o que pode acontecer de
+    verdade quando dois registros caem no mesmo minuto (a hora só guarda
+    HH:MM, sem segundos)."""
+    minimo, maximo = datetimes.min(), datetimes.max()
+    if maximo - minimo < margem * 2:
+        centro = minimo + (maximo - minimo) / 2
+        return [centro - margem, centro + margem]
+    return [minimo - margem, maximo + margem]
+
+
 def _grafico_por_registro(data_inicio: str, data_fim: str) -> None:
     st.markdown("**Humor por registro**")
     df = calc.registros_periodo(data_inicio, data_fim)
@@ -208,7 +222,10 @@ def _grafico_por_registro(data_inicio: str, data_fim: str) -> None:
         marker=dict(size=7, color=utils.COR_ACENTO),
         hovertemplate="%{x|%d/%m %H:%M} — %{y}/10<extra></extra>",
     ))
-    fig.update_layout(xaxis_title=None, yaxis_title=None, yaxis_range=[0, 10])
+    fig.update_layout(
+        xaxis_title=None, yaxis_title=None, yaxis_range=[0, 10],
+        xaxis_range=_range_eixo_tempo(df["datetime"]),
+    )
     st.plotly_chart(_grid_style(fig), use_container_width=True)
 
 

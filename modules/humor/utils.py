@@ -36,6 +36,12 @@ COR_REALIZADO = "#3987e5"
 COR_TAG_POSITIVO = "#3987e5"
 COR_TAG_NEGATIVO = "#e66767"
 
+# Ponto médio neutro pra escala divergente do calendário de humor (nota
+# baixa = COR_TAG_NEGATIVO, média = COR_NEUTRO, alta = COR_TAG_POSITIVO) —
+# mesmo cinza de fundo escuro recomendado pela skill de dataviz pra ponto
+# médio de escalas divergentes.
+COR_NEUTRO = "#383835"
+
 
 def formatar_data_br(data_iso: str) -> str:
     """'2026-08-05' -> '05/08'. String vazia retorna vazio."""

@@ -218,7 +218,7 @@ def heatmap_diario(
     habitos = _habitos_ou_buscar(habitos)
     total_habitos = len(habitos)
     if total_habitos == 0:
-        return pd.DataFrame({"data": todas_datas, "percentual": 0.0})
+        return pd.DataFrame({"data": todas_datas, "percentual": 0.0, "nomes": ""})
 
     if registros is None:
         registros = models.listar_registros_todos(data_inicio=inicio.isoformat())
@@ -227,13 +227,19 @@ def heatmap_diario(
 
     if registros.empty:
         contagem_por_dia = pd.Series(dtype=int)
+        nomes_por_dia = pd.Series(dtype=object)
     else:
         contagem_por_dia = registros.groupby("data").size()
         contagem_por_dia.index = pd.to_datetime(contagem_por_dia.index)
+        # habito_nome já vem resolvido por listar_registros_todos() (join
+        # com habitos) — só precisa juntar os nomes por dia.
+        nomes_por_dia = registros.groupby("data")["habito_nome"].apply(lambda s: ", ".join(s))
+        nomes_por_dia.index = pd.to_datetime(nomes_por_dia.index)
 
     contagem = contagem_por_dia.reindex(todas_datas, fill_value=0)
     percentual = (contagem / total_habitos * 100).clip(upper=100)
-    return pd.DataFrame({"data": todas_datas, "percentual": percentual.values})
+    nomes = nomes_por_dia.reindex(todas_datas, fill_value="")
+    return pd.DataFrame({"data": todas_datas, "percentual": percentual.values, "nomes": nomes.values})
 
 
 def cumprimento_por_mes(
