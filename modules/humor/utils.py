@@ -15,6 +15,11 @@ TAGS_HUMOR = [
     "Ansioso", "Cansado", "Irritado", "Triste", "Sobrecarregado", "Frustrado", "Entediado",
 ]
 
+# As 7 primeiras tags acima são o lado positivo do vocabulário; o resto é
+# negativo. Usado só pra colorir (gráfico de tags, badges do histórico) —
+# não afeta a nota numérica.
+TAGS_POSITIVAS = set(TAGS_HUMOR[:7])
+
 # Tema visual "ledger/terminal": mesmo esquema de cores dos demais módulos.
 COR_FUNDO = "#0D0F0C"
 COR_FUNDO_ALT = "#16190F"
@@ -23,6 +28,13 @@ COR_TEXTO_MUTED = "#898781"
 COR_HAIRLINE = "#2A2D23"
 COR_ACENTO = "#3FA66B"
 COR_REALIZADO = "#3987e5"
+
+# Par validado (CVD ΔE 19.2, normal-vision ΔE 29.0, contraste >=3:1 no fundo
+# escuro do app) via scripts/validate_palette.js da skill de dataviz —
+# verde/vermelho (a primeira tentativa) falha separação pra daltonismo
+# deutan (ΔE 4.0), por isso azul/vermelho.
+COR_TAG_POSITIVO = "#3987e5"
+COR_TAG_NEGATIVO = "#e66767"
 
 
 def formatar_data_br(data_iso: str) -> str:
@@ -49,3 +61,12 @@ def tags_para_texto(tags: list[str]) -> str:
 def texto_para_tags(texto: str) -> list[str]:
     """'Animado,Grato' -> ['Animado', 'Grato']. String vazia -> []."""
     return [t for t in texto.split(",") if t]
+
+
+def cor_tag(tag: str) -> str:
+    return COR_TAG_POSITIVO if tag in TAGS_POSITIVAS else COR_TAG_NEGATIVO
+
+
+def badge_cor_tag(tag: str) -> str:
+    """Nome de cor aceito por st.badge/diretiva markdown (":blue-badge[...]")."""
+    return "blue" if tag in TAGS_POSITIVAS else "red"

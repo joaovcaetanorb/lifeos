@@ -100,7 +100,8 @@ def _popover_registro(registro: dict) -> None:
 def _linha_registro(registro: dict) -> None:
     col_texto, col_acao = st.columns([8, 1])
     with col_texto:
-        tags_txt = ", ".join(utils.texto_para_tags(registro["tags"])) or "sem tags"
+        tags = utils.texto_para_tags(registro["tags"])
+        tags_txt = " ".join(f":{utils.badge_cor_tag(t)}-badge[{t}]" for t in tags) or "sem tags"
         st.markdown(f"**{registro['nota']}/10** · {tags_txt}")
         st.caption(f"{utils.formatar_data_br(registro['data'])} {registro['hora']}".strip())
         if registro["nota_livre"]:
@@ -218,10 +219,12 @@ def _grafico_tags(data_inicio: str, data_fim: str) -> None:
         st.caption("Nenhuma tag registrada nesse período.")
         return
     df = df.sort_values("total")
+    cores = [utils.cor_tag(tag) for tag in df["tag"]]
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=df["total"], y=df["tag"], orientation="h", marker_color=utils.COR_ACENTO))
+    fig.add_trace(go.Bar(x=df["total"], y=df["tag"], orientation="h", marker_color=cores))
     fig.update_layout(xaxis_title=None, yaxis_title=None)
     st.plotly_chart(_grid_style(fig), use_container_width=True)
+    st.caption("azul = sentimento positivo · vermelho = negativo")
 
 
 def _secao_analises() -> None:
