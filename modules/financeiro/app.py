@@ -51,6 +51,28 @@ st.markdown(
 
 st.divider()
 
+ui.eyebrow("cartão de crédito")
+st.subheader("Como lançar as compras pra fatura bater com a real")
+st.markdown(
+    "A fatura **nunca é digitada** — ela é sempre calculada a partir das compras "
+    "cadastradas em Cartão. Pra isso funcionar direito:\n\n"
+    "1. **Lance cada compra assim que ela acontecer**, igual você faz em Gastos. Uma "
+    "compra já cadastrada continua entrando sozinha nas faturas futuras — no dia do "
+    "pagamento você não precisa lançar nada, a fatura já está certa.\n"
+    "2. **Use a data ORIGINAL da compra, nunca a data de hoje.** O app conta as parcelas "
+    "a partir de `data_compra` — se você comprou algo parcelado em 10x há 3 meses e só "
+    "for lançar agora, tem que informar a data real da compra. Lançar com a data de "
+    "hoje faz o app achar que faltam 10 parcelas quando na real já foram pagas 3, e a "
+    "fatura calculada não bate com a do banco.\n"
+)
+st.warning(
+    "'Abrir a fatura e lançar tudo' só é necessário na primeira vez que você usar o "
+    "módulo, ou quando esquecer de lançar uma compra na hora — não é uma tarefa "
+    "recorrente de todo ciclo."
+)
+
+st.divider()
+
 ui.eyebrow("cada aba")
 st.subheader("O que cada tela faz")
 st.markdown(

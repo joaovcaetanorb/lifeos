@@ -17,6 +17,7 @@ import utils
 st.set_page_config(page_title="Humor | Humor", page_icon="🙂", layout="wide")
 database.inicializar_banco()
 ui.aplicar_tema()
+ui.mostrar_toast_pendente()
 
 CHART_LAYOUT = dict(
     margin=dict(l=10, r=10, t=40, b=10),
@@ -61,7 +62,7 @@ def _formulario_novo_registro() -> None:
                     data_registro.isoformat(), hora_registro.strip(), nota,
                     utils.tags_para_texto(tags), nota_livre.strip(),
                 )
-                st.success("Registro salvo.")
+                ui.marcar_toast("Registro salvo.")
                 st.rerun()
 
 
@@ -92,9 +93,11 @@ def _popover_registro(registro: dict) -> None:
                 registro_id, data_val.isoformat(), hora_val.strip(), nota_val,
                 utils.tags_para_texto(tags_val), nota_livre_val.strip(),
             )
+            ui.marcar_toast("Registro atualizado.")
             st.rerun()
         if excluir:
             models.excluir_registro(registro_id)
+            ui.marcar_toast("Registro excluído.", icone="🗑️")
             st.rerun()
 
 

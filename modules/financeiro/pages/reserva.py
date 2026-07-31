@@ -14,6 +14,7 @@ import utils
 st.set_page_config(page_title="Reserva | Controle Financeiro", page_icon="💰", layout="wide")
 database.inicializar_banco()
 ui.aplicar_tema()
+ui.mostrar_toast_pendente()
 
 CHART_LAYOUT = dict(
     margin=dict(l=10, r=10, t=40, b=10),
@@ -109,7 +110,7 @@ def _formulario_movimento() -> None:
                 )
             else:
                 models.inserir_movimento_reserva(data_mov.isoformat(), valor, tipo, observacao)
-                st.success(f"{tipo} de {utils.formatar_moeda(valor)} registrado.")
+                ui.marcar_toast(f"{tipo} de {utils.formatar_moeda(valor)} registrado.")
                 st.rerun()
 
 
@@ -134,7 +135,7 @@ def _tabela_e_exclusao() -> None:
         movimento_id = st.selectbox("Selecione o movimento", list(opcoes.keys()), format_func=lambda i: opcoes[i])
         if st.button("excluir selecionado"):
             models.excluir_movimento_reserva(movimento_id)
-            st.success("Movimento excluído.")
+            ui.marcar_toast("Movimento excluído.", icone="🗑️")
             st.rerun()
 
 

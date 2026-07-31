@@ -13,6 +13,7 @@ import utils
 st.set_page_config(page_title="Gastos | Controle Financeiro", page_icon="💰", layout="wide")
 database.inicializar_banco()
 ui.aplicar_tema()
+ui.mostrar_toast_pendente()
 
 
 def _formulario_novo_gasto() -> None:
@@ -45,7 +46,7 @@ def _formulario_novo_gasto() -> None:
                     data_gasto.isoformat(), descricao, valor, categoria, forma_pagamento,
                     hora_gasto.strftime("%H:%M"),
                 )
-                st.success(f"Gasto de {utils.formatar_moeda(valor)} em {categoria} salvo.")
+                ui.marcar_toast(f"Gasto de {utils.formatar_moeda(valor)} em {categoria} salvo.")
                 st.rerun()
 
 
@@ -81,7 +82,7 @@ def _tabela_e_exclusao(mes_ref: str) -> None:
         gasto_id = st.selectbox("Selecione o lançamento", list(opcoes.keys()), format_func=lambda i: opcoes[i])
         if st.button("excluir selecionado"):
             models.excluir_gasto(gasto_id)
-            st.success("Lançamento excluído.")
+            ui.marcar_toast("Lançamento excluído.", icone="🗑️")
             st.rerun()
 
 

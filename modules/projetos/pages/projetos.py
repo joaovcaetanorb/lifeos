@@ -15,6 +15,7 @@ import utils
 st.set_page_config(page_title="Projetos | Projetos", page_icon="🎯", layout="wide")
 database.inicializar_banco()
 ui.aplicar_tema()
+ui.mostrar_toast_pendente()
 
 
 def _salvar_foto(projeto_id: int, arquivo) -> str:
@@ -67,7 +68,7 @@ def _formulario_novo_projeto() -> None:
                             projeto_id, nome.strip(), descricao.strip(), orcamento,
                             observacoes.strip(), "Ativo", foto_path=caminho,
                         )
-                    st.success(f"Projeto '{nome}' criado.")
+                    ui.marcar_toast(f"Projeto '{nome}' criado.")
                     st.rerun()
 
 
@@ -120,9 +121,11 @@ def _popover_item(item: dict) -> None:
             models.atualizar_detalhes_item_checklist(
                 item_id, notas.strip(), prazo_final, link.strip(), foto_path=caminho
             )
+            ui.marcar_toast("Item atualizado.")
             st.rerun()
         if excluir:
             models.excluir_item_checklist(item_id)
+            ui.marcar_toast("Item excluído.", icone="🗑️")
             st.rerun()
 
 
@@ -148,6 +151,7 @@ def _secao_checklist(pid: int) -> None:
         if st.form_submit_button("adicionar item"):
             if nova_descricao.strip():
                 models.inserir_item_checklist(pid, nova_descricao.strip())
+                ui.marcar_toast("Item adicionado.")
                 st.rerun()
 
 
@@ -163,7 +167,7 @@ def _secao_aportes(pid: int) -> None:
                 st.warning("Informe um valor maior que zero.")
             else:
                 models.inserir_aporte(pid, data_aporte.isoformat(), valor, observacao)
-                st.success(f"Aporte de {utils.formatar_moeda(valor)} registrado.")
+                ui.marcar_toast(f"Aporte de {utils.formatar_moeda(valor)} registrado.")
                 st.rerun()
 
     aportes = models.listar_aportes(pid)
@@ -187,6 +191,7 @@ def _secao_aportes(pid: int) -> None:
     )
     if st.button("excluir aporte selecionado", key=f"del_aporte_{pid}"):
         models.excluir_aporte(aporte_id)
+        ui.marcar_toast("Aporte excluído.", icone="🗑️")
         st.rerun()
 
 
@@ -209,14 +214,14 @@ def _secao_editar(projeto: dict) -> None:
             models.atualizar_projeto(
                 pid, nome.strip(), descricao.strip(), orcamento, observacoes.strip(), status, foto_path=caminho
             )
-            st.success("Projeto atualizado.")
+            ui.marcar_toast("Projeto atualizado.")
             st.rerun()
 
     st.divider()
     confirmar = st.checkbox("confirmar exclusão deste projeto", key=f"confirmar_exclusao_{pid}")
     if st.button("excluir projeto", key=f"del_projeto_{pid}", disabled=not confirmar):
         models.excluir_projeto(pid)
-        st.success("Projeto excluído.")
+        ui.marcar_toast("Projeto excluído.", icone="🗑️")
         st.rerun()
 
 

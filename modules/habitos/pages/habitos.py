@@ -16,6 +16,7 @@ import utils
 st.set_page_config(page_title="Hábitos | Hábitos", page_icon="✅", layout="wide")
 database.inicializar_banco()
 ui.aplicar_tema()
+ui.mostrar_toast_pendente()
 
 CHART_LAYOUT = dict(
     margin=dict(l=10, r=10, t=40, b=10),
@@ -51,7 +52,7 @@ def _formulario_novo_habito() -> None:
                     st.warning("Informe um nome para o hábito.")
                 else:
                     models.inserir_habito(nome.strip())
-                    st.success(f"Hábito '{nome}' criado.")
+                    ui.marcar_toast(f"Hábito '{nome}' criado.")
                     st.rerun()
 
 
@@ -69,14 +70,14 @@ def _secao_editar(habito: dict) -> None:
         ativo = st.checkbox("ativo", value=bool(habito["ativo"]))
         if st.form_submit_button("salvar alterações"):
             models.atualizar_habito(hid, nome.strip(), ativo)
-            st.success("Hábito atualizado.")
+            ui.marcar_toast("Hábito atualizado.")
             st.rerun()
 
     st.divider()
     confirmar = st.checkbox("confirmar exclusão deste hábito", key=f"confirmar_exclusao_{hid}")
     if st.button("excluir hábito", key=f"del_habito_{hid}", disabled=not confirmar):
         models.excluir_habito(hid)
-        st.success("Hábito excluído.")
+        ui.marcar_toast("Hábito excluído.", icone="🗑️")
         st.rerun()
 
 

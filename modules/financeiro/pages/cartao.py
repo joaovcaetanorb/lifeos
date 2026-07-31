@@ -14,6 +14,7 @@ import utils
 st.set_page_config(page_title="Cartão | Controle Financeiro", page_icon="💰", layout="wide")
 database.inicializar_banco()
 ui.aplicar_tema()
+ui.mostrar_toast_pendente()
 
 CHART_LAYOUT = dict(
     margin=dict(l=10, r=10, t=40, b=10),
@@ -88,7 +89,7 @@ def _formulario_nova_compra() -> None:
                 st.warning("Informe um valor maior que zero.")
             else:
                 models.inserir_compra_cartao(descricao, data_compra.isoformat(), valor_total, int(parcelas), categoria)
-                st.success(f"Compra de {utils.formatar_moeda(valor_total)} em {int(parcelas)}x salva.")
+                ui.marcar_toast(f"Compra de {utils.formatar_moeda(valor_total)} em {int(parcelas)}x salva.")
                 st.rerun()
 
 
@@ -120,7 +121,7 @@ def _tabela_e_exclusao(hoje: date) -> None:
         st.caption("Remove todas as parcelas futuras dessa compra do cálculo da fatura.")
         if st.button("excluir selecionada"):
             models.excluir_compra_cartao(compra_id)
-            st.success("Compra excluída.")
+            ui.marcar_toast("Compra excluída.", icone="🗑️")
             st.rerun()
 
 

@@ -17,6 +17,7 @@ import utils
 st.set_page_config(page_title="Dashboard | Controle Financeiro", page_icon="💰", layout="wide")
 database.inicializar_banco()
 ui.aplicar_tema()
+ui.mostrar_toast_pendente()
 
 CHART_LAYOUT = dict(
     margin=dict(l=10, r=10, t=40, b=10),
@@ -306,7 +307,7 @@ def _secao_configuracoes() -> None:
 
             if st.form_submit_button("Salvar configurações"):
                 models.atualizar_config(salario, vale, int(dia_util), meta_reserva, aporte_padrao)
-                st.success("Configurações atualizadas.")
+                ui.marcar_toast("Configurações atualizadas.")
                 st.rerun()
 
         st.markdown("---")
@@ -329,12 +330,12 @@ def _secao_configuracoes() -> None:
             nova_data = st.date_input("A partir de", value=valor_atual, format="DD/MM/YYYY")
             if st.button("salvar data de início"):
                 models.definir_inicio_controle(nova_data.isoformat())
-                st.success("Data de início do controle salva.")
+                ui.marcar_toast("Data de início do controle salva.")
                 st.rerun()
         elif config.get("inicio_controle"):
             if st.button("desativar (voltar a calcular sempre)"):
                 models.definir_inicio_controle("")
-                st.success("Controle reativado imediatamente.")
+                ui.marcar_toast("Controle reativado imediatamente.")
                 st.rerun()
 
         st.markdown("---")
@@ -349,9 +350,11 @@ def _secao_configuracoes() -> None:
             )
             if novo_valor != conta["valor"]:
                 models.atualizar_conta_fixa(int(conta["id"]), conta["descricao"], novo_valor, True)
+                ui.marcar_toast(f"Valor de '{conta['descricao']}' atualizado.")
                 st.rerun()
             if cc3.button("Remover", key=f"conta_remover_{conta['id']}"):
                 models.excluir_conta_fixa(int(conta["id"]))
+                ui.marcar_toast(f"Conta fixa '{conta['descricao']}' removida.", icone="🗑️")
                 st.rerun()
 
         with st.form("form_nova_conta", clear_on_submit=True):
@@ -360,6 +363,7 @@ def _secao_configuracoes() -> None:
             valor_novo = nc2.number_input("Valor", min_value=0.0, step=10.0, label_visibility="collapsed")
             if nc3.form_submit_button("Adicionar") and descricao_nova:
                 models.inserir_conta_fixa(descricao_nova, valor_novo)
+                ui.marcar_toast(f"Conta fixa '{descricao_nova}' adicionada.")
                 st.rerun()
 
 

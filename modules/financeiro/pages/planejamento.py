@@ -15,6 +15,7 @@ import utils
 st.set_page_config(page_title="Planejamento | Controle Financeiro", page_icon="💰", layout="wide")
 database.inicializar_banco()
 ui.aplicar_tema()
+ui.mostrar_toast_pendente()
 
 CHART_LAYOUT = dict(
     margin=dict(l=10, r=10, t=40, b=10),
@@ -61,7 +62,7 @@ def _formulario_orcamento(mes_ref: str) -> None:
         if st.form_submit_button("salvar orçamento", use_container_width=True):
             for categoria, valor in valores.items():
                 models.upsert_planejamento(mes_ref, categoria, valor)
-            st.success("Orçamento salvo.")
+            ui.marcar_toast("Orçamento salvo.")
             st.rerun()
 
 

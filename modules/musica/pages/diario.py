@@ -15,6 +15,7 @@ import utils
 st.set_page_config(page_title="Diário | Música", page_icon="🎵", layout="wide")
 database.inicializar_banco()
 ui.aplicar_tema()
+ui.mostrar_toast_pendente()
 
 
 def _salvar_capa(album_id: int, arquivo) -> str:
@@ -198,7 +199,7 @@ def _formulario_nova_escuta() -> None:
                     album_id, data_escuta.isoformat(), None if sem_nota else nota,
                     review.strip(), faixa_favorita.strip(),
                 )
-                st.success("Escuta registrada.")
+                ui.marcar_toast("Escuta registrada.")
                 st.rerun()
 
 
@@ -228,9 +229,11 @@ def _popover_escuta(escuta: dict) -> None:
             models.atualizar_escuta(
                 escuta_id, data_val.isoformat(), None if sem_nota else nota_val, review.strip(), faixa.strip(),
             )
+            ui.marcar_toast("Escuta atualizada.")
             st.rerun()
         if excluir:
             models.excluir_escuta(escuta_id)
+            ui.marcar_toast("Escuta excluída.", icone="🗑️")
             st.rerun()
 
 

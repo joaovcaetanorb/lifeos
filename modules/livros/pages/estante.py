@@ -15,6 +15,7 @@ import utils
 st.set_page_config(page_title="Estante | Livros", page_icon="📚", layout="wide")
 database.inicializar_banco()
 ui.aplicar_tema()
+ui.mostrar_toast_pendente()
 
 
 def _ano_valido(valor) -> int | None:
@@ -70,9 +71,11 @@ def _popover_leitura(leitura: dict) -> None:
             models.atualizar_leitura(
                 leitura_id, data_val.isoformat(), status_val, None if sem_nota else nota_val, review.strip(),
             )
+            ui.marcar_toast("Leitura atualizada.")
             st.rerun()
         if excluir:
             models.excluir_leitura(leitura_id)
+            ui.marcar_toast("Leitura excluída.", icone="🗑️")
             st.rerun()
 
 
@@ -112,6 +115,7 @@ def _secao_leituras(livro_id: int) -> None:
             models.inserir_leitura(
                 livro_id, data_leitura.isoformat(), status, None if sem_nota else nota, review.strip(),
             )
+            ui.marcar_toast("Leitura registrada.")
             st.rerun()
 
 
@@ -129,14 +133,14 @@ def _secao_editar(livro: dict) -> None:
         if st.form_submit_button("salvar alterações"):
             caminho = _salvar_capa(livro_id, nova_capa) if nova_capa is not None else None
             models.atualizar_livro(livro_id, nome.strip(), int(ano) if ano else None, genero.strip(), capa_path=caminho)
-            st.success("Livro atualizado.")
+            ui.marcar_toast("Livro atualizado.")
             st.rerun()
 
     st.divider()
     confirmar = st.checkbox("confirmar exclusão deste livro (apaga todas as leituras dele)", key=f"confirmar_del_{livro_id}")
     if st.button("excluir livro", key=f"del_livro_{livro_id}", disabled=not confirmar):
         models.excluir_livro(livro_id)
-        st.success("Livro excluído.")
+        ui.marcar_toast("Livro excluído.", icone="🗑️")
         st.rerun()
 
 

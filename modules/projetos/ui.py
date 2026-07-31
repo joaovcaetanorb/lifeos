@@ -83,3 +83,25 @@ def titulo_pagina(nome: str) -> None:
 
 def eyebrow(texto: str) -> None:
     st.markdown(f'<div class="ledger-eyebrow">{texto}</div>', unsafe_allow_html=True)
+
+
+_CHAVE_TOAST = "_toast_pendente"
+
+
+def marcar_toast(mensagem: str, icone: str = "✅") -> None:
+    """Guarda uma mensagem de confirmação pra mostrar depois de um st.rerun().
+
+    st.success() chamado logo antes de st.rerun() não sobrevive ao rerun (o
+    script é cortado antes do navegador renderizar) — por isso a mensagem
+    passa pelo session_state e só vira st.toast() no topo da próxima
+    execução, via mostrar_toast_pendente()."""
+    st.session_state[_CHAVE_TOAST] = (mensagem, icone)
+
+
+def mostrar_toast_pendente() -> None:
+    """Chamar uma vez, no topo de cada página, antes de qualquer outra
+    renderização — mostra (e consome) o toast deixado por marcar_toast()."""
+    pendente = st.session_state.pop(_CHAVE_TOAST, None)
+    if pendente:
+        mensagem, icone = pendente
+        st.toast(mensagem, icon=icone)

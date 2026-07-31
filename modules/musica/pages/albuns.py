@@ -16,6 +16,7 @@ import utils
 st.set_page_config(page_title="Álbuns | Música", page_icon="🎵", layout="wide")
 database.inicializar_banco()
 ui.aplicar_tema()
+ui.mostrar_toast_pendente()
 
 
 def _ano_valido(valor) -> int | None:
@@ -91,9 +92,11 @@ def _popover_escuta(escuta: dict, spotify_id: str) -> None:
             models.atualizar_escuta(
                 escuta_id, data_val.isoformat(), None if sem_nota else nota_val, review.strip(), faixa.strip(),
             )
+            ui.marcar_toast("Escuta atualizada.")
             st.rerun()
         if excluir:
             models.excluir_escuta(escuta_id)
+            ui.marcar_toast("Escuta excluída.", icone="🗑️")
             st.rerun()
 
 
@@ -133,6 +136,7 @@ def _secao_escutas(album_id: int, spotify_id: str) -> None:
             models.inserir_escuta(
                 album_id, data_escuta.isoformat(), None if sem_nota else nota, review.strip(), faixa_favorita.strip(),
             )
+            ui.marcar_toast("Escuta registrada.")
             st.rerun()
 
 
@@ -150,14 +154,14 @@ def _secao_editar(album: dict) -> None:
         if st.form_submit_button("salvar alterações"):
             caminho = _salvar_capa(album_id, nova_capa) if nova_capa is not None else None
             models.atualizar_album(album_id, nome.strip(), int(ano) if ano else None, genero.strip(), capa_path=caminho)
-            st.success("Álbum atualizado.")
+            ui.marcar_toast("Álbum atualizado.")
             st.rerun()
 
     st.divider()
     confirmar = st.checkbox("confirmar exclusão deste álbum (apaga todas as escutas dele)", key=f"confirmar_del_{album_id}")
     if st.button("excluir álbum", key=f"del_album_{album_id}", disabled=not confirmar):
         models.excluir_album(album_id)
-        st.success("Álbum excluído.")
+        ui.marcar_toast("Álbum excluído.", icone="🗑️")
         st.rerun()
 
 

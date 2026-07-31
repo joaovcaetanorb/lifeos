@@ -14,6 +14,7 @@ import utils
 st.set_page_config(page_title="Diário | Livros", page_icon="📚", layout="wide")
 database.inicializar_banco()
 ui.aplicar_tema()
+ui.mostrar_toast_pendente()
 
 
 def _salvar_capa(livro_id: int, arquivo) -> str:
@@ -87,7 +88,7 @@ def _formulario_nova_leitura() -> None:
                 models.inserir_leitura(
                     livro_id, data_leitura.isoformat(), status, None if sem_nota else nota, review.strip(),
                 )
-                st.success("Leitura registrada.")
+                ui.marcar_toast("Leitura registrada.")
                 st.rerun()
 
 
@@ -121,9 +122,11 @@ def _popover_leitura(leitura: dict) -> None:
             models.atualizar_leitura(
                 leitura_id, data_val.isoformat(), status_val, None if sem_nota else nota_val, review.strip(),
             )
+            ui.marcar_toast("Leitura atualizada.")
             st.rerun()
         if excluir:
             models.excluir_leitura(leitura_id)
+            ui.marcar_toast("Leitura excluída.", icone="🗑️")
             st.rerun()
 
 

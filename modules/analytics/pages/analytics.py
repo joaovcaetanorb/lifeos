@@ -15,6 +15,7 @@ import utils
 st.set_page_config(page_title="Analytics | Analytics", page_icon="📈", layout="wide")
 database.inicializar_banco()
 ui.aplicar_tema()
+ui.mostrar_toast_pendente()
 
 CHART_LAYOUT = dict(
     margin=dict(l=10, r=10, t=40, b=10),
@@ -198,6 +199,7 @@ def _secao_sugestoes(data_inicio: str, data_fim: str) -> None:
             texto = groq_client.gerar_sugestoes(contexto)
         if texto:
             models.salvar_sugestao(texto)
+            ui.marcar_toast("Sugestões atualizadas.")
             st.rerun()
 
 
