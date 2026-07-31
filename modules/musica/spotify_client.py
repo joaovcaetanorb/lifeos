@@ -29,15 +29,36 @@ def disponivel() -> bool:
     return _get_client() is not None
 
 
+def ultimo_erro() -> str | None:
+    """Mensagem amigável do último erro de `buscar_albuns`, se houver — pra
+    UI distinguir 'sem resultado' de 'a busca falhou'. None enquanto a
+    última chamada não deu erro."""
+    return st.session_state.get("spotify_ultimo_erro")
+
+
 def buscar_albuns(query: str, limit: int = 5) -> list[dict]:
     """[{nome, artista, artista_spotify_id, ano, capa_url, spotify_id,
-    spotify_url}, ...]. Lista vazia se indisponível, sem resultado, ou erro."""
+    spotify_url}, ...]. Lista vazia se indisponível, sem resultado, ou erro
+    (nesse último caso, `ultimo_erro()` explica o motivo)."""
+    st.session_state["spotify_ultimo_erro"] = None
     sp = _get_client()
     if sp is None or not query.strip():
         return []
     try:
         resultado = sp.search(q=query, type="album", limit=limit)
+    except spotipy.SpotifyException as e:
+        if e.http_status == 403:
+            st.session_state["spotify_ultimo_erro"] = (
+                "Spotify recusou a busca (403): desde o início de 2026 a Web API exige que a "
+                "conta dona do app tenha assinatura Premium ativa para usar o modo de busca "
+                "(Client Credentials). Confira a assinatura em developer.spotify.com/dashboard — "
+                "se já tiver Premium e o erro persistir, tente regenerar o Client Secret do app."
+            )
+        else:
+            st.session_state["spotify_ultimo_erro"] = f"Spotify recusou a busca (HTTP {e.http_status})."
+        return []
     except Exception:
+        st.session_state["spotify_ultimo_erro"] = "Não foi possível buscar no Spotify agora (erro de rede)."
         return []
 
     albuns = []

@@ -229,13 +229,17 @@ def resumo_livros() -> dict | None:
         return None
     try:
         leituras = pd.read_sql_query(
-            """SELECT leituras.*, livros.nome AS livro_nome
-               FROM leituras JOIN livros ON livros.id = leituras.livro_id
+            """SELECT leituras.*, livros.nome AS livro_nome, livros.capa_path AS livro_capa_path,
+                      livros.genero AS livro_genero, livros.ano_publicacao AS livro_ano,
+                      autores.nome AS autor_nome
+               FROM leituras
+               JOIN livros ON livros.id = leituras.livro_id
+               JOIN autores ON autores.id = livros.autor_id
                ORDER BY leituras.data DESC, leituras.id DESC""",
             conn,
         )
         if leituras.empty:
-            return {"lendo_agora": 0, "titulos_lendo": [], "lidos_ano": 0}
+            return {"lendo_agora": 0, "livros_lendo": [], "lidos_ano": 0}
 
         mais_recente_por_livro = leituras.sort_values(
             ["livro_id", "data"], ascending=[True, False]
@@ -246,9 +250,19 @@ def resumo_livros() -> dict | None:
         lidos_ano = leituras[
             (leituras["status"] == "Concluído") & (leituras["data"].str.slice(0, 4) == ano_atual)
         ]
+        livros_lendo = [
+            {
+                "nome": row["livro_nome"],
+                "autor": row["autor_nome"],
+                "genero": row["livro_genero"] or "",
+                "ano": int(row["livro_ano"]) if pd.notna(row["livro_ano"]) else None,
+                "capa_path": row["livro_capa_path"] or "",
+            }
+            for _, row in lendo.iterrows()
+        ]
         return {
             "lendo_agora": int(len(lendo)),
-            "titulos_lendo": lendo["livro_nome"].tolist(),
+            "livros_lendo": livros_lendo,
             "lidos_ano": int(len(lidos_ano)),
         }
     except Exception:
@@ -264,21 +278,31 @@ def resumo_humor(hoje: date | None = None) -> dict | None:
     conn = database.get_connection("humor")
     if conn is None:
         return None
+    vazio = {
+        "registrado_hoje": False, "nota_hoje": None, "tags_hoje": [],
+        "nota_livre_hoje": "", "criado_em": None,
+    }
     try:
         registros = pd.read_sql_query(
             "SELECT * FROM registros_humor ORDER BY data DESC, hora DESC, id DESC", conn,
         )
         if registros.empty:
-            return {"registrado_hoje": False, "nota_hoje": None, "tags_hoje": []}
+            return vazio
 
         hoje_iso = hoje.isoformat()
         registros_hoje = registros[registros["data"] == hoje_iso]
         if registros_hoje.empty:
-            return {"registrado_hoje": False, "nota_hoje": None, "tags_hoje": []}
+            return vazio
 
         ultimo = registros_hoje.iloc[0]
         tags = [t for t in ultimo["tags"].split(",") if t]
-        return {"registrado_hoje": True, "nota_hoje": int(ultimo["nota"]), "tags_hoje": tags}
+        return {
+            "registrado_hoje": True,
+            "nota_hoje": int(ultimo["nota"]),
+            "tags_hoje": tags,
+            "nota_livre_hoje": ultimo["nota_livre"] or "",
+            "criado_em": ultimo["created_at"],
+        }
     except Exception:
         return None
 
@@ -293,7 +317,9 @@ def resumo_musica() -> dict | None:
         return None
     try:
         escutas = pd.read_sql_query(
-            """SELECT escutas.*, albuns.nome AS album_nome, artistas.nome AS artista_nome
+            """SELECT escutas.*, albuns.nome AS album_nome, albuns.capa_path AS album_capa_path,
+                      albuns.genero AS album_genero, albuns.ano_lancamento AS album_ano,
+                      artistas.nome AS artista_nome
                FROM escutas
                JOIN albuns ON albuns.id = escutas.album_id
                JOIN artistas ON artistas.id = albuns.artista_id
@@ -310,7 +336,13 @@ def resumo_musica() -> dict | None:
 
         return {
             "albuns_mes": int(albuns_mes),
-            "ultimo_album": f"{ultima['album_nome']} — {ultima['artista_nome']}",
+            "ultimo_album": {
+                "nome": ultima["album_nome"],
+                "artista": ultima["artista_nome"],
+                "genero": ultima["album_genero"] or "",
+                "ano": int(ultima["album_ano"]) if pd.notna(ultima["album_ano"]) else None,
+                "capa_path": ultima["album_capa_path"] or "",
+            },
         }
     except Exception:
         return None
@@ -353,11 +385,13 @@ def contexto_hoje() -> str:
 
     livros = resumo_livros()
     if livros is not None and livros["lendo_agora"] > 0:
-        blocos.append(f"LIVROS — lendo agora: {', '.join(livros['titulos_lendo'])}.")
+        nomes = ", ".join(l["nome"] for l in livros["livros_lendo"])
+        blocos.append(f"LIVROS — lendo agora: {nomes}.")
 
     musica = resumo_musica()
     if musica is not None and musica["ultimo_album"]:
-        blocos.append(f"MÚSICA — último álbum ouvido: {musica['ultimo_album']}.")
+        album = musica["ultimo_album"]
+        blocos.append(f"MÚSICA — último álbum ouvido: {album['nome']} — {album['artista']}.")
 
     if not blocos:
         return "Nenhum módulo tem dado suficiente ainda."

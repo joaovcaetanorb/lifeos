@@ -2,6 +2,7 @@
 resto do app (e dos relatórios dos módulos financeiro, projetos e hábitos).
 """
 
+import calendar
 import io
 from datetime import date, timedelta
 
@@ -66,16 +67,72 @@ def _fig_para_imagem(fig, largura_cm: float = 16.5) -> Image:
     return Image(buf, width=largura, height=largura * proporcao)
 
 
-def _grafico_evolucao(dias: int, hoje: date) -> Image | None:
-    df = calc.evolucao_diaria(dias, hoje)
-    if df["nota"].dropna().empty:
+def _meses_periodo(data_inicio: str, data_fim: str) -> list[tuple[int, int]]:
+    """(ano, mês) de cada mês tocado pelo período do relatório — um
+    relatório de 90 dias pode cruzar 3-4 meses, então o calendário vira
+    uma grade por mês."""
+    inicio, fim = date.fromisoformat(data_inicio), date.fromisoformat(data_fim)
+    meses = []
+    ano, mes = inicio.year, inicio.month
+    while (ano, mes) <= (fim.year, fim.month):
+        meses.append((ano, mes))
+        ano, mes = (ano + 1, 1) if mes == 12 else (ano, mes + 1)
+    return meses
+
+
+def _grafico_calendario_mes(ano: int, mes: int) -> Image | None:
+    """Mesma lógica do calendário por mês da página (um retângulo por dia,
+    dividido em faixas cronológicas quando há mais de um registro) — só
+    que desenhado com matplotlib pra virar imagem estática do PDF."""
+    primeiro_dia_semana, dias_no_mes = calendar.monthrange(ano, mes)
+    data_inicio = date(ano, mes, 1).isoformat()
+    data_fim = date(ano, mes, dias_no_mes).isoformat()
+    df = calc.registros_periodo(data_inicio, data_fim)
+    if df.empty:
         return None
-    fig, ax = plt.subplots(figsize=(6.5, 3), facecolor=utils.COR_FUNDO)
-    _estilo_eixos(ax)
-    ax.set_title(f"evolução do humor (últimos {dias} dias)", fontsize=10)
-    ax.bar(df["data"], df["nota"], color=utils.COR_REALIZADO)
-    ax.plot(df["data"], df["media_movel_7d"], color=utils.COR_ACENTO, linewidth=2)
-    ax.set_ylim(0, 10)
+
+    registros_por_dia = {
+        dia: grupo.sort_values("datetime") for dia, grupo in df.groupby(df["datetime"].dt.day)
+    }
+    dias_semana_labels = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+    n_semanas = (primeiro_dia_semana + dias_no_mes - 1) // 7 + 1
+
+    fig, ax = plt.subplots(figsize=(6.5, 1.15 * n_semanas + 0.6), facecolor=utils.COR_FUNDO)
+    ax.set_facecolor(utils.COR_FUNDO)
+    ax.set_title(f"calendário de humor — {utils.NOMES_MESES[mes - 1]} de {ano}", fontsize=10, color=utils.COR_TEXTO)
+
+    for dia in range(1, dias_no_mes + 1):
+        posicao = primeiro_dia_semana + dia - 1
+        semana, coluna = posicao // 7, posicao % 7
+        y_topo = n_semanas - 1 - semana  # matplotlib cresce pra cima; inverte pra semana 0 ficar no topo
+        registros_dia = registros_por_dia.get(dia)
+
+        if registros_dia is None or registros_dia.empty:
+            ax.add_patch(plt.Rectangle(
+                (coluna, y_topo), 1, 1, facecolor=utils.COR_FUNDO_ALT, edgecolor=utils.COR_HAIRLINE, linewidth=0.5,
+            ))
+            cor_numero = utils.COR_TEXTO_MUTED
+        else:
+            n = len(registros_dia)
+            for i, (_, registro) in enumerate(registros_dia.iterrows()):
+                altura = 1 / n
+                y0 = y_topo + 1 - (i + 1) * altura
+                ax.add_patch(plt.Rectangle(
+                    (coluna, y0), 1, altura, facecolor=utils.cor_nota(registro["nota"]),
+                    edgecolor=utils.COR_FUNDO, linewidth=0.5,
+                ))
+            cor_numero = utils.COR_TEXTO
+
+        ax.text(coluna + 0.06, y_topo + 0.92, str(dia), fontsize=6, color=cor_numero, ha="left", va="top")
+
+    ax.set_xlim(0, 7)
+    ax.set_ylim(0, n_semanas)
+    ax.set_xticks([i + 0.5 for i in range(7)])
+    ax.set_xticklabels(dias_semana_labels, fontsize=8, color=utils.COR_TEXTO_MUTED)
+    ax.set_yticks([])
+    ax.tick_params(length=0)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
     return _fig_para_imagem(fig)
 
 
@@ -87,7 +144,8 @@ def _grafico_tags(data_inicio: str, data_fim: str) -> Image | None:
     fig, ax = plt.subplots(figsize=(6.5, max(2, 0.4 * len(df))), facecolor=utils.COR_FUNDO)
     _estilo_eixos(ax)
     ax.set_title("tags mais frequentes", fontsize=10)
-    ax.barh(df["tag"], df["total"], color=utils.COR_ACENTO)
+    cores = [utils.cor_tag(tag) for tag in df["tag"]]
+    ax.barh(df["tag"], df["total"], color=cores)
     return _fig_para_imagem(fig)
 
 
@@ -129,13 +187,18 @@ def gerar_pdf_relatorio(dias: int = 30) -> bytes:
     if resumo["total_registros"] > 0:
         story.append(Paragraph("GRÁFICOS", _ESTILO_EYEBROW))
         story.append(Paragraph("evolução e padrões", _ESTILO_SUBTITULO))
-        grafico_evolucao = _grafico_evolucao(dias, hoje)
-        if grafico_evolucao is not None:
-            story.append(grafico_evolucao)
-            story.append(Spacer(1, 0.3 * cm))
+        for ano_mes, mes_mes in _meses_periodo(data_inicio, data_fim):
+            grafico_calendario = _grafico_calendario_mes(ano_mes, mes_mes)
+            if grafico_calendario is not None:
+                story.append(grafico_calendario)
+                story.append(Spacer(1, 0.15 * cm))
+        story.append(Paragraph("vermelho = nota baixa · azul = nota alta", _ESTILO_MUTED))
+        story.append(Spacer(1, 0.4 * cm))
+
         grafico_tags = _grafico_tags(data_inicio, data_fim)
         if grafico_tags is not None:
             story.append(grafico_tags)
+            story.append(Paragraph("azul = sentimento positivo · vermelho = negativo", _ESTILO_MUTED))
         story.append(Spacer(1, 0.5 * cm))
 
         story.append(Paragraph("HISTÓRICO DO PERÍODO", _ESTILO_EYEBROW))

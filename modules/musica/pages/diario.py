@@ -47,6 +47,10 @@ def _secao_busca_spotify() -> dict:
     if c2.button("buscar", key="spotify_buscar_escuta"):
         st.session_state["spotify_resultados_escuta"] = spotify_client.buscar_albuns(query)
 
+    erro = spotify_client.ultimo_erro()
+    if erro:
+        st.warning(erro)
+
     resultados = st.session_state.get("spotify_resultados_escuta", [])
     if resultados:
         for i, r in enumerate(resultados):

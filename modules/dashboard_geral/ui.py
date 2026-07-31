@@ -56,6 +56,23 @@ hr { opacity: 0.35; }
     height: 100%;
 }
 
+/* título grande dentro de um card do Dashboard Geral: precisa quebrar
+   linha (nomes de livro/álbum longos), diferente do st.metric (que corta
+   com reticências em vez de quebrar) */
+.card-destaque {
+    font-family: 'Courier Prime', monospace;
+    font-weight: 700;
+    font-size: 1.3rem;
+    line-height: 1.3;
+    margin: 0.1rem 0 0.3rem 0;
+    overflow-wrap: break-word;
+}
+
+/* capa (livro/álbum) dentro de um card: cantos retos, igual ao resto do tema */
+.card-capa img {
+    border-radius: 2px !important;
+}
+
 /* celular: menos padding lateral, números menores */
 @media (max-width: 640px) {
     [data-testid="stAppViewContainer"] .block-container {
@@ -81,3 +98,10 @@ def titulo_pagina(nome: str) -> None:
 
 def eyebrow(texto: str) -> None:
     st.markdown(f'<div class="ledger-eyebrow">{texto}</div>', unsafe_allow_html=True)
+
+
+def destaque_grande(texto: str) -> None:
+    """Título grande dentro de um card — ao contrário de st.metric, quebra
+    linha em vez de cortar com reticências (importante pra nomes longos de
+    livro/álbum)."""
+    st.markdown(f'<div class="card-destaque">{texto}</div>', unsafe_allow_html=True)

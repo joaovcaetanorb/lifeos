@@ -42,6 +42,33 @@ COR_TAG_NEGATIVO = "#e66767"
 # médio de escalas divergentes.
 COR_NEUTRO = "#383835"
 
+NOMES_MESES = [
+    "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+]
+
+
+def hex_para_rgb(hex_cor: str) -> tuple[int, int, int]:
+    hex_cor = hex_cor.lstrip("#")
+    return tuple(int(hex_cor[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def cor_nota(nota: float, nota_min: float = 1, nota_max: float = 10) -> str:
+    """Interpola a escala divergente do calendário de humor (vermelho ->
+    cinza -> azul) — usado onde não dá pra usar um `colorscale` pronto
+    (formas do Plotly, retângulos do matplotlib no relatório em PDF)."""
+    proporcao = min(max((nota - nota_min) / (nota_max - nota_min), 0), 1)
+    if proporcao <= 0.5:
+        cor_a, cor_b, t = COR_TAG_NEGATIVO, COR_NEUTRO, proporcao / 0.5
+    else:
+        cor_a, cor_b, t = COR_NEUTRO, COR_TAG_POSITIVO, (proporcao - 0.5) / 0.5
+    r1, g1, b1 = hex_para_rgb(cor_a)
+    r2, g2, b2 = hex_para_rgb(cor_b)
+    r = round(r1 + (r2 - r1) * t)
+    g = round(g1 + (g2 - g1) * t)
+    b = round(b1 + (b2 - b1) * t)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
 
 def formatar_data_br(data_iso: str) -> str:
     """'2026-08-05' -> '05/08'. String vazia retorna vazio."""

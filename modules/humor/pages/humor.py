@@ -1,5 +1,6 @@
 """Humor: registro rápido (nota + tags + nota livre) e histórico/gráficos."""
 
+import calendar
 from datetime import date
 
 import pandas as pd
@@ -24,7 +25,6 @@ CHART_LAYOUT = dict(
     plot_bgcolor="rgba(0,0,0,0)",
     font=dict(family="JetBrains Mono, monospace", color=utils.COR_TEXTO_MUTED),
 )
-
 
 def _grid_style(fig: go.Figure) -> go.Figure:
     fig.update_xaxes(showgrid=True, gridcolor=utils.COR_HAIRLINE, zeroline=False)
@@ -195,38 +195,141 @@ def _periodo_selecionado() -> tuple[str, str, str]:
     return inicio.isoformat(), fim.isoformat(), "período personalizado"
 
 
-def _range_eixo_tempo(datetimes: pd.Series, margem: pd.Timedelta = pd.Timedelta(hours=1)) -> list:
-    """Range manual do eixo X com margem mínima — o autorange do Plotly
-    colapsa pra uma janela de frações de milissegundo quando os pontos
-    ficam muito próximos (ou é só 1 ponto), o que pode acontecer de
-    verdade quando dois registros caem no mesmo minuto (a hora só guarda
-    HH:MM, sem segundos)."""
-    minimo, maximo = datetimes.min(), datetimes.max()
-    if maximo - minimo < margem * 2:
-        centro = minimo + (maximo - minimo) / 2
-        return [centro - margem, centro + margem]
+def _range_eixo_dias(dias: pd.Series, margem_minima: pd.Timedelta = pd.Timedelta(days=1)) -> list:
+    """Range manual do eixo X (em dias) com margem mínima — o autorange do
+    Plotly colapsa pra uma janela de frações de milissegundo quando todos
+    os pontos caem no mesmo dia, o que faz o eixo mostrar horários tipo
+    '23:59:59.9995' em vez da data."""
+    minimo, maximo = dias.min(), dias.max()
+    margem = max(margem_minima, (maximo - minimo) * 0.08)
     return [minimo - margem, maximo + margem]
 
 
-def _grafico_por_registro(data_inicio: str, data_fim: str) -> None:
-    st.markdown("**Humor por registro**")
+def _grafico_hora_do_dia(data_inicio: str, data_fim: str) -> None:
+    """Um ponto por registro, dia no eixo X e horário no eixo Y — ao
+    contrário de um eixo de tempo contínuo, registros múltiplos no mesmo
+    dia caem em alturas diferentes em vez de colar um no outro, então dá
+    pra ver a que hora cada um foi feito sem precisar passar o mouse."""
+    st.markdown("**Humor por horário do dia**")
     df = calc.registros_periodo(data_inicio, data_fim)
     if df.empty:
         st.caption("Nenhum registro nesse período.")
         return
 
+    df = df.copy()
+    df["hora_decimal"] = df["datetime"].dt.hour + df["datetime"].dt.minute / 60
+    dias = df["datetime"].dt.normalize()
+
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=df["datetime"], y=df["nota"], mode="lines+markers",
-        line=dict(color=utils.COR_REALIZADO, width=1.5),
-        marker=dict(size=7, color=utils.COR_ACENTO),
-        hovertemplate="%{x|%d/%m %H:%M} — %{y}/10<extra></extra>",
+        x=dias, y=df["hora_decimal"], mode="markers",
+        marker=dict(
+            size=11, color=df["nota"], cmin=1, cmax=10,
+            colorscale=[[0, utils.COR_TAG_NEGATIVO], [0.5, utils.COR_NEUTRO], [1, utils.COR_TAG_POSITIVO]],
+            line=dict(width=1, color=utils.COR_FUNDO),
+        ),
+        customdata=pd.concat([df["datetime"].dt.strftime("%H:%M"), df["nota"]], axis=1),
+        hovertemplate="%{x|%d/%m} %{customdata[0]} — %{customdata[1]}/10<extra></extra>",
     ))
-    fig.update_layout(
-        xaxis_title=None, yaxis_title=None, yaxis_range=[0, 10],
-        xaxis_range=_range_eixo_tempo(df["datetime"]),
+    range_x = _range_eixo_dias(dias)
+    largura_dias = (range_x[1] - range_x[0]).days
+    fig.update_xaxes(
+        range=range_x, tickformat="%d/%m",
+        dtick=86400000 if largura_dias <= 10 else None,
     )
+    fig.update_yaxes(range=[24, 0], tickvals=[0, 6, 12, 18, 24], ticktext=["00h", "06h", "12h", "18h", "24h"])
+    fig.update_layout(xaxis_title=None, yaxis_title=None)
     st.plotly_chart(_grid_style(fig), use_container_width=True)
+    st.caption("vermelho = nota baixa · azul = nota alta")
+
+
+def _meses_disponiveis() -> list[tuple[int, int]]:
+    """(ano, mês) de cada mês entre o primeiro registro e hoje, mais
+    recente primeiro — popula o seletor da visão \"Por mês\"."""
+    hoje = date.today()
+    intervalo = models.intervalo_datas_registros()
+    inicio = date.fromisoformat(intervalo[0]) if intervalo else hoje
+
+    meses = []
+    ano, mes = inicio.year, inicio.month
+    while (ano, mes) <= (hoje.year, hoje.month):
+        meses.append((ano, mes))
+        ano, mes = (ano + 1, 1) if mes == 12 else (ano, mes + 1)
+    return list(reversed(meses))
+
+
+def _grafico_calendario_mes(ano: int, mes: int) -> None:
+    """Um retângulo por dia do mês — dias com mais de um registro são
+    divididos em faixas horizontais (uma por registro, em ordem
+    cronológica de cima pra baixo), então dá pra ver na hora quando o
+    humor mudou dentro do mesmo dia, sem depender do hover."""
+    primeiro_dia_semana, dias_no_mes = calendar.monthrange(ano, mes)
+    data_inicio = date(ano, mes, 1).isoformat()
+    data_fim = date(ano, mes, dias_no_mes).isoformat()
+    df = calc.registros_periodo(data_inicio, data_fim)
+    if df.empty:
+        st.caption("Nenhum registro nesse mês.")
+        return
+
+    registros_por_dia = {
+        dia: grupo.sort_values("datetime") for dia, grupo in df.groupby(df["datetime"].dt.day)
+    }
+    dias_semana_labels = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+    n_semanas = (primeiro_dia_semana + dias_no_mes - 1) // 7 + 1
+
+    fig = go.Figure()
+    hover_x, hover_y, hover_texto = [], [], []
+    for dia in range(1, dias_no_mes + 1):
+        posicao = primeiro_dia_semana + dia - 1
+        semana, coluna = posicao // 7, posicao % 7
+        registros_dia = registros_por_dia.get(dia)
+
+        if registros_dia is None or registros_dia.empty:
+            fig.add_shape(
+                type="rect", x0=coluna, x1=coluna + 1, y0=semana, y1=semana + 1,
+                fillcolor=utils.COR_FUNDO_ALT, line=dict(width=1, color=utils.COR_HAIRLINE),
+            )
+            cor_numero = utils.COR_TEXTO_MUTED
+        else:
+            n = len(registros_dia)
+            for i, (_, registro) in enumerate(registros_dia.iterrows()):
+                y0, y1 = semana + i / n, semana + (i + 1) / n
+                fig.add_shape(
+                    type="rect", x0=coluna, x1=coluna + 1, y0=y0, y1=y1,
+                    fillcolor=utils.cor_nota(registro["nota"]), line=dict(width=1, color=utils.COR_FUNDO),
+                )
+                hover_x.append(coluna + 0.5)
+                hover_y.append((y0 + y1) / 2)
+                tags_txt = ", ".join(utils.texto_para_tags(registro["tags"])) or "sem tags"
+                hover_texto.append(
+                    f"{registro['datetime'].strftime('%H:%M')} — {registro['nota']}/10<br>{tags_txt}"
+                )
+            cor_numero = utils.COR_TEXTO
+
+        fig.add_annotation(
+            x=coluna + 0.06, y=semana + 0.12, text=str(dia), showarrow=False,
+            font=dict(size=9, color=cor_numero), xanchor="left", yanchor="top",
+        )
+
+    if hover_x:
+        fig.add_trace(go.Scatter(
+            x=hover_x, y=hover_y, mode="markers",
+            marker=dict(size=28, color="rgba(0,0,0,0)"),
+            text=hover_texto, hovertemplate="%{text}<extra></extra>",
+            showlegend=False,
+        ))
+
+    fig.update_xaxes(
+        range=[0, 7], tickmode="array", tickvals=[i + 0.5 for i in range(7)], ticktext=dias_semana_labels,
+        showgrid=False, zeroline=False,
+    )
+    fig.update_yaxes(range=[n_semanas, 0], showgrid=False, zeroline=False, showticklabels=False)
+    fig.update_layout(**{**CHART_LAYOUT, "height": 110 * n_semanas + 60})
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption(
+        "vermelho = nota baixa · azul = nota alta · dias com mais de um registro aparecem "
+        "divididos em faixas (a de cima é o registro mais cedo)"
+    )
 
 
 def _grafico_tags(data_inicio: str, data_fim: str) -> None:
@@ -248,13 +351,31 @@ def _secao_analises() -> None:
     ui.eyebrow("análises")
     st.subheader("Evolução e padrões")
     with st.expander("ver gráficos"):
-        st.caption("Calendário sempre mostra os últimos 6 meses — o filtro abaixo vale pros gráficos seguintes.")
-        _grafico_heatmap_diario(date.today())
+        modo_calendario = st.radio(
+            "Calendário", ["Últimos 6 meses", "Por mês"],
+            horizontal=True, label_visibility="collapsed", key="humor_modo_calendario",
+        )
+        if modo_calendario == "Últimos 6 meses":
+            _grafico_heatmap_diario(date.today())
+            st.caption(
+                "Cada célula é a média do dia — se o humor mudou bastante nesse dia, "
+                "troque pra \"Por mês\" pra ver cada registro separado."
+            )
+        else:
+            meses = _meses_disponiveis()
+            ano, mes = st.selectbox(
+                "Mês", meses, format_func=lambda m: f"{utils.NOMES_MESES[m[1] - 1]} de {m[0]}",
+                key="humor_mes_selecionado",
+            )
+            st.markdown(f"**{utils.NOMES_MESES[mes - 1]} de {ano}**")
+            _grafico_calendario_mes(ano, mes)
+
         st.divider()
+        st.caption("O filtro de período abaixo vale pros dois gráficos seguintes.")
         data_inicio, data_fim, _ = _periodo_selecionado()
         col_a, col_b = st.columns(2)
         with col_a:
-            _grafico_por_registro(data_inicio, data_fim)
+            _grafico_hora_do_dia(data_inicio, data_fim)
         with col_b:
             _grafico_tags(data_inicio, data_fim)
 
