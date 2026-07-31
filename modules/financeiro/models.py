@@ -185,3 +185,36 @@ def excluir_movimento_reserva(movimento_id: int) -> None:
     conn = get_connection()
     conn.execute("DELETE FROM reserva_movimentos WHERE id = ?", (movimento_id,))
     conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Receitas extras (renda ocasional, fora do salário fixo)
+# ---------------------------------------------------------------------------
+
+def inserir_receita_extra(data: str, descricao: str, valor: float) -> None:
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO receitas_extras (data, descricao, valor) VALUES (?, ?, ?)",
+        (data, descricao, valor),
+    )
+    conn.commit()
+
+
+def listar_receitas_extras(data_inicio: str | None = None, data_fim: str | None = None) -> pd.DataFrame:
+    conn = get_connection()
+    query = "SELECT * FROM receitas_extras WHERE 1=1"
+    params = []
+    if data_inicio:
+        query += " AND data >= ?"
+        params.append(data_inicio)
+    if data_fim:
+        query += " AND data <= ?"
+        params.append(data_fim)
+    query += " ORDER BY data DESC, id DESC"
+    return pd.read_sql_query(query, conn, params=params)
+
+
+def excluir_receita_extra(receita_id: int) -> None:
+    conn = get_connection()
+    conn.execute("DELETE FROM receitas_extras WHERE id = ?", (receita_id,))
+    conn.commit()

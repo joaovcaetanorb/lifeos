@@ -60,6 +60,12 @@ def _secao_dia_pagamento(hoje: date) -> None:
         st.progress(percentual_restante)
         st.caption(f"{percentual_restante * 100:.0f}% do dinheiro livre do ciclo ainda disponível.")
 
+    if saldo["receita_extra_ciclo"] > 0:
+        st.caption(
+            f"Inclui {utils.formatar_moeda(saldo['receita_extra_ciclo'])} de renda extra "
+            f"recebida neste ciclo (lançada em Gastos)."
+        )
+
     st.caption(
         f"Ciclo atual: de {saldo['inicio_ciclo'].strftime('%d/%m/%Y')} até o próximo pagamento "
         f"em {saldo['proximo_pagamento'].strftime('%d/%m/%Y')} — faltam **{saldo['dias_restantes']} dias**. "
@@ -75,6 +81,7 @@ def _secao_dia_pagamento(hoje: date) -> None:
             f"- **= Dinheiro livre no mês: {utils.formatar_moeda(saldo['dinheiro_livre'])}**\n"
             f"- (−) Já gasto desde o último pagamento ({saldo['inicio_ciclo'].strftime('%d/%m')}, fora VA e crédito): "
             f"{utils.formatar_moeda(saldo['gasto_impacta_livre'])}\n"
+            f"- (+) Renda extra recebida no ciclo: {utils.formatar_moeda(saldo['receita_extra_ciclo'])}\n"
             f"- **= Saldo restante hoje: {utils.formatar_moeda(saldo['saldo_restante'])}**\n\n"
             f"Vale alimentação ({utils.formatar_moeda(saldo['vale_alimentacao'])}) é tratado à parte, "
             f"pois só cobre gastos pagos com VA.\n\n"

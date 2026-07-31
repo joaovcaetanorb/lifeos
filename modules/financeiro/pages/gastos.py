@@ -50,6 +50,61 @@ def _formulario_novo_gasto() -> None:
                 st.rerun()
 
 
+def _formulario_renda_extra() -> None:
+    ui.eyebrow("renda extra")
+    st.subheader("Registrar renda extra ocasional")
+    st.caption(
+        "Freela, bico, venda avulsa — qualquer entrada de dinheiro que não seja o "
+        "salário fixo. Soma direto no 'dinheiro livre' do Dia do Pagamento, a partir "
+        "da data que você informar aqui (mesma lógica de um gasto: cai no ciclo pela data)."
+    )
+    with st.form("form_renda_extra", clear_on_submit=True):
+        c1, c2, c3 = st.columns([1, 2, 1])
+        data_receita = c1.date_input("Data", value=date.today(), format="DD/MM/YYYY", key="data_renda_extra")
+        descricao = c2.text_input("Descrição", placeholder="Ex.: Freela de fim de semana")
+        valor = c3.number_input("Valor (R$)", min_value=0.0, step=1.0, format="%.2f", key="valor_renda_extra")
+
+        if st.form_submit_button("salvar renda extra", use_container_width=True):
+            if not descricao:
+                st.warning("Informe uma descrição para a renda extra.")
+            elif valor <= 0:
+                st.warning("Informe um valor maior que zero.")
+            else:
+                models.inserir_receita_extra(data_receita.isoformat(), descricao, valor)
+                ui.marcar_toast(f"Renda extra de {utils.formatar_moeda(valor)} registrada.")
+                st.rerun()
+
+
+def _tabela_renda_extra(mes_ref: str) -> None:
+    inicio, fim = calc.intervalo_ciclo(mes_ref)
+    receitas = models.listar_receitas_extras(data_inicio=inicio, data_fim=fim)
+    if receitas.empty:
+        st.caption("Nenhuma renda extra lançada neste ciclo.")
+        return
+
+    total = receitas["valor"].sum()
+    st.caption(f"Total de renda extra no ciclo: {utils.formatar_moeda(total)}")
+
+    exibicao = receitas[["data", "descricao", "valor"]].copy()
+    exibicao["valor"] = exibicao["valor"].map(utils.formatar_moeda)
+    exibicao.columns = ["Data", "Descrição", "Valor"]
+    st.dataframe(exibicao, use_container_width=True, hide_index=True)
+
+    with st.expander("Excluir uma renda extra"):
+        opcoes = {
+            int(row["id"]): f"{row['data']} — {row['descricao']} — {utils.formatar_moeda(row['valor'])}"
+            for _, row in receitas.iterrows()
+        }
+        receita_id = st.selectbox(
+            "Selecione o lançamento", list(opcoes.keys()), format_func=lambda i: opcoes[i],
+            key="sel_receita_extra",
+        )
+        if st.button("excluir selecionada", key="del_receita_extra"):
+            models.excluir_receita_extra(receita_id)
+            ui.marcar_toast("Renda extra excluída.", icone="🗑️")
+            st.rerun()
+
+
 def _selecionar_mes(hoje: date) -> str:
     opcoes = [calc.mes_referencia_atual(utils.somar_meses(hoje, -i)) for i in range(6)]
     rotulos = {m: utils.nome_mes(m) for m in opcoes}
@@ -92,11 +147,16 @@ def render() -> None:
 
     _formulario_novo_gasto()
     st.divider()
+    _formulario_renda_extra()
+    st.divider()
 
     ui.eyebrow("histórico")
     st.subheader("Lançamentos")
     mes_ref = _selecionar_mes(hoje)
     _tabela_e_exclusao(mes_ref)
+
+    st.markdown("**Renda extra do ciclo**")
+    _tabela_renda_extra(mes_ref)
 
 
 render()

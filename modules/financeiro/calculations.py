@@ -426,7 +426,13 @@ def saldo_disponivel_hoje(hoje: date | None = None) -> dict:
         ~gastos_ciclo["forma_pagamento"].isin(["Vale alimentação", "Crédito"])
     ]["valor"].sum() if not gastos_ciclo.empty else 0.0
 
-    saldo_restante = disponivel["dinheiro_livre"] - gasto_impacta_livre
+    # Renda extra ocasional (freela, bico) já recebida dentro do ciclo atual —
+    # soma direto no saldo livre, na data em que ela realmente entrou (mesma
+    # lógica de "cai no ciclo pela data" que gastos e compras de cartão já usam).
+    receitas_ciclo = models.listar_receitas_extras(data_inicio=inicio_ciclo.isoformat(), data_fim=hoje.isoformat())
+    receita_extra_ciclo = round(receitas_ciclo["valor"].sum(), 2) if not receitas_ciclo.empty else 0.0
+
+    saldo_restante = disponivel["dinheiro_livre"] - gasto_impacta_livre + receita_extra_ciclo
     divisao = dividir_por_periodo(saldo_restante, hoje, config["dia_util_pagamento"])
 
     # Se o usuário marcou uma data de início de controle (ex.: "só valho a
@@ -446,6 +452,7 @@ def saldo_disponivel_hoje(hoje: date | None = None) -> dict:
         "inicio_ciclo": inicio_ciclo,
         "gasto_ciclo": gasto_ja_feito,
         "gasto_impacta_livre": round(gasto_impacta_livre, 2),
+        "receita_extra_ciclo": receita_extra_ciclo,
         "saldo_restante": round(saldo_restante, 2),
         "controle_ativo": controle_ativo,
         "inicio_controle": inicio_controle_str,
