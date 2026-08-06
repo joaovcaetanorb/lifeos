@@ -369,13 +369,20 @@ def dividir_por_periodo(valor: float, hoje: date | None = None, dia_util_pagamen
     hoje = hoje or date.today()
     data_pagamento = utils.proximo_pagamento(hoje, dia_util_pagamento)
     dias_restantes = utils.dias_ate(data_pagamento, hoje)
-    semanas_restantes = max(dias_restantes / 7, 1 / 7)
+    por_dia = round(valor / dias_restantes, 2) if dias_restantes else valor
+
+    # "Por semana" é o ritmo diário projetado para 7 dias — mas se faltam
+    # menos de 7 dias até o próximo pagamento, o ciclo acaba antes disso e
+    # não há como gastar mais do que o que sobrou (senão o valor "explode"
+    # quando falta só 1 dia, ex.: R$ 2.782/dia virando R$ 19.474/semana).
+    dias_para_semana = min(dias_restantes, 7) if dias_restantes else 7
+    por_semana = round(por_dia * dias_para_semana, 2) if dias_restantes else valor
 
     return {
         "proximo_pagamento": data_pagamento,
         "dias_restantes": dias_restantes,
-        "por_dia": round(valor / dias_restantes, 2) if dias_restantes else valor,
-        "por_semana": round(valor / semanas_restantes, 2),
+        "por_dia": por_dia,
+        "por_semana": por_semana,
     }
 
 
