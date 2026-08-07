@@ -33,6 +33,7 @@ def _resumo() -> None:
     )
 
 
+@st.fragment
 def _formulario_nova_leitura() -> None:
     with st.expander("+ nova leitura", expanded=True):
         livros = models.listar_livros()

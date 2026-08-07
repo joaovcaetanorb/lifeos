@@ -114,6 +114,7 @@ def _linha_registro(registro: dict) -> None:
         _popover_registro(registro)
 
 
+@st.fragment
 def _secao_historico() -> None:
     ui.eyebrow("histórico")
     st.subheader("Registros")

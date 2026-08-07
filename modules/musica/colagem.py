@@ -28,7 +28,7 @@ def _tile_capa(capa_path: str, tamanho: int) -> Image.Image:
                 esquerda = (img.width - lado) // 2
                 topo = (img.height - lado) // 2
                 img = img.crop((esquerda, topo, esquerda + lado, topo + lado))
-                return img.resize((tamanho, tamanho))
+                return img.resize((tamanho, tamanho), Image.Resampling.LANCZOS)
 
     return Image.new("RGB", (tamanho, tamanho), utils.COR_FUNDO_ALT)
 

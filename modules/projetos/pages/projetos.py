@@ -275,6 +275,7 @@ def _card_projeto(projeto: dict) -> None:
                 _secao_editar(projeto)
 
 
+@st.fragment
 def _secao_relatorio() -> None:
     with st.expander("relatório em PDF"):
         st.caption(

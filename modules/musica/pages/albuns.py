@@ -44,14 +44,17 @@ def _resumo() -> None:
 
 
 def _campo_faixa_favorita(spotify_id: str, valor_atual: str, key: str) -> str:
-    """Se o álbum tem spotify_id e o Spotify está disponível, busca a
+    """Se o álbum tem spotify_id, busca a
     tracklist real (cacheada por spotify_id) e mostra uma faixa por
     checkbox pra marcar as favoritas. Senão, cai pro texto livre. Sempre
     retorna a string final (faixas separadas por ', ')."""
     faixas = []
     if spotify_id and spotify_client.disponivel():
         cache_key = f"faixas_{spotify_id}"
-        if cache_key not in st.session_state:
+        # só guarda em cache resultado com faixa de verdade — uma falha
+        # transitória (503, timeout) não pode grudar como "sem faixas" pro
+        # resto da sessão, senão a próxima tentativa nunca mais acontece
+        if not st.session_state.get(cache_key):
             st.session_state[cache_key] = spotify_client.buscar_faixas(spotify_id)
         faixas = st.session_state[cache_key]
 
@@ -172,13 +175,15 @@ def _toggle_favorito(album_id: int) -> None:
 def _card_album(album: dict) -> None:
     album_id = int(album["id"])
     with st.container(border=True):
-        col_capa, col_texto, col_favorito = st.columns([1, 5, 1])
+        col_capa, col_texto, col_favorito = st.columns([2, 4, 1])
 
         with col_capa:
             if album["capa_path"]:
                 caminho_capa = database.DB_DIR / album["capa_path"]
                 if caminho_capa.exists():
-                    st.image(str(caminho_capa), width=140)
+                    st.image(str(caminho_capa), width=220)
+            if album["spotify_url"]:
+                st.link_button("▶ abrir no Spotify", album["spotify_url"], use_container_width=True)
 
         with col_texto:
             st.subheader(album["nome"])

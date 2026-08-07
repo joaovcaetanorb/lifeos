@@ -13,9 +13,16 @@ tabela pode não existir ainda, e isso só aparece como exceção na query.
 from datetime import date, timedelta
 
 import pandas as pd
+import streamlit as st
 
 import database
 import utils
+
+# TTL curto (não zero): funções somente-leitura sobre bancos de outros
+# módulos — mesma lógica do dashboard_geral/calculations.py (só financeiro
+# e música chamam st.cache_data.clear() nas escritas por enquanto; o TTL é
+# a rede de segurança pros módulos que ainda não chamam).
+_TTL_RESUMO = 5
 
 
 def _periodos_do_intervalo(data_inicio: str, data_fim: str) -> list[str]:
@@ -33,6 +40,7 @@ def _periodos_do_intervalo(data_inicio: str, data_fim: str) -> list[str]:
 # Financeiro
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def financeiro_por_mes(data_inicio: str, data_fim: str) -> pd.DataFrame:
     """Total gasto por mês, dentro do período."""
     periodos = _periodos_do_intervalo(data_inicio, data_fim)
@@ -59,6 +67,7 @@ def financeiro_por_mes(data_inicio: str, data_fim: str) -> pd.DataFrame:
     })
 
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def financeiro_resumo() -> dict | None:
     conn = database.get_connection_modulo("financeiro")
     if conn is None:
@@ -75,6 +84,7 @@ def financeiro_resumo() -> dict | None:
 # Projetos
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def projetos_lista() -> pd.DataFrame:
     """Cada projeto com progresso financeiro (%) calculado."""
     vazio = pd.DataFrame(columns=["nome", "status", "progresso"])
@@ -101,6 +111,7 @@ def projetos_lista() -> pd.DataFrame:
 # Hábitos
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def habitos_por_mes(data_inicio: str, data_fim: str) -> pd.DataFrame:
     """% médio de cumprimento (entre hábitos ativos) por mês — mesma lógica
     de `habitos/calculations.py::cumprimento_por_mes`, reimplementada aqui
@@ -148,6 +159,7 @@ def habitos_por_mes(data_inicio: str, data_fim: str) -> pd.DataFrame:
     return pd.DataFrame(linhas)
 
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def habitos_lista_percentual(dias: int = 30) -> pd.DataFrame:
     vazio = pd.DataFrame(columns=["nome", "percentual"])
     conn = database.get_connection_modulo("habitos")
@@ -176,6 +188,7 @@ def habitos_lista_percentual(dias: int = 30) -> pd.DataFrame:
 # Humor
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def humor_por_mes(data_inicio: str, data_fim: str) -> pd.DataFrame:
     periodos = _periodos_do_intervalo(data_inicio, data_fim)
     vazio = pd.DataFrame({"periodo": periodos, "mes_nome": [utils.nome_mes_curto(p) for p in periodos], "nota_media": None})
@@ -203,6 +216,7 @@ def humor_por_mes(data_inicio: str, data_fim: str) -> pd.DataFrame:
     })
 
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def humor_tags_frequentes(data_inicio: str, data_fim: str, limite: int = 5) -> pd.DataFrame:
     vazio = pd.DataFrame(columns=["tag", "total"])
     conn = database.get_connection_modulo("humor")
@@ -231,6 +245,7 @@ def humor_tags_frequentes(data_inicio: str, data_fim: str, limite: int = 5) -> p
 # Livros
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def livros_resumo(data_inicio: str, data_fim: str) -> dict:
     vazio = {"concluidos": 0, "lendo_agora": 0, "nota_media": None}
     conn = database.get_connection_modulo("livros")
@@ -260,6 +275,7 @@ def livros_resumo(data_inicio: str, data_fim: str) -> dict:
 # Música
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def musica_resumo(data_inicio: str, data_fim: str) -> dict:
     vazio = {"escutas": 0, "albuns_novos": 0, "top_artistas": []}
     conn = database.get_connection_modulo("musica")
@@ -300,6 +316,7 @@ def musica_resumo(data_inicio: str, data_fim: str) -> dict:
 _MIN_DIAS_POR_GRUPO = 7
 
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def _serie_diaria_humor(data_inicio: str, data_fim: str) -> pd.Series:
     """Nota média de humor por dia (index=date) — múltiplos registros no
     mesmo dia viram uma média, igual ao calendário do próprio módulo Humor."""
@@ -321,6 +338,7 @@ def _serie_diaria_humor(data_inicio: str, data_fim: str) -> pd.Series:
     return serie
 
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def _dias_com_habito_cumprido(data_inicio: str, data_fim: str) -> set:
     """Dias (date) com pelo menos 1 hábito marcado como cumprido."""
     conn = database.get_connection_modulo("habitos")
@@ -338,6 +356,7 @@ def _dias_com_habito_cumprido(data_inicio: str, data_fim: str) -> set:
     return set(pd.to_datetime(registros["data"]).dt.date)
 
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def _dias_gasto_por_data(data_inicio: str, data_fim: str) -> pd.Series:
     """Total gasto por dia (index=date)."""
     conn = database.get_connection_modulo("financeiro")
@@ -358,6 +377,7 @@ def _dias_gasto_por_data(data_inicio: str, data_fim: str) -> pd.Series:
     return serie
 
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def _dias_com_atividade_cultural(data_inicio: str, data_fim: str) -> set:
     """Dias (date) com pelo menos 1 leitura (livros) ou 1 escuta (música)."""
     dias: set = set()
@@ -424,6 +444,7 @@ def _comparar_grupos(
     }
 
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def correlacoes_humor(data_inicio: str, data_fim: str) -> list[dict]:
     """Roda os cruzamentos Humor×Hábitos, Humor×Financeiro e
     Humor×Livros/Música — cada um só entra na lista se houver dado
@@ -460,6 +481,7 @@ def correlacoes_humor(data_inicio: str, data_fim: str) -> list[dict]:
 # Contexto agregado — o que a IA recebe (perguntas e sugestões)
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def contexto_geral(data_inicio: str, data_fim: str) -> str:
     """Monta um resumo textual compacto (não os dados brutos!) com o que
     cada módulo tem de mais relevante no período — é isso que vira o

@@ -14,9 +14,16 @@ ainda, e isso só aparece como exceção na hora da query, não antes.
 from datetime import date, timedelta
 
 import pandas as pd
+import streamlit as st
 
 import database
 import utils
+
+# TTL curto (não zero): essas funções só leem — a invalidação "de verdade"
+# depende de módulos que ainda não chamam st.cache_data.clear() (só
+# financeiro e música chamam, por enquanto). O TTL é uma rede de segurança
+# pros outros módulos; escritas em financeiro/música já limpam tudo na hora.
+_TTL_RESUMO = 5
 
 
 # ---------------------------------------------------------------------------
@@ -36,6 +43,7 @@ def _fatura_do_mes(conn, mes_referencia: str, dia_util: int) -> float:
     return round(total, 2)
 
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def resumo_financeiro(hoje: date | None = None) -> dict | None:
     """Saldo restante até o próximo pagamento + gasto do ciclo atual.
 
@@ -98,6 +106,7 @@ def resumo_financeiro(hoje: date | None = None) -> dict | None:
 # Projetos
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def resumo_projetos() -> dict | None:
     conn = database.get_connection("projetos")
     if conn is None:
@@ -132,6 +141,7 @@ def resumo_projetos() -> dict | None:
         return None
 
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def proxima_tarefa_projeto() -> dict | None:
     """Primeiro item de checklist ainda não concluído, entre os projetos
     ativos — prioriza quem tem prazo mais próximo, depois ordem/criação.
@@ -166,6 +176,7 @@ def proxima_tarefa_projeto() -> dict | None:
 # Hábitos
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def resumo_habitos(hoje: date | None = None) -> dict | None:
     hoje = hoje or date.today()
     conn = database.get_connection("habitos")
@@ -194,6 +205,7 @@ def resumo_habitos(hoje: date | None = None) -> dict | None:
         return None
 
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def habitos_faltantes_hoje(hoje: date | None = None) -> list[str] | None:
     """Nomes dos hábitos ativos ainda não marcados hoje. None se o módulo
     nunca foi usado OU não tem nenhum hábito ativo cadastrado — distinto de
@@ -223,6 +235,7 @@ def habitos_faltantes_hoje(hoje: date | None = None) -> list[str] | None:
 # Livros
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def resumo_livros() -> dict | None:
     conn = database.get_connection("livros")
     if conn is None:
@@ -273,6 +286,7 @@ def resumo_livros() -> dict | None:
 # Humor
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def resumo_humor(hoje: date | None = None) -> dict | None:
     hoje = hoje or date.today()
     conn = database.get_connection("humor")
@@ -311,6 +325,7 @@ def resumo_humor(hoje: date | None = None) -> dict | None:
 # Música
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_TTL_RESUMO, show_spinner=False)
 def resumo_musica() -> dict | None:
     conn = database.get_connection("musica")
     if conn is None:

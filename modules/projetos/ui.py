@@ -68,6 +68,46 @@ hr { opacity: 0.35; }
     [data-testid="stMetricValue"] { font-size: 1.25rem !important; }
     [data-testid="stMetricLabel"] { font-size: 0.65rem !important; }
 }
+
+/* esconde o chrome padrão do Streamlit (menu hambúrguer, rodapé "Made with
+   Streamlit", botão Deploy) — não combina com a identidade "ledger" própria
+   do app */
+#MainMenu, footer, [data-testid="stDeployButton"], [data-testid="stToolbar"] {
+    visibility: hidden !important;
+}
+
+/* hover/foco nos botões: transição sutil pro verde de destaque, sem sombra
+   (mantém o visual chapado/terminal) */
+.stButton > button {
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+.stButton > button:hover {
+    border-color: #3FA66B !important;
+    color: #3FA66B !important;
+}
+.stButton > button:focus-visible {
+    outline: 2px solid #3FA66B;
+    outline-offset: 1px;
+}
+
+/* scrollbar fina e quadrada, verde sobre escuro — o scrollbar padrão do
+   navegador quebra a ilusão de terminal */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #0D0F0C; }
+::-webkit-scrollbar-thumb { background: #2A2D23; border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: #3FA66B; }
+
+/* cabeçalho do expander no mesmo tratamento visual do .ledger-eyebrow, e
+   mais contraste na borda dos containers contra o fundo secundário */
+[data-testid="stExpander"] summary {
+    font-family: 'Courier Prime', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.85rem;
+}
+[data-testid="stVerticalBlockBorderWrapper"] {
+    border-color: #2A2D23 !important;
+}
 </style>
 """
 

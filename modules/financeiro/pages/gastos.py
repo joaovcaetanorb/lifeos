@@ -75,6 +75,7 @@ def _formulario_renda_extra() -> None:
                 st.rerun()
 
 
+@st.fragment
 def _tabela_renda_extra(mes_ref: str) -> None:
     inicio, fim = calc.intervalo_ciclo(mes_ref)
     receitas = models.listar_receitas_extras(data_inicio=inicio, data_fim=fim)
@@ -111,6 +112,7 @@ def _selecionar_mes(hoje: date) -> str:
     return st.selectbox("Mês", opcoes, format_func=lambda m: rotulos[m])
 
 
+@st.fragment
 def _tabela_e_exclusao(mes_ref: str) -> None:
     inicio, fim = calc.intervalo_ciclo(mes_ref)
     gastos = models.listar_gastos(data_inicio=inicio, data_fim=fim)

@@ -9,12 +9,14 @@ conexão pra todas as chamadas seguintes da mesma sessão.
 """
 
 import pandas as pd
+import streamlit as st
 from database import get_connection, linha_para_dict
 
 # ---------------------------------------------------------------------------
 # Hábitos
 # ---------------------------------------------------------------------------
 
+@st.cache_data(show_spinner=False)
 def listar_habitos(somente_ativos: bool = True) -> pd.DataFrame:
     conn = get_connection()
     query = "SELECT * FROM habitos"
@@ -24,6 +26,7 @@ def listar_habitos(somente_ativos: bool = True) -> pd.DataFrame:
     return pd.read_sql_query(query, conn)
 
 
+@st.cache_data(show_spinner=False)
 def obter_habito(habito_id: int) -> dict | None:
     conn = get_connection()
     cursor = conn.execute("SELECT * FROM habitos WHERE id = ?", (habito_id,))
@@ -34,6 +37,7 @@ def inserir_habito(nome: str) -> int:
     conn = get_connection()
     cur = conn.execute("INSERT INTO habitos (nome, ativo) VALUES (?, 1)", (nome,))
     conn.commit()
+    st.cache_data.clear()
     return cur.lastrowid
 
 
@@ -44,18 +48,21 @@ def atualizar_habito(habito_id: int, nome: str, ativo: bool) -> None:
         (nome, int(ativo), habito_id),
     )
     conn.commit()
+    st.cache_data.clear()
 
 
 def excluir_habito(habito_id: int) -> None:
     conn = get_connection()
     conn.execute("DELETE FROM habitos WHERE id = ?", (habito_id,))
     conn.commit()
+    st.cache_data.clear()
 
 
 # ---------------------------------------------------------------------------
 # Registros (dias marcados como cumpridos)
 # ---------------------------------------------------------------------------
 
+@st.cache_data(show_spinner=False)
 def esta_marcado(habito_id: int, data_iso: str) -> bool:
     conn = get_connection()
     row = conn.execute(
@@ -72,6 +79,7 @@ def marcar_dia(habito_id: int, data_iso: str) -> None:
         (habito_id, data_iso),
     )
     conn.commit()
+    st.cache_data.clear()
 
 
 def desmarcar_dia(habito_id: int, data_iso: str) -> None:
@@ -81,8 +89,10 @@ def desmarcar_dia(habito_id: int, data_iso: str) -> None:
         (habito_id, data_iso),
     )
     conn.commit()
+    st.cache_data.clear()
 
 
+@st.cache_data(show_spinner=False)
 def listar_registros(habito_id: int, data_inicio: str | None = None, data_fim: str | None = None) -> pd.DataFrame:
     conn = get_connection()
     query = "SELECT * FROM habito_registros WHERE habito_id = ?"
@@ -97,6 +107,7 @@ def listar_registros(habito_id: int, data_inicio: str | None = None, data_fim: s
     return pd.read_sql_query(query, conn, params=params)
 
 
+@st.cache_data(show_spinner=False)
 def listar_registros_todos(data_inicio: str | None = None, data_fim: str | None = None) -> pd.DataFrame:
     """Todos os registros já com o nome do hábito resolvido (join) — usada
     pelos cálculos que olham vários hábitos de uma vez."""
@@ -117,6 +128,7 @@ def listar_registros_todos(data_inicio: str | None = None, data_fim: str | None 
     return pd.read_sql_query(query, conn, params=params)
 
 
+@st.cache_data(show_spinner=False)
 def intervalo_datas_registros() -> tuple[str, str] | None:
     """(data mais antiga, data mais recente) entre todos os registros, ou
     None se não há nenhum."""

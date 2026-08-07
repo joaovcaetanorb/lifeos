@@ -8,3 +8,4 @@ font = "monospace"
 
 [server]
 runOnSave = true
+enableStaticServing = true

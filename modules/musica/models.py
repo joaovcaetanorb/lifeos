@@ -8,23 +8,27 @@ por isso nenhuma função aqui chama `conn.close()`.
 """
 
 import pandas as pd
+import streamlit as st
 from database import get_connection, linha_para_dict
 
 # ---------------------------------------------------------------------------
 # Artistas
 # ---------------------------------------------------------------------------
 
+@st.cache_data(show_spinner=False)
 def listar_artistas() -> pd.DataFrame:
     conn = get_connection()
     return pd.read_sql_query("SELECT * FROM artistas ORDER BY nome ASC", conn)
 
 
+@st.cache_data(show_spinner=False)
 def obter_artista(artista_id: int) -> dict | None:
     conn = get_connection()
     cursor = conn.execute("SELECT * FROM artistas WHERE id = ?", (artista_id,))
     return linha_para_dict(cursor, cursor.fetchone())
 
 
+@st.cache_data(show_spinner=False)
 def buscar_artista_por_nome(nome: str) -> dict | None:
     """Busca exata (case-insensitive) — usada pra evitar duplicar artista
     ao cadastrar um álbum novo."""
@@ -39,6 +43,7 @@ def inserir_artista(nome: str, spotify_id: str = "") -> int:
         "INSERT INTO artistas (nome, spotify_id) VALUES (?, ?)", (nome, spotify_id)
     )
     conn.commit()
+    st.cache_data.clear()
     return cur.lastrowid
 
 
@@ -54,6 +59,7 @@ def obter_ou_criar_artista(nome: str, spotify_id: str = "") -> int:
 # Álbuns
 # ---------------------------------------------------------------------------
 
+@st.cache_data(show_spinner=False)
 def listar_albuns() -> pd.DataFrame:
     """Álbuns com o nome do artista já resolvido (join), pra não precisar
     de N+1 consultas na tela de catálogo."""
@@ -67,6 +73,7 @@ def listar_albuns() -> pd.DataFrame:
     )
 
 
+@st.cache_data(show_spinner=False)
 def obter_album(album_id: int) -> dict | None:
     conn = get_connection()
     cursor = conn.execute(
@@ -87,6 +94,7 @@ def inserir_album(nome: str, artista_id: int, ano_lancamento: int | None, genero
         (nome, artista_id, ano_lancamento, genero, capa_path, spotify_id, spotify_url),
     )
     conn.commit()
+    st.cache_data.clear()
     return cur.lastrowid
 
 
@@ -105,14 +113,17 @@ def atualizar_album(album_id: int, nome: str, ano_lancamento: int | None, genero
             (nome, ano_lancamento, genero, capa_path, album_id),
         )
     conn.commit()
+    st.cache_data.clear()
 
 
 def favoritar_album(album_id: int, favorito: bool) -> None:
     conn = get_connection()
     conn.execute("UPDATE albuns SET favorito = ? WHERE id = ?", (int(favorito), album_id))
     conn.commit()
+    st.cache_data.clear()
 
 
+@st.cache_data(show_spinner=False)
 def buscar_album_por_nome(nome: str, artista_id: int) -> dict | None:
     conn = get_connection()
     cursor = conn.execute(
@@ -136,12 +147,14 @@ def excluir_album(album_id: int) -> None:
     conn = get_connection()
     conn.execute("DELETE FROM albuns WHERE id = ?", (album_id,))
     conn.commit()
+    st.cache_data.clear()
 
 
 # ---------------------------------------------------------------------------
 # Escutas
 # ---------------------------------------------------------------------------
 
+@st.cache_data(show_spinner=False)
 def listar_escutas(album_id: int) -> pd.DataFrame:
     conn = get_connection()
     return pd.read_sql_query(
@@ -150,13 +163,15 @@ def listar_escutas(album_id: int) -> pd.DataFrame:
     )
 
 
+@st.cache_data(show_spinner=False)
 def listar_escutas_com_album() -> pd.DataFrame:
     """Todas as escutas já com álbum e artista resolvidos (join) — usada
     pela timeline/diário, que não navega álbum por álbum."""
     conn = get_connection()
     return pd.read_sql_query(
         """SELECT escutas.*, albuns.nome AS album_nome, albuns.capa_path,
-                  albuns.spotify_id AS album_spotify_id, artistas.nome AS artista_nome
+                  albuns.spotify_id AS album_spotify_id, albuns.spotify_url AS album_spotify_url,
+                  artistas.nome AS artista_nome
            FROM escutas
            JOIN albuns ON albuns.id = escutas.album_id
            JOIN artistas ON artistas.id = albuns.artista_id
@@ -165,6 +180,7 @@ def listar_escutas_com_album() -> pd.DataFrame:
     )
 
 
+@st.cache_data(show_spinner=False)
 def intervalo_datas_escutas() -> tuple[str, str] | None:
     """(data mais antiga, data mais recente) entre todas as escutas, ou
     None se não há nenhuma — usado pra resolver "todos os tempos" com
@@ -185,6 +201,7 @@ def inserir_escuta(album_id: int, data: str, nota: float | None, review: str = "
         (album_id, data, nota, review, faixa_favorita),
     )
     conn.commit()
+    st.cache_data.clear()
 
 
 def atualizar_escuta(escuta_id: int, data: str, nota: float | None, review: str,
@@ -196,9 +213,11 @@ def atualizar_escuta(escuta_id: int, data: str, nota: float | None, review: str,
         (data, nota, review, faixa_favorita, escuta_id),
     )
     conn.commit()
+    st.cache_data.clear()
 
 
 def excluir_escuta(escuta_id: int) -> None:
     conn = get_connection()
     conn.execute("DELETE FROM escutas WHERE id = ?", (escuta_id,))
     conn.commit()
+    st.cache_data.clear()

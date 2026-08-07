@@ -34,8 +34,8 @@ def _salvar_capa_de_bytes(album_id: int, conteudo: bytes) -> str:
 
 
 def _secao_busca_spotify() -> dict:
-    """Busca opcional no Spotify pra pré-preencher os campos do álbum novo.
-    Retorna o resultado escolhido (vazio se nada foi escolhido/buscado)."""
+    """Busca opcional no Spotify pra pré-preencher os campos do álbum
+    novo. Retorna o resultado escolhido (vazio se nada foi escolhido/buscado)."""
     if not spotify_client.disponivel():
         return {}
 
@@ -55,17 +55,17 @@ def _secao_busca_spotify() -> dict:
     resultados = st.session_state.get("spotify_resultados_escuta", [])
     if resultados:
         for i, r in enumerate(resultados):
-            col_capa, col_info, col_btn = st.columns([1, 5, 1])
+            col_capa, col_info, col_btn = st.columns([1.2, 4.8, 1])
             with col_capa:
                 if r["capa_url"]:
-                    st.image(r["capa_url"], width=50)
+                    st.image(r["capa_url"], width=90)
             with col_info:
                 st.caption(f"{r['nome']} — {r['artista']} ({r['ano'] or '?'})")
             with col_btn:
                 if st.button("usar", key=f"spotify_usar_escuta_{i}"):
                     st.session_state["spotify_escolha_escuta"] = r
                     st.session_state["spotify_resultados_escuta"] = []
-                    st.rerun()
+                    st.rerun(scope="fragment")
 
     escolha = st.session_state.get("spotify_escolha_escuta", {})
     if escolha:
@@ -73,19 +73,34 @@ def _secao_busca_spotify() -> dict:
         col_msg.success(f"selecionado: {escolha['nome']} — {escolha['artista']}")
         if col_limpar.button("limpar", key="spotify_limpar_escuta"):
             st.session_state["spotify_escolha_escuta"] = {}
-            st.rerun()
+            st.rerun(scope="fragment")
     return escolha
 
 
+def _genero_sugerido(artista_spotify_id: str) -> str:
+    """Gênero do artista no Spotify, cacheado por sessão — só busca depois
+    que o usuário já escolheu o álbum (1 chamada de API a mais, não vale a
+    pena pra cada resultado da lista)."""
+    if not artista_spotify_id:
+        return ""
+    cache_key = f"genero_artista_{artista_spotify_id}"
+    if cache_key not in st.session_state:
+        st.session_state[cache_key] = spotify_client.buscar_genero_artista(artista_spotify_id)
+    return st.session_state[cache_key]
+
+
 def _campo_faixa_favorita(spotify_id: str, valor_atual: str, key: str) -> str:
-    """Se o álbum tem spotify_id e o Spotify está disponível, busca a
+    """Se o álbum tem spotify_id, busca a
     tracklist real (cacheada por spotify_id) e mostra uma faixa por
     checkbox pra marcar as favoritas. Senão, cai pro texto livre. Sempre
     retorna a string final (faixas separadas por ', ')."""
     faixas = []
     if spotify_id and spotify_client.disponivel():
         cache_key = f"faixas_{spotify_id}"
-        if cache_key not in st.session_state:
+        # só guarda em cache resultado com faixa de verdade — uma falha
+        # transitória (503, timeout) não pode grudar como "sem faixas" pro
+        # resto da sessão, senão a próxima tentativa nunca mais acontece
+        if not st.session_state.get(cache_key):
             st.session_state[cache_key] = spotify_client.buscar_faixas(spotify_id)
         faixas = st.session_state[cache_key]
 
@@ -109,8 +124,10 @@ def _resumo() -> None:
     )
 
 
+@st.fragment
 def _formulario_nova_escuta() -> None:
-    with st.expander("+ nova escuta", expanded=True):
+    aberto = st.session_state.get("_nova_escuta_aberto", True)
+    with st.expander("+ nova escuta", expanded=aberto):
         albuns = models.listar_albuns()
         opcoes = {-1: "+ novo álbum"}
         for _, row in albuns.iterrows():
@@ -126,9 +143,10 @@ def _formulario_nova_escuta() -> None:
         escolha_spotify = {}
         if album_selecionado == -1:
             escolha_spotify = _secao_busca_spotify()
-            # sufixo muda o "key" dos campos quando uma nova escolha do Spotify
-            # é feita, forçando os widgets a reassumir o value= pré-preenchido
-            # (senão o key antigo já teria estado salvo e o value seria ignorado)
+            # sufixo muda o "key" dos campos quando uma nova escolha do
+            # Spotify é feita, forçando os widgets a reassumir o value=
+            # pré-preenchido (senão o key antigo já teria estado salvo e o
+            # value seria ignorado)
             sufixo = escolha_spotify.get("spotify_id", "manual")
 
             c1, c2 = st.columns(2)
@@ -143,7 +161,11 @@ def _formulario_nova_escuta() -> None:
                 "Ano de lançamento (opcional)", min_value=0, max_value=2100, step=1,
                 value=escolha_spotify.get("ano") or 0, key=f"novo_ano_escuta_{sufixo}",
             )
-            novo_genero = c4.text_input("Gênero (opcional)", key=f"novo_genero_escuta_{sufixo}")
+            novo_genero = c4.text_input(
+                "Gênero (opcional)",
+                value=_genero_sugerido(escolha_spotify.get("artista_spotify_id", "")),
+                key=f"novo_genero_escuta_{sufixo}",
+            )
             nova_capa = st.file_uploader(
                 "Capa manual (opcional — substitui a do Spotify, se houver)",
                 type=["png", "jpg", "jpeg"], key=f"nova_capa_escuta_{sufixo}",
@@ -199,6 +221,7 @@ def _formulario_nova_escuta() -> None:
                     album_id, data_escuta.isoformat(), None if sem_nota else nota,
                     review.strip(), faixa_favorita.strip(),
                 )
+                st.session_state["_nova_escuta_aberto"] = False
                 ui.marcar_toast("Escuta registrada.")
                 st.rerun()
 
@@ -239,13 +262,15 @@ def _popover_escuta(escuta: dict) -> None:
 
 def _card_escuta(escuta: dict) -> None:
     with st.container(border=True):
-        col_capa, col_texto, col_acao = st.columns([1, 6.5, 0.5], gap="small")
+        col_capa, col_texto, col_acao = st.columns([2, 5.5, 0.5], gap="small")
 
         with col_capa:
             if escuta["capa_path"]:
                 caminho_capa = database.DB_DIR / escuta["capa_path"]
                 if caminho_capa.exists():
-                    st.image(str(caminho_capa), width=120)
+                    st.image(str(caminho_capa), width=200)
+            if escuta["album_spotify_url"]:
+                st.link_button("▶ abrir no Spotify", escuta["album_spotify_url"], use_container_width=True)
 
         with col_texto:
             st.markdown(f"**{escuta['album_nome']}** — {escuta['artista_nome']}")

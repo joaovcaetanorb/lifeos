@@ -8,12 +8,14 @@ por isso nenhuma função aqui chama `conn.close()`.
 """
 
 import pandas as pd
+import streamlit as st
 from database import get_connection, linha_para_dict
 
 # ---------------------------------------------------------------------------
 # Projetos
 # ---------------------------------------------------------------------------
 
+@st.cache_data(show_spinner=False)
 def listar_projetos(status: str | None = None) -> pd.DataFrame:
     conn = get_connection()
     query = "SELECT * FROM projetos"
@@ -25,6 +27,7 @@ def listar_projetos(status: str | None = None) -> pd.DataFrame:
     return pd.read_sql_query(query, conn, params=params)
 
 
+@st.cache_data(show_spinner=False)
 def obter_projeto(projeto_id: int) -> dict | None:
     conn = get_connection()
     cursor = conn.execute("SELECT * FROM projetos WHERE id = ?", (projeto_id,))
@@ -40,6 +43,7 @@ def inserir_projeto(nome: str, descricao: str, orcamento: float, observacoes: st
         (nome, descricao, orcamento, observacoes, foto_path),
     )
     conn.commit()
+    st.cache_data.clear()
     return cur.lastrowid
 
 
@@ -59,18 +63,21 @@ def atualizar_projeto(projeto_id: int, nome: str, descricao: str, orcamento: flo
             (nome, descricao, orcamento, observacoes, status, foto_path, projeto_id),
         )
     conn.commit()
+    st.cache_data.clear()
 
 
 def excluir_projeto(projeto_id: int) -> None:
     conn = get_connection()
     conn.execute("DELETE FROM projetos WHERE id = ?", (projeto_id,))
     conn.commit()
+    st.cache_data.clear()
 
 
 # ---------------------------------------------------------------------------
 # Checklist
 # ---------------------------------------------------------------------------
 
+@st.cache_data(show_spinner=False)
 def listar_checklist(projeto_id: int) -> pd.DataFrame:
     conn = get_connection()
     return pd.read_sql_query(
@@ -90,6 +97,7 @@ def inserir_item_checklist(projeto_id: int, descricao: str) -> None:
         (projeto_id, descricao, proxima_ordem),
     )
     conn.commit()
+    st.cache_data.clear()
 
 
 def marcar_item_checklist(item_id: int, concluido: bool) -> None:
@@ -99,6 +107,7 @@ def marcar_item_checklist(item_id: int, concluido: bool) -> None:
         (int(concluido), item_id),
     )
     conn.commit()
+    st.cache_data.clear()
 
 
 def atualizar_detalhes_item_checklist(item_id: int, notas: str, prazo: str, link: str,
@@ -116,18 +125,21 @@ def atualizar_detalhes_item_checklist(item_id: int, notas: str, prazo: str, link
             (notas, prazo, link, foto_path, item_id),
         )
     conn.commit()
+    st.cache_data.clear()
 
 
 def excluir_item_checklist(item_id: int) -> None:
     conn = get_connection()
     conn.execute("DELETE FROM projeto_checklist WHERE id = ?", (item_id,))
     conn.commit()
+    st.cache_data.clear()
 
 
 # ---------------------------------------------------------------------------
 # Aportes
 # ---------------------------------------------------------------------------
 
+@st.cache_data(show_spinner=False)
 def listar_aportes(projeto_id: int) -> pd.DataFrame:
     conn = get_connection()
     return pd.read_sql_query(
@@ -144,9 +156,11 @@ def inserir_aporte(projeto_id: int, data: str, valor: float, observacao: str = "
         (projeto_id, data, valor, observacao),
     )
     conn.commit()
+    st.cache_data.clear()
 
 
 def excluir_aporte(aporte_id: int) -> None:
     conn = get_connection()
     conn.execute("DELETE FROM projeto_aportes WHERE id = ?", (aporte_id,))
     conn.commit()
+    st.cache_data.clear()

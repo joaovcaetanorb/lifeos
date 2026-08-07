@@ -227,6 +227,7 @@ def _secao_analises(registros, habitos) -> None:
             _grafico_cumprimento_mensal(data_inicio, data_fim, registros, habitos)
 
 
+@st.fragment
 def _secao_relatorio() -> None:
     ui.eyebrow("fechamento")
     st.subheader("Relatório em PDF")
@@ -259,6 +260,14 @@ def _secao_relatorio() -> None:
         )
 
 
+def _secao_checkin(habitos, hoje: date, registros) -> None:
+    if habitos.empty:
+        st.caption("Nenhum hábito cadastrado ainda.")
+    else:
+        for _, habito in habitos.iterrows():
+            _card_habito(dict(habito), hoje, registros)
+
+
 def render() -> None:
     hoje = date.today()
     habitos = calc.buscar_habitos()
@@ -272,11 +281,7 @@ def render() -> None:
 
     st.divider()
     ui.eyebrow("check-in de hoje")
-    if habitos.empty:
-        st.caption("Nenhum hábito cadastrado ainda.")
-    else:
-        for _, habito in habitos.iterrows():
-            _card_habito(dict(habito), hoje, registros)
+    _secao_checkin(habitos, hoje, registros)
 
     st.divider()
     _secao_analises(registros, habitos)

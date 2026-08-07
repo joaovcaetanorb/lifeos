@@ -8,9 +8,11 @@ função aqui chama `conn.close()`.
 """
 
 import pandas as pd
+import streamlit as st
 from database import get_connection, linha_para_dict
 
 
+@st.cache_data(show_spinner=False)
 def obter_resposta_cacheada(pergunta: str) -> dict | None:
     """Última resposta salva pra essa pergunta exata (perguntas
     pré-definidas repetem o mesmo texto, então reaproveitam o cache;
@@ -31,8 +33,10 @@ def salvar_resposta(pergunta: str, resposta: str) -> None:
         (pergunta, resposta),
     )
     conn.commit()
+    st.cache_data.clear()
 
 
+@st.cache_data(show_spinner=False)
 def listar_perguntas_recentes(limite: int = 10) -> pd.DataFrame:
     conn = get_connection()
     return pd.read_sql_query(
@@ -41,6 +45,7 @@ def listar_perguntas_recentes(limite: int = 10) -> pd.DataFrame:
     )
 
 
+@st.cache_data(show_spinner=False)
 def obter_sugestao_mais_recente() -> dict | None:
     conn = get_connection()
     cursor = conn.execute("SELECT * FROM sugestoes ORDER BY gerado_em DESC LIMIT 1")
@@ -51,8 +56,10 @@ def salvar_sugestao(texto: str) -> None:
     conn = get_connection()
     conn.execute("INSERT INTO sugestoes (texto) VALUES (?)", (texto,))
     conn.commit()
+    st.cache_data.clear()
 
 
+@st.cache_data(show_spinner=False)
 def obter_correlacao_cacheada(par: str) -> dict | None:
     conn = get_connection()
     cursor = conn.execute("SELECT * FROM correlacoes_texto WHERE par = ?", (par,))
@@ -70,3 +77,4 @@ def salvar_correlacao(par: str, texto: str) -> None:
         (par, texto),
     )
     conn.commit()
+    st.cache_data.clear()

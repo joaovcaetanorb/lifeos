@@ -8,23 +8,27 @@ por isso nenhuma função aqui chama `conn.close()`.
 """
 
 import pandas as pd
+import streamlit as st
 from database import get_connection, linha_para_dict
 
 # ---------------------------------------------------------------------------
 # Autores
 # ---------------------------------------------------------------------------
 
+@st.cache_data(show_spinner=False)
 def listar_autores() -> pd.DataFrame:
     conn = get_connection()
     return pd.read_sql_query("SELECT * FROM autores ORDER BY nome ASC", conn)
 
 
+@st.cache_data(show_spinner=False)
 def obter_autor(autor_id: int) -> dict | None:
     conn = get_connection()
     cursor = conn.execute("SELECT * FROM autores WHERE id = ?", (autor_id,))
     return linha_para_dict(cursor, cursor.fetchone())
 
 
+@st.cache_data(show_spinner=False)
 def buscar_autor_por_nome(nome: str) -> dict | None:
     conn = get_connection()
     cursor = conn.execute("SELECT * FROM autores WHERE nome = ? COLLATE NOCASE", (nome,))
@@ -35,6 +39,7 @@ def inserir_autor(nome: str) -> int:
     conn = get_connection()
     cur = conn.execute("INSERT INTO autores (nome) VALUES (?)", (nome,))
     conn.commit()
+    st.cache_data.clear()
     return cur.lastrowid
 
 
@@ -50,6 +55,7 @@ def obter_ou_criar_autor(nome: str) -> int:
 # Livros
 # ---------------------------------------------------------------------------
 
+@st.cache_data(show_spinner=False)
 def listar_livros() -> pd.DataFrame:
     """Livros com o nome do autor já resolvido (join), pra não precisar de
     N+1 consultas na tela de estante."""
@@ -63,6 +69,7 @@ def listar_livros() -> pd.DataFrame:
     )
 
 
+@st.cache_data(show_spinner=False)
 def obter_livro(livro_id: int) -> dict | None:
     conn = get_connection()
     cursor = conn.execute(
@@ -78,8 +85,10 @@ def favoritar_livro(livro_id: int, favorito: bool) -> None:
     conn = get_connection()
     conn.execute("UPDATE livros SET favorito = ? WHERE id = ?", (int(favorito), livro_id))
     conn.commit()
+    st.cache_data.clear()
 
 
+@st.cache_data(show_spinner=False)
 def buscar_livro_por_nome(nome: str, autor_id: int) -> dict | None:
     conn = get_connection()
     cursor = conn.execute(
@@ -98,6 +107,7 @@ def inserir_livro(nome: str, autor_id: int, ano_publicacao: int | None, genero: 
         (nome, autor_id, ano_publicacao, genero, capa_path),
     )
     conn.commit()
+    st.cache_data.clear()
     return cur.lastrowid
 
 
@@ -125,18 +135,21 @@ def atualizar_livro(livro_id: int, nome: str, ano_publicacao: int | None, genero
             (nome, ano_publicacao, genero, capa_path, livro_id),
         )
     conn.commit()
+    st.cache_data.clear()
 
 
 def excluir_livro(livro_id: int) -> None:
     conn = get_connection()
     conn.execute("DELETE FROM livros WHERE id = ?", (livro_id,))
     conn.commit()
+    st.cache_data.clear()
 
 
 # ---------------------------------------------------------------------------
 # Leituras
 # ---------------------------------------------------------------------------
 
+@st.cache_data(show_spinner=False)
 def listar_leituras(livro_id: int) -> pd.DataFrame:
     conn = get_connection()
     return pd.read_sql_query(
@@ -145,6 +158,7 @@ def listar_leituras(livro_id: int) -> pd.DataFrame:
     )
 
 
+@st.cache_data(show_spinner=False)
 def listar_leituras_com_livro() -> pd.DataFrame:
     """Todas as leituras já com livro e autor resolvidos (join) — usada
     pela timeline/diário, que não navega livro por livro."""
@@ -169,6 +183,7 @@ def inserir_leitura(livro_id: int, data: str, status: str, nota: float | None,
         (livro_id, data, status, nota, review),
     )
     conn.commit()
+    st.cache_data.clear()
 
 
 def atualizar_leitura(leitura_id: int, data: str, status: str, nota: float | None, review: str) -> None:
@@ -178,14 +193,17 @@ def atualizar_leitura(leitura_id: int, data: str, status: str, nota: float | Non
         (data, status, nota, review, leitura_id),
     )
     conn.commit()
+    st.cache_data.clear()
 
 
 def excluir_leitura(leitura_id: int) -> None:
     conn = get_connection()
     conn.execute("DELETE FROM leituras WHERE id = ?", (leitura_id,))
     conn.commit()
+    st.cache_data.clear()
 
 
+@st.cache_data(show_spinner=False)
 def intervalo_datas_leituras() -> tuple[str, str] | None:
     """(data mais antiga, data mais recente) entre todas as leituras, ou
     None se não há nenhuma."""
