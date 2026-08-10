@@ -194,6 +194,22 @@ def intervalo_datas_escutas() -> tuple[str, str] | None:
     return row[0], row[1]
 
 
+@st.cache_data(show_spinner=False)
+def intervalo_datas_historico() -> tuple[str, str] | None:
+    """Como `intervalo_datas_escutas`, mas sobre o histórico real
+    sincronizado da conta Spotify — o intervalo de datas dos dois nem
+    sempre bate (o histórico pode ter faixas antes do primeiro registro
+    manual no Diário, ou depois do último)."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT MIN(substr(tocado_em, 1, 10)) AS minima, MAX(substr(tocado_em, 1, 10)) AS maxima "
+        "FROM spotify_historico"
+    ).fetchone()
+    if row is None or row[0] is None:
+        return None
+    return row[0], row[1]
+
+
 def inserir_escuta(album_id: int, data: str, nota: float | None, review: str = "",
                     faixa_favorita: str = "") -> None:
     conn = get_connection()

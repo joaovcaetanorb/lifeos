@@ -2,7 +2,7 @@
 filtráveis por período e por fonte (o que você mesmo avalia no Diário, ou
 o que a conta Spotify realmente tocou)."""
 
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -143,6 +143,40 @@ def _periodo_selecionado() -> tuple[str, str, str]:
     c1, c2 = st.columns(2)
     inicio = c1.date_input("De", value=date(hoje.year, 1, 1), format="DD/MM/YYYY", key="stats_data_inicio")
     fim = c2.date_input("Até", value=hoje, format="DD/MM/YYYY", key="stats_data_fim")
+    return inicio.isoformat(), fim.isoformat(), "período personalizado"
+
+
+def _periodo_relatorio_stories() -> tuple[str, str, str]:
+    """Período do relatório Stories — independente do filtro lá em cima
+    (que só tem mês/ano/tudo), porque um resumo pra postar hoje ou nessa
+    semana é um caso de uso comum que o filtro da página não cobre."""
+    hoje = date.today()
+    atalho = st.radio(
+        "Período do relatório",
+        ["Hoje", "Esta semana", "Este mês", "Este ano", "Todos os tempos", "Personalizado"],
+        horizontal=True, key="stories_periodo",
+    )
+
+    if atalho == "Hoje":
+        return hoje.isoformat(), hoje.isoformat(), "hoje"
+    if atalho == "Esta semana":
+        inicio = hoje - timedelta(days=hoje.weekday())
+        return inicio.isoformat(), hoje.isoformat(), "esta semana"
+    if atalho == "Este mês":
+        inicio = hoje.replace(day=1)
+        return inicio.isoformat(), hoje.isoformat(), "este mês"
+    if atalho == "Este ano":
+        inicio = date(hoje.year, 1, 1)
+        return inicio.isoformat(), hoje.isoformat(), str(hoje.year)
+    if atalho == "Todos os tempos":
+        intervalo = models.intervalo_datas_historico()
+        if intervalo is None:
+            return hoje.isoformat(), hoje.isoformat(), "todos os tempos"
+        return intervalo[0], intervalo[1], "todos os tempos"
+
+    c1, c2 = st.columns(2)
+    inicio = c1.date_input("De", value=date(hoje.year, 1, 1), format="DD/MM/YYYY", key="stories_data_inicio")
+    fim = c2.date_input("Até", value=hoje, format="DD/MM/YYYY", key="stories_data_fim")
     return inicio.isoformat(), fim.isoformat(), "período personalizado"
 
 
@@ -320,9 +354,11 @@ def _grafico_habito_dia_semana(data_inicio: str, data_fim: str) -> None:
     st.plotly_chart(_lollipop_vertical(df, "dia_semana", "total"), use_container_width=True)
 
 
-def _secao_relatorio_stories(data_inicio: str, data_fim: str, rotulo: str) -> None:
+def _secao_relatorio_stories() -> None:
+    data_inicio, data_fim, rotulo = _periodo_relatorio_stories()
     dados = calc.resumo_periodo_real(data_inicio, data_fim)
     if dados["total_faixas"] == 0:
+        st.caption("Nenhuma faixa sincronizada nesse período.")
         return
     if st.button("gerar relatório estilo Stories", use_container_width=True, key="gerar_stories"):
         top_albuns = calc.top_albuns_historico(data_inicio, data_fim, 9).to_dict("records")
@@ -354,7 +390,7 @@ def _secao_spotify(data_inicio: str, data_fim: str, rotulo: str) -> None:
 
     _secao_resumo_real(data_inicio, data_fim, rotulo)
     st.divider()
-    _secao_relatorio_stories(data_inicio, data_fim, rotulo)
+    _secao_relatorio_stories()
     st.divider()
 
     col1, col2 = st.columns(2)

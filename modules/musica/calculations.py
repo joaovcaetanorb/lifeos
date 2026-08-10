@@ -2,7 +2,7 @@
 Sem acesso direto a SQL — usa models.py.
 """
 
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 
@@ -280,18 +280,40 @@ def habito_por_hora(data_inicio: str, data_fim: str) -> pd.DataFrame:
     return pd.DataFrame({"hora": horas, "total": [int(contagem.get(h, 0)) for h in horas]})
 
 
+def sequencia_dias_ativos(referencia: str) -> int:
+    """Quantos dias seguidos, contando pra trás a partir de `referencia`
+    (ISO, inclusive), você teve pelo menos 1 faixa tocada de verdade.
+    Olha o histórico completo (não só o período filtrado do relatório) —
+    uma sequência que começou antes do início do período selecionado
+    ainda é uma sequência de verdade. Datas em horário de Brasília, pra
+    bater com o resto das estatísticas de hábito."""
+    historico = models.listar_historico(limit=100000)
+    if historico.empty:
+        return 0
+    dias_ativos = set(_horario_brt(historico["tocado_em"]).dt.date)
+    cursor = date.fromisoformat(referencia)
+    sequencia = 0
+    while cursor in dias_ativos:
+        sequencia += 1
+        cursor -= timedelta(days=1)
+    return sequencia
+
+
 def resumo_periodo_real(data_inicio: str, data_fim: str) -> dict:
     """Números do histórico real do período, pro relatório estilo Stories.
     `minutos` só conta faixas sincronizadas depois que `duration_ms` passou
     a ser guardado (2026-08) — faixas mais antigas do histórico entram como
     0 nesse total, mas continuam contando normalmente pro resto (total de
-    faixas, top artista/faixa, hora favorita)."""
+    faixas, top artista/faixa, hora favorita). `sequencia_dias` é sempre
+    calculada (mesmo sem faixas no período), já que reflete o dia final do
+    período, não o total nele."""
+    sequencia_dias = sequencia_dias_ativos(data_fim)
     periodo = _historico_periodo(data_inicio, data_fim)
     if periodo.empty:
         return {
             "total_faixas": 0, "minutos": 0, "artistas_distintos": 0,
             "top_artista": None, "top_faixa": None, "top_faixa_artista": None,
-            "hora_favorita": None,
+            "hora_favorita": None, "sequencia_dias": sequencia_dias,
         }
 
     minutos = int(periodo["duration_ms"].fillna(0).sum() // 60000)
@@ -317,6 +339,7 @@ def resumo_periodo_real(data_inicio: str, data_fim: str) -> dict:
         "top_faixa": top_faixa,
         "top_faixa_artista": top_faixa_artista,
         "hora_favorita": hora_favorita,
+        "sequencia_dias": sequencia_dias,
     }
 
 

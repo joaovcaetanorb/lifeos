@@ -150,8 +150,11 @@ def _desenhar_conteudo(
         detalhe.append(f"{dados['artistas_distintos']} ARTISTAS DIFERENTES")
     if dados["hora_favorita"] is not None:
         detalhe.append(f"PICO ÀS {dados['hora_favorita']}H")
+    if dados.get("sequencia_dias", 0) >= 2:
+        detalhe.append(f"{dados['sequencia_dias']} DIAS SEGUIDOS")
     if detalhe:
-        y += _centralizado(draw, y, "  ·  ".join(detalhe), _fonte(False, 28), cor_muted) + 20
+        fonte, texto = _fonte_ajustada(draw, "  ·  ".join(detalhe), False, 28, tamanho_minimo=20)
+        y += _centralizado(draw, y, texto, fonte, cor_muted) + 20
 
     return y
 
