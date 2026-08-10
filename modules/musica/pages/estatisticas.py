@@ -10,6 +10,7 @@ import streamlit as st
 
 import calculations as calc
 import database
+import groq_client
 import models
 import relatorio_stories
 import spotify_client
@@ -120,6 +121,105 @@ def _com_tendencia(fig: go.Figure, df: pd.DataFrame, col_categoria: str, col_val
     return fig
 
 
+def _donut(df: pd.DataFrame, col_categoria: str, col_valor: str) -> go.Figure:
+    """Proporção de cada categoria no total, em rosca — degradê do próprio
+    verde de destaque (fatia maior mais forte, menores mais claras) pra
+    não introduzir cores fora da paleta do app só pra diferenciar fatia."""
+    df = df.sort_values(col_valor, ascending=False).reset_index(drop=True)
+    n = len(df)
+    opacidades = [1.0 - (0.55 * i / (n - 1)) for i in range(n)] if n > 1 else [1.0]
+    cores = [_cor_com_opacidade(utils.COR_ACENTO, a) for a in opacidades]
+
+    fig = go.Figure(data=[go.Pie(
+        labels=df[col_categoria], values=df[col_valor], hole=0.62,
+        marker=dict(colors=cores, line=dict(color=utils.COR_FUNDO, width=3)),
+        textinfo="label", textfont=dict(color=utils.COR_TEXTO, family="JetBrains Mono, monospace", size=13),
+        hovertemplate="%{label}: %{value} (%{percent})<extra></extra>",
+        sort=False,
+    )])
+    fig.update_layout(**{**CHART_LAYOUT, "showlegend": False, "margin": dict(l=10, r=10, t=20, b=10)})
+    return fig
+
+
+def _area_temporal(df: pd.DataFrame, col_categoria: str, col_valor: str, formatar=str, eixo_max=None) -> go.Figure:
+    """Série ordenada no tempo (décadas) como área preenchida — reforça a
+    leitura de linha do tempo em vez de tratar cada década como categoria
+    solta pra comparar, que é o que o lollipop sugere."""
+    valores = df[col_valor].tolist()
+    maximo_valor = max(valores) if valores else 0
+    rotulos_hover = [formatar(v) for v in valores]
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df[col_categoria], y=valores, mode="lines+markers",
+        line=dict(color=utils.COR_ACENTO, width=3, shape="spline", smoothing=0.4),
+        fill="tozeroy", fillcolor=_cor_com_opacidade(utils.COR_ACENTO, 0.18),
+        marker=dict(size=9, color=utils.COR_ACENTO, line=dict(width=2, color=utils.COR_FUNDO)),
+        customdata=rotulos_hover, hovertemplate="%{x}: %{customdata}<extra></extra>",
+        showlegend=False,
+    ))
+    limite = eixo_max if eixo_max is not None else (maximo_valor * 1.3 if maximo_valor else 1)
+    fig.update_xaxes(showgrid=False, zeroline=False)
+    fig.update_yaxes(showgrid=True, gridcolor=utils.COR_HAIRLINE, zeroline=False, range=[0, limite])
+    fig.update_layout(**CHART_LAYOUT)
+    return fig
+
+
+def _relogio_radial(df: pd.DataFrame) -> go.Figure:
+    """Faixas tocadas por hora do dia como um relógio de 24h (barra polar)
+    — a hora é cíclica (23h e 0h são vizinhas), um círculo representa isso
+    melhor que uma reta com as pontas soltas."""
+    valores = df["total"].tolist()
+    cores = _cores_por_destaque(valores)
+    theta = [h * 15 for h in df["hora"]]  # 360° / 24h = 15° por hora
+    rotulos_hover = [str(v) for v in valores]
+
+    fig = go.Figure(data=go.Barpolar(
+        r=valores, theta=theta, width=[13] * len(valores),
+        marker=dict(color=cores, line=dict(color=utils.COR_FUNDO, width=1)),
+        customdata=rotulos_hover, hovertemplate="%{customdata} faixa(s)<extra></extra>",
+    ))
+    fig.update_layout(
+        polar=dict(
+            bgcolor="rgba(0,0,0,0)",
+            radialaxis=dict(showticklabels=False, gridcolor=utils.COR_HAIRLINE, linecolor=utils.COR_HAIRLINE),
+            angularaxis=dict(
+                rotation=90, direction="clockwise",
+                tickmode="array", tickvals=[h * 15 for h in range(0, 24, 3)],
+                ticktext=[f"{h}h" for h in range(0, 24, 3)],
+                gridcolor=utils.COR_HAIRLINE, linecolor=utils.COR_HAIRLINE,
+            ),
+        ),
+        margin=dict(l=30, r=30, t=30, b=30), height=440,
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="JetBrains Mono, monospace", color=utils.COR_TEXTO_MUTED),
+        showlegend=False,
+    )
+    return fig
+
+
+def _secao_insights_ia(chave: str, contexto_fn) -> None:
+    ui.eyebrow("groq")
+    st.subheader("O que a IA notou")
+    if not groq_client.disponivel():
+        st.caption("Disponível assim que a chave do Groq for configurada.")
+        return
+
+    cache = st.session_state.setdefault("musica_insights_cache", {})
+    if chave in cache:
+        st.markdown(cache[chave])
+        if st.button("gerar de novo", key=f"regerar_{chave}"):
+            del cache[chave]
+            st.rerun()
+        return
+
+    if st.button("gerar insights", key=f"gerar_{chave}", use_container_width=True):
+        with st.spinner("Analisando..."):
+            texto = groq_client.gerar_insights(contexto_fn())
+        cache[chave] = texto or "Não consegui gerar insights agora. Tente de novo em instantes."
+        st.rerun()
+
+
 def _periodo_selecionado() -> tuple[str, str, str]:
     """Retorna (data_inicio_iso, data_fim_iso, rótulo pra exibição)."""
     hoje = date.today()
@@ -201,7 +301,7 @@ def _grafico_escutas_por_mes(data_inicio: str, data_fim: str) -> None:
     if df["total"].sum() == 0:
         st.caption("Nenhuma escuta registrada nesse período.")
         return
-    fig = _com_tendencia(_lollipop_vertical(df, "mes_nome", "total"), df, "mes_nome", "total")
+    fig = _com_tendencia(_area_temporal(df, "mes_nome", "total"), df, "mes_nome", "total")
     st.plotly_chart(fig, use_container_width=True)
 
 
@@ -233,7 +333,7 @@ def _grafico_por_decada(data_inicio: str, data_fim: str) -> None:
     if df.empty:
         st.caption("Nenhum álbum com ano de lançamento cadastrado nesse período.")
         return
-    st.plotly_chart(_lollipop_vertical(df, "decada", "total"), use_container_width=True)
+    st.plotly_chart(_area_temporal(df, "decada", "total"), use_container_width=True)
 
 
 def _grafico_por_genero(data_inicio: str, data_fim: str) -> None:
@@ -246,7 +346,7 @@ def _grafico_por_genero(data_inicio: str, data_fim: str) -> None:
             "no Spotify já sugerem um gênero automaticamente ao cadastrar."
         )
         return
-    st.plotly_chart(_lollipop_horizontal(df, "genero", "total"), use_container_width=True)
+    st.plotly_chart(_donut(df, "genero", "total"), use_container_width=True)
 
 
 def _grafico_nota_por_genero(data_inicio: str, data_fim: str) -> None:
@@ -287,6 +387,8 @@ def _secao_diario(data_inicio: str, data_fim: str, rotulo: str) -> None:
     st.divider()
     _grafico_por_genero(data_inicio, data_fim)
     _grafico_nota_por_genero(data_inicio, data_fim)
+    st.divider()
+    _secao_insights_ia(f"diario|{data_inicio}|{data_fim}", lambda: calc.contexto_ia_diario(data_inicio, data_fim))
 
 
 # ---------------------------------------------------------------------------
@@ -330,7 +432,7 @@ def _grafico_volume_historico(data_inicio: str, data_fim: str) -> None:
     if df["total"].sum() == 0:
         st.caption("Nenhuma faixa sincronizada nesse período.")
         return
-    fig = _com_tendencia(_lollipop_vertical(df, "mes_nome", "total"), df, "mes_nome", "total")
+    fig = _com_tendencia(_area_temporal(df, "mes_nome", "total"), df, "mes_nome", "total")
     st.plotly_chart(fig, use_container_width=True)
 
 
@@ -341,8 +443,7 @@ def _grafico_habito_hora(data_inicio: str, data_fim: str) -> None:
     if df["total"].sum() == 0:
         st.caption("Nenhuma faixa sincronizada nesse período.")
         return
-    df = df.assign(hora_label=[f"{h}h" for h in df["hora"]])
-    st.plotly_chart(_lollipop_vertical(df, "hora_label", "total"), use_container_width=True)
+    st.plotly_chart(_relogio_radial(df), use_container_width=True)
 
 
 def _grafico_habito_dia_semana(data_inicio: str, data_fim: str) -> None:
@@ -402,6 +503,9 @@ def _secao_spotify(data_inicio: str, data_fim: str, rotulo: str) -> None:
         _grafico_habito_hora(data_inicio, data_fim)
     with col4:
         _grafico_habito_dia_semana(data_inicio, data_fim)
+
+    st.divider()
+    _secao_insights_ia(f"spotify|{data_inicio}|{data_fim}", lambda: calc.contexto_ia_real(data_inicio, data_fim))
 
 
 def render() -> None:

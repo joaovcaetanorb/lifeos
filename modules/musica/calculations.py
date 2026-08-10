@@ -354,6 +354,65 @@ def habito_por_dia_semana(data_inicio: str, data_fim: str) -> pd.DataFrame:
     return pd.DataFrame({"dia_semana": dias, "total": [int(contagem.get(i, 0)) for i in range(7)]})
 
 
+def contexto_ia_diario(data_inicio: str, data_fim: str) -> str:
+    """Texto plano com os números já calculados do período (fonte Diário),
+    pra mandar como contexto pro Groq — a IA só lê e comenta, nunca
+    calcula nada sozinha."""
+    resumo = resumo_periodo(data_inicio, data_fim)
+    top_art = top_artistas(data_inicio, data_fim, 5)
+    generos = escutas_por_genero(data_inicio, data_fim, 5)
+    decadas = escutas_por_decada(data_inicio, data_fim)
+    notas = distribuicao_notas(data_inicio, data_fim)
+
+    linhas = [
+        f"Álbuns novos cadastrados: {resumo['albuns_novos']}",
+        f"Escutas registradas: {resumo['escutas']}",
+        f"Nota média: {resumo['nota_media'] if resumo['nota_media'] is not None else 'sem notas'}",
+        f"Artista destaque: {resumo['artista_destaque'] or 'nenhum'}",
+    ]
+    if not top_art.empty:
+        linhas.append("Top artistas: " + ", ".join(f"{r.artista_nome} ({r.total})" for r in top_art.itertuples()))
+    if not generos.empty:
+        linhas.append("Gêneros mais escutados: " + ", ".join(f"{r.genero} ({r.total})" for r in generos.itertuples()))
+    if not decadas.empty:
+        linhas.append("Escutas por década de lançamento: " + ", ".join(f"{r.decada} ({r.total})" for r in decadas.itertuples()))
+    if notas["total"].sum() > 0:
+        pico = notas.loc[notas["total"].idxmax()]
+        linhas.append(f"Nota mais comum: {utils.formatar_nota(pico['nota'])} ({int(pico['total'])}x)")
+    return "\n".join(linhas)
+
+
+def contexto_ia_real(data_inicio: str, data_fim: str) -> str:
+    """Como `contexto_ia_diario`, mas com os números do histórico real
+    sincronizado da conta Spotify (fonte Spotify)."""
+    dados = resumo_periodo_real(data_inicio, data_fim)
+    top_art = top_artistas_historico(data_inicio, data_fim, 5)
+    top_fx = top_faixas_historico(data_inicio, data_fim, 5)
+    horas = habito_por_hora(data_inicio, data_fim)
+    dias = habito_por_dia_semana(data_inicio, data_fim)
+
+    linhas = [
+        f"Faixas ouvidas de verdade: {dados['total_faixas']}",
+        f"Tempo ouvido: {dados['minutos']} minutos",
+        f"Artistas diferentes: {dados['artistas_distintos']}",
+        f"Artista mais tocado: {dados['top_artista'] or 'nenhum'}",
+        f"Faixa mais tocada: {dados['top_faixa'] or 'nenhuma'}"
+        + (f" (de {dados['top_faixa_artista']})" if dados["top_faixa"] else ""),
+        f"Sequência de dias seguidos ouvindo: {dados['sequencia_dias']}",
+    ]
+    if not top_art.empty:
+        linhas.append("Top artistas: " + ", ".join(f"{r.artista_nome} ({r.total})" for r in top_art.itertuples()))
+    if not top_fx.empty:
+        linhas.append("Top faixas: " + ", ".join(f"{r.faixa_nome} — {r.artista_nome} ({r.total})" for r in top_fx.itertuples()))
+    if horas["total"].sum() > 0:
+        pico_hora = horas.loc[horas["total"].idxmax()]
+        linhas.append(f"Hora do dia com mais faixas tocadas: {int(pico_hora['hora'])}h ({int(pico_hora['total'])} faixas)")
+    if dias["total"].sum() > 0:
+        pico_dia = dias.loc[dias["total"].idxmax()]
+        linhas.append(f"Dia da semana com mais faixas tocadas: {pico_dia['dia_semana']} ({int(pico_dia['total'])} faixas)")
+    return "\n".join(linhas)
+
+
 def resumo_periodo(data_inicio: str, data_fim: str) -> dict:
     """Números do período: álbuns novos no catálogo, escutas registradas,
     nota média e o artista mais escutado dentro dele."""
