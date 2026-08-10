@@ -186,9 +186,12 @@ def top_albuns_historico(data_inicio: str, data_fim: str, limite: int) -> pd.Dat
     Agrupa por `album_spotify_id` (identidade real do álbum), não por
     (nome, artista) — um álbum de compilação (ex.: "participação
     especial") pode ter faixas creditadas a artistas diferentes, e agrupar
-    por artista contava o MESMO disco como vários álbuns distintos,
-    duplicando a mesma capa várias vezes no mosaico. Cai pra nome+artista
-    só pra faixas sincronizadas antes desse campo existir (id vazio)."""
+    por artista contava o MESMO disco como vários álbuns distintos. Cai
+    pra nome+artista só pra faixas sincronizadas antes desse campo existir
+    (id vazio). Além disso, nunca devolve duas linhas com a mesma
+    `capa_url` — a regra pro mosaico é sobre a IMAGEM nunca repetir, não só
+    sobre o álbum (dois álbuns com id diferente ainda podem apontar pra
+    mesma arte de capa)."""
     colunas = ["album_nome", "artista_nome", "capa_url", "total"]
     historico = models.listar_historico(limit=100000)
     if historico.empty:
@@ -211,10 +214,20 @@ def top_albuns_historico(data_inicio: str, data_fim: str, limite: int) -> pd.Dat
             artista_nome=("artista_nome", "first"),
             capa_url=("capa_url", "first"),
             total=("chave_album", "size"),
-        )
+        )[colunas]
         .sort_values("total", ascending=False)
     )
-    return agrupado[colunas].head(limite)
+
+    # dedup por capa_url — só entre linhas que TÊM capa (capa_url == "" não
+    # conta como "repetida", senão um segundo álbum sem capa cadastrada
+    # seria descartado à toa; ele só vira um quadro em branco no mosaico).
+    tem_capa = agrupado["capa_url"] != ""
+    sem_repetir = pd.concat([
+        agrupado[tem_capa].drop_duplicates(subset="capa_url", keep="first"),
+        agrupado[~tem_capa],
+    ]).sort_values("total", ascending=False)
+
+    return sem_repetir.head(limite)
 
 
 def _historico_periodo(data_inicio: str, data_fim: str) -> pd.DataFrame:
