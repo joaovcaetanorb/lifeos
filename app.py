@@ -28,16 +28,24 @@ _STATIC_DIR = Path(__file__).resolve().parent / "static"
 # Nomes de arquivo reaproveitados por mais de um módulo — têm que ser
 # removidos do cache antes de cada página rodar, senão uma página herda o
 # "database" (ou "calculations", "models"...) que outro módulo carregou antes.
+# Mas não é só sobre COLISÃO entre módulos: um arquivo com nome ÚNICO (só
+# existe numa pasta, ex.: relatorio_stories.py, só em música) ainda PRECISA
+# estar nesta lista, senão o processo Python de longa duração da Streamlit
+# Cloud importa a primeira versão que ver e nunca mais recarrega — um novo
+# `git push` muda o arquivo no disco, mas o módulo já em sys.modules
+# continua sendo o antigo até o processo reiniciar do zero (bug real visto
+# em produção: `gerar_relatorio_stories() takes 2 positional arguments but
+# 3 were given` depois de adicionar um parâmetro novo à função).
 # A ORDEM importa: é a ordem de dependência real entre esses arquivos
 # (conferida nos imports de cada um) — utils/database não dependem de
 # nada daqui, models depende de database, calculations depende de
-# models+utils(+database em alguns módulos), relatorio depende de tudo
-# isso, spotify_client (música) depende de models pra guardar token/
-# histórico da conta conectada. _preload_nomes_compartilhados() carrega
-# nessa ordem.
+# models+utils(+database em alguns módulos), relatorio/relatorio_stories
+# dependem de tudo isso, spotify_client (música) depende de models pra
+# guardar token/histórico da conta conectada. _preload_nomes_compartilhados()
+# carrega nessa ordem.
 _NOMES_COMPARTILHADOS = [
     "utils", "database", "models", "calculations", "ui",
-    "colagem", "relatorio", "spotify_client", "groq_client",
+    "colagem", "relatorio", "relatorio_stories", "spotify_client", "groq_client",
 ]
 
 # sys.path/sys.modules são globais do processo, mas o Streamlit roda cada
