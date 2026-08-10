@@ -75,6 +75,31 @@ def _centralizado(draw: ImageDraw.ImageDraw, y: int, texto: str, fonte: ImageFon
     return _centralizado_x(draw, LARGURA // 2, y, texto, fonte, cor)
 
 
+_VERDE_SPOTIFY = (29, 185, 84)  # #1DB954 — verde oficial, não o COR_ACENTO do app
+
+
+def _icone_spotify(diametro: int) -> Image.Image:
+    """Selo circular inspirado no ícone do Spotify (círculo verde + 3 ondas
+    sonoras brancas, concêntricas a partir do mesmo centro) desenhado com
+    primitivas do Pillow — não é o arquivo oficial da marca (não temos
+    acesso a ele aqui), só uma referência visual pra deixar claro de onde
+    vêm os números do card."""
+    escala = 4  # desenha maior e reduz depois, pra anti-aliasing sem depender de libs extras
+    tam = diametro * escala
+    img = Image.new("RGBA", (tam, tam), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.ellipse([0, 0, tam - 1, tam - 1], fill=_VERDE_SPOTIFY)
+
+    centro_x, centro_y = tam / 2, tam * 0.56
+    largura_linha = round(tam * 0.052)
+    for raio_rel in (0.40, 0.28, 0.16):
+        raio = tam * raio_rel
+        bbox = [centro_x - raio, centro_y - raio, centro_x + raio, centro_y + raio]
+        draw.arc(bbox, start=205, end=335, fill=(255, 255, 255, 255), width=largura_linha)
+
+    return img.resize((diametro, diametro), Image.Resampling.LANCZOS)
+
+
 def _fundo_gradiente() -> Image.Image:
     """Fundo com leve gradiente vertical entre as duas cores de fundo do
     tema — evita a chapa lisa de um card só com COR_FUNDO."""
@@ -106,7 +131,10 @@ def _desenhar_conteudo(
         return y + 44
 
     y = 0
-    y += _centralizado(draw, y, "$ MEU SPOTIFY", _fonte(True, 30), cor_acento) + 18
+    icone = _icone_spotify(80)
+    camada.paste(icone, ((LARGURA - icone.width) // 2, y), icone)
+    y += icone.height + 22
+    y += _centralizado(draw, y, "MEU SPOTIFY", _fonte(True, 30), cor_acento) + 18
     y += _centralizado(draw, y, rotulo_periodo.upper(), _fonte(True, 44), cor_texto) + 34
 
     if top_albuns:
@@ -182,7 +210,7 @@ def gerar_relatorio_stories(dados: dict, rotulo_periodo: str, top_albuns: list[d
     imagem = _fundo_gradiente()
     imagem.paste(camada, (0, offset), camada)
 
-    rodape = f"gerado em {date.today().strftime('%d/%m/%Y')} · LifeOS"
+    rodape = f"gerado em {date.today().strftime('%d/%m/%Y')}"
     _centralizado(ImageDraw.Draw(imagem), ALTURA - 80, rodape, _fonte(False, 24), cor_muted)
 
     buf = io.BytesIO()

@@ -367,16 +367,13 @@ def _secao_relatorio_stories() -> None:
         st.session_state["stories_arquivo"] = f"spotify-{data_inicio}-a-{data_fim}.png"
 
     if st.session_state.get("stories_bytes"):
-        c1, c2 = st.columns([1, 2])
-        with c1:
-            st.image(st.session_state["stories_bytes"], width=260)
-        with c2:
-            st.download_button(
-                "baixar PNG",
-                data=st.session_state["stories_bytes"],
-                file_name=st.session_state["stories_arquivo"],
-                mime="image/png",
-            )
+        st.download_button(
+            "baixar PNG",
+            data=st.session_state["stories_bytes"],
+            file_name=st.session_state["stories_arquivo"],
+            mime="image/png",
+            use_container_width=True,
+        )
 
 
 def _secao_spotify(data_inicio: str, data_fim: str, rotulo: str) -> None:
