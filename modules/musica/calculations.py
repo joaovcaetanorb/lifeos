@@ -177,6 +177,29 @@ def top_albuns_periodo(data_inicio: str, data_fim: str, limite: int) -> pd.DataF
     return agrupado.head(limite)
 
 
+def top_albuns_historico(data_inicio: str, data_fim: str, limite: int) -> pd.DataFrame:
+    """Álbuns mais tocados de verdade no período (histórico sincronizado
+    da conta Spotify, não o que foi avaliado no Diário), rankeados por
+    número de faixas tocadas — pra colagem a partir do consumo real."""
+    colunas = ["album_nome", "artista_nome", "capa_url", "total"]
+    historico = models.listar_historico(limit=100000)
+    if historico.empty:
+        return pd.DataFrame(columns=colunas)
+
+    dia = historico["tocado_em"].str.slice(0, 10)
+    periodo = historico[(dia >= data_inicio) & (dia <= data_fim)]
+    if periodo.empty:
+        return pd.DataFrame(columns=colunas)
+
+    agrupado = (
+        periodo.groupby(["album_nome", "artista_nome", "capa_url"])
+        .size()
+        .reset_index(name="total")
+        .sort_values("total", ascending=False)
+    )
+    return agrupado.head(limite)
+
+
 def resumo_periodo(data_inicio: str, data_fim: str) -> dict:
     """Números do período: álbuns novos no catálogo, escutas registradas,
     nota média e o artista mais escutado dentro dele."""

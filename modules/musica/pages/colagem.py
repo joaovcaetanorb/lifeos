@@ -47,6 +47,10 @@ def render() -> None:
     )
 
     st.divider()
+    fonte = st.radio(
+        "Fonte", ["Diário (avaliado)", "Histórico Spotify (tocado de verdade)"],
+        horizontal=True, key="colagem_fonte",
+    )
     data_inicio, data_fim, rotulo = _periodo_selecionado()
 
     c1, c2 = st.columns(2)
@@ -55,9 +59,15 @@ def render() -> None:
     formato_arquivo = "stories" if formato.startswith("Stories") else "post"
 
     if st.button("gerar colagem", use_container_width=True):
-        top = calc.top_albuns_periodo(data_inicio, data_fim, lado_grade * lado_grade)
+        if fonte.startswith("Diário"):
+            top = calc.top_albuns_periodo(data_inicio, data_fim, lado_grade * lado_grade)
+            aviso_vazio = "Nenhuma escuta registrada nesse período ainda."
+        else:
+            top = calc.top_albuns_historico(data_inicio, data_fim, lado_grade * lado_grade)
+            aviso_vazio = "Nenhuma faixa tocada sincronizada nesse período ainda (conecta e sincroniza na página Spotify)."
+
         if top.empty:
-            st.warning("Nenhuma escuta registrada nesse período ainda.")
+            st.warning(aviso_vazio)
             st.session_state["colagem_bytes"] = None
         else:
             imagem_bytes = colagem.gerar_colagem(top.to_dict("records"), lado_grade, formato_arquivo)

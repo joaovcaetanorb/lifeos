@@ -9,6 +9,7 @@ import database
 import models
 import spotify_client
 import ui
+import utils
 
 st.set_page_config(page_title="Spotify | Música", page_icon="🎵", layout="wide")
 database.inicializar_banco()
@@ -16,6 +17,15 @@ ui.aplicar_tema()
 ui.mostrar_toast_pendente()
 
 _PERIODOS = {"short_term": "4 semanas", "medium_term": "6 meses", "long_term": "geral"}
+
+
+def _formatar_tocado_em(tocado_em: str) -> str:
+    """'2026-08-10T14:23:45.000Z' -> '10/08/2026 14:23'."""
+    if not tocado_em or len(tocado_em) < 16:
+        return ""
+    data = utils.formatar_data_br(tocado_em[:10])
+    hora = tocado_em[11:16]
+    return f"{data} {hora}"
 
 
 def _processar_callback_oauth() -> None:
@@ -90,14 +100,13 @@ def _secao_historico() -> None:
         return
 
     for _, faixa in historico.iterrows():
-        col_texto, col_capa = st.columns([6, 1])
-        with col_texto:
-            st.markdown(f"**{faixa['faixa_nome']}** — {faixa['artista_nome']}")
-            st.caption(f"{faixa['album_nome']} · {faixa['tocado_em'][:16].replace('T', ' ')}")
+        col_capa, col_texto = st.columns([1, 6])
         with col_capa:
             if faixa["capa_url"]:
-                with st.popover("capa"):
-                    st.image(faixa["capa_url"], width=180)
+                st.image(faixa["capa_url"], width=64)
+        with col_texto:
+            st.markdown(f"**{faixa['faixa_nome']}** — {faixa['artista_nome']}")
+            st.caption(f"{faixa['album_nome']} · {_formatar_tocado_em(faixa['tocado_em'])}")
         st.divider()
 
 
