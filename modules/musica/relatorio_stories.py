@@ -18,13 +18,15 @@ from datetime import date
 import matplotlib
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
+import colagem
 import utils
 
 LARGURA, ALTURA = 1080, 1920
 MARGEM = 90
 LARGURA_UTIL = LARGURA - 2 * MARGEM
-MARGEM_TOPO_MINIMA = 130
-ALTURA_RODAPE = 140
+MARGEM_TOPO_MINIMA = 110
+ALTURA_RODAPE = 130
+LADO_MOSAICO = 480
 
 _FONTS_DIR = os.path.join(matplotlib.get_data_path(), "fonts", "ttf")
 _FONTE_REGULAR = os.path.join(_FONTS_DIR, "DejaVuSansMono.ttf")
@@ -42,7 +44,7 @@ def _largura_texto(draw: ImageDraw.ImageDraw, texto: str, fonte: ImageFont.FreeT
 
 def _fonte_ajustada(
     draw: ImageDraw.ImageDraw, texto: str, bold: bool, tamanho_inicial: int,
-    largura_maxima: int = LARGURA_UTIL, tamanho_minimo: int = 28,
+    largura_maxima: int = LARGURA_UTIL, tamanho_minimo: int = 26,
 ) -> tuple[ImageFont.FreeTypeFont, str]:
     """Reduz o tamanho da fonte até o texto caber em `largura_maxima`; se
     ainda não couber no tamanho mínimo, trunca com reticências — nomes de
@@ -59,14 +61,18 @@ def _fonte_ajustada(
     return fonte, texto
 
 
-def _centralizado(draw: ImageDraw.ImageDraw, y: int, texto: str, fonte: ImageFont.FreeTypeFont, cor) -> int:
-    """Desenha `texto` centralizado horizontalmente na altura `y`; retorna
-    a altura ocupada, pra quem chama avançar o cursor vertical."""
+def _centralizado_x(draw: ImageDraw.ImageDraw, x_centro: int, y: int, texto: str, fonte: ImageFont.FreeTypeFont, cor) -> int:
+    """Desenha `texto` centralizado em torno de `x_centro` na altura `y`;
+    retorna a altura ocupada, pra quem chama avançar o cursor vertical."""
     bbox = draw.textbbox((0, 0), texto, font=fonte)
     largura, altura = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    x = (LARGURA - largura) // 2
+    x = x_centro - largura // 2
     draw.text((x - bbox[0], y - bbox[1]), texto, font=fonte, fill=cor)
     return altura
+
+
+def _centralizado(draw: ImageDraw.ImageDraw, y: int, texto: str, fonte: ImageFont.FreeTypeFont, cor) -> int:
+    return _centralizado_x(draw, LARGURA // 2, y, texto, fonte, cor)
 
 
 def _fundo_gradiente() -> Image.Image:
@@ -83,61 +89,79 @@ def _fundo_gradiente() -> Image.Image:
     return img
 
 
-def _desenhar_conteudo(draw: ImageDraw.ImageDraw, dados: dict, rotulo_periodo: str, cores: tuple) -> int:
+def _desenhar_conteudo(
+    draw: ImageDraw.ImageDraw, camada: Image.Image, dados: dict, rotulo_periodo: str,
+    top_albuns: list[dict], cores: tuple,
+) -> int:
     """Desenha o bloco de estatísticas a partir de y=0 e retorna a altura
     total ocupada — quem chama decide onde colar esse bloco (pra
     centralizar verticalmente conforme o conteúdo, já que a quantidade de
-    seções varia com os dados disponíveis)."""
+    seções varia com os dados disponíveis). `camada` é a mesma imagem de
+    `draw`, usada só pra colar o mosaico de capas (Image.paste não existe
+    em ImageDraw)."""
     cor_texto, cor_muted, cor_acento, cor_hairline = cores
 
     def linha(y: int) -> int:
         draw.line([(MARGEM, y), (LARGURA - MARGEM, y)], fill=cor_hairline, width=2)
-        return y + 60
+        return y + 44
 
     y = 0
-    y += _centralizado(draw, y, "$ MEU SPOTIFY", _fonte(True, 34), cor_acento) + 24
-    y += _centralizado(draw, y, rotulo_periodo.upper(), _fonte(True, 52), cor_texto) + 60
-    y = linha(y) + 10
+    y += _centralizado(draw, y, "$ MEU SPOTIFY", _fonte(True, 30), cor_acento) + 18
+    y += _centralizado(draw, y, rotulo_periodo.upper(), _fonte(True, 44), cor_texto) + 34
 
-    y += _centralizado(draw, y, f"{dados['total_faixas']}", _fonte(True, 150), cor_acento) + 14
-    y += _centralizado(draw, y, "MÚSICAS OUVIDAS", _fonte(True, 32), cor_muted) + 90
-
-    horas, minutos_resto = divmod(dados["minutos"], 60)
-    texto_tempo = f"{horas}h{minutos_resto:02d}" if horas > 0 else f"{minutos_resto}min"
-    y += _centralizado(draw, y, texto_tempo, _fonte(True, 110), cor_texto) + 14
-    y += _centralizado(draw, y, "TEMPO OUVIDO", _fonte(True, 32), cor_muted) + 50
-    y = linha(y) + 10
-
-    if dados["top_artista"]:
-        y += _centralizado(draw, y, "ARTISTA #1", _fonte(True, 28), cor_acento) + 18
-        fonte, texto = _fonte_ajustada(draw, dados["top_artista"], True, 72)
-        y += _centralizado(draw, y, texto, fonte, cor_texto) + 60
-
-    if dados["top_faixa"]:
-        y += _centralizado(draw, y, "FAIXA #1", _fonte(True, 28), cor_acento) + 18
-        fonte, texto = _fonte_ajustada(draw, dados["top_faixa"], True, 56)
-        y += _centralizado(draw, y, texto, fonte, cor_texto) + 10
-        fonte, texto = _fonte_ajustada(draw, dados.get("top_faixa_artista") or "", False, 34)
-        y += _centralizado(draw, y, texto, fonte, cor_muted) + 60
+    if top_albuns:
+        mosaico = colagem.montar_mosaico(top_albuns, 3, LADO_MOSAICO).convert("RGBA")
+        x = (LARGURA - mosaico.width) // 2
+        camada.paste(mosaico, (x, y))
+        y += mosaico.height + 30
 
     y = linha(y)
 
+    x_esq, x_dir = LARGURA * 0.27, LARGURA * 0.73
+    horas, minutos_resto = divmod(dados["minutos"], 60)
+    texto_tempo = f"{horas}h{minutos_resto:02d}" if horas > 0 else f"{minutos_resto}min"
+    altura_num = max(
+        _centralizado_x(draw, x_esq, y, f"{dados['total_faixas']}", _fonte(True, 92), cor_acento),
+        _centralizado_x(draw, x_dir, y, texto_tempo, _fonte(True, 92), cor_texto),
+    )
+    y += altura_num + 12
+    _centralizado_x(draw, x_esq, y, "MÚSICAS", _fonte(True, 24), cor_muted)
+    _centralizado_x(draw, x_dir, y, "TEMPO OUVIDO", _fonte(True, 24), cor_muted)
+    y += 24 + 20
+
+    y = linha(y)
+
+    if dados["top_artista"]:
+        y += _centralizado(draw, y, "ARTISTA #1", _fonte(True, 26), cor_acento) + 14
+        fonte, texto = _fonte_ajustada(draw, dados["top_artista"], True, 62)
+        y += _centralizado(draw, y, texto, fonte, cor_texto) + 34
+
+    if dados["top_faixa"]:
+        y += _centralizado(draw, y, "FAIXA #1", _fonte(True, 26), cor_acento) + 14
+        fonte, texto = _fonte_ajustada(draw, dados["top_faixa"], True, 48)
+        y += _centralizado(draw, y, texto, fonte, cor_texto) + 8
+        fonte, texto = _fonte_ajustada(draw, dados.get("top_faixa_artista") or "", False, 30)
+        y += _centralizado(draw, y, texto, fonte, cor_muted) + 34
+
+    y = linha(y)
+
+    detalhe = []
     if dados["artistas_distintos"]:
-        y += _centralizado(
-            draw, y, f"{dados['artistas_distintos']} ARTISTAS DIFERENTES", _fonte(False, 32), cor_muted,
-        ) + 24
+        detalhe.append(f"{dados['artistas_distintos']} ARTISTAS DIFERENTES")
     if dados["hora_favorita"] is not None:
-        y += _centralizado(
-            draw, y, f"MAIS OUVIDO PERTO DAS {dados['hora_favorita']}H", _fonte(False, 32), cor_muted,
-        ) + 24
+        detalhe.append(f"PICO ÀS {dados['hora_favorita']}H")
+    if detalhe:
+        y += _centralizado(draw, y, "  ·  ".join(detalhe), _fonte(False, 28), cor_muted) + 20
 
     return y
 
 
-def gerar_relatorio_stories(dados: dict, rotulo_periodo: str) -> bytes:
+def gerar_relatorio_stories(dados: dict, rotulo_periodo: str, top_albuns: list[dict] | None = None) -> bytes:
     """dados: dict no formato de `calculations.resumo_periodo_real()`.
     rotulo_periodo: rótulo já formatado do período (ex: "este mês", "2026").
-    PNG bytes, 1080x1920."""
+    top_albuns: lista no formato de `calculations.top_albuns_historico()`
+    (já ordenada, mais tocado primeiro) — vira um mosaico 3x3 no topo do
+    card; None ou lista vazia pula o mosaico. PNG bytes, 1080x1920."""
     cor_texto = ImageColor.getrgb(utils.COR_TEXTO)
     cor_muted = ImageColor.getrgb(utils.COR_TEXTO_MUTED)
     cor_acento = ImageColor.getrgb(utils.COR_ACENTO)
@@ -145,7 +169,8 @@ def gerar_relatorio_stories(dados: dict, rotulo_periodo: str) -> bytes:
 
     camada = Image.new("RGBA", (LARGURA, ALTURA), (0, 0, 0, 0))
     altura_conteudo = _desenhar_conteudo(
-        ImageDraw.Draw(camada), dados, rotulo_periodo, (cor_texto, cor_muted, cor_acento, cor_hairline),
+        ImageDraw.Draw(camada), camada, dados, rotulo_periodo, top_albuns or [],
+        (cor_texto, cor_muted, cor_acento, cor_hairline),
     )
 
     espaco_disponivel = ALTURA - ALTURA_RODAPE
@@ -155,7 +180,7 @@ def gerar_relatorio_stories(dados: dict, rotulo_periodo: str) -> bytes:
     imagem.paste(camada, (0, offset), camada)
 
     rodape = f"gerado em {date.today().strftime('%d/%m/%Y')} · LifeOS"
-    _centralizado(ImageDraw.Draw(imagem), ALTURA - 90, rodape, _fonte(False, 26), cor_muted)
+    _centralizado(ImageDraw.Draw(imagem), ALTURA - 80, rodape, _fonte(False, 24), cor_muted)
 
     buf = io.BytesIO()
     imagem.save(buf, format="PNG")

@@ -48,12 +48,12 @@ def _tile_capa(item: dict, tamanho: int) -> Image.Image:
     return Image.new("RGB", (tamanho, tamanho), utils.COR_FUNDO_ALT)
 
 
-def gerar_colagem(albuns: list[dict], lado_grade: int, formato: str = "post") -> bytes:
-    """albuns: lista de dicts com album_nome/artista_nome + capa_path
-    (Diário) ou capa_url (histórico Spotify), já ordenados por relevância
-    (mais escutado/tocado primeiro). lado_grade: 3, 4 ou 5. formato:
-    'post' (quadrado) ou 'stories' (vertical). PNG bytes."""
-    tamanho_tile = LADO_POST // lado_grade
+def montar_mosaico(albuns: list[dict], lado_grade: int, lado_total: int) -> Image.Image:
+    """Mosaico NxN das capas de `albuns` (mais relevante primeiro),
+    redimensionado pro lado `lado_total` (pixels, total — não por tile).
+    Devolve a Image (não bytes) pra quem chamar poder colar num canvas
+    maior, como o relatório estilo Stories, sem serializar PNG à toa."""
+    tamanho_tile = lado_total // lado_grade
     lado_mosaico = tamanho_tile * lado_grade
     mosaico = Image.new("RGB", (lado_mosaico, lado_mosaico), utils.COR_FUNDO)
 
@@ -63,12 +63,21 @@ def gerar_colagem(albuns: list[dict], lado_grade: int, formato: str = "post") ->
         tile = _tile_capa(item, tamanho_tile)
         col, linha = i % lado_grade, i // lado_grade
         mosaico.paste(tile, (col * tamanho_tile, linha * tamanho_tile))
+    return mosaico
+
+
+def gerar_colagem(albuns: list[dict], lado_grade: int, formato: str = "post") -> bytes:
+    """albuns: lista de dicts com album_nome/artista_nome + capa_path
+    (Diário) ou capa_url (histórico Spotify), já ordenados por relevância
+    (mais escutado/tocado primeiro). lado_grade: 3, 4 ou 5. formato:
+    'post' (quadrado) ou 'stories' (vertical). PNG bytes."""
+    mosaico = montar_mosaico(albuns, lado_grade, LADO_POST)
 
     if formato == "stories":
         largura, altura = TAMANHO_STORIES
         canvas = Image.new("RGB", (largura, altura), utils.COR_FUNDO)
-        x = (largura - lado_mosaico) // 2
-        y = (altura - lado_mosaico) // 2
+        x = (largura - mosaico.width) // 2
+        y = (altura - mosaico.height) // 2
         canvas.paste(mosaico, (x, y))
     else:
         canvas = mosaico
