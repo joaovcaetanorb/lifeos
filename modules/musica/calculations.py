@@ -180,7 +180,15 @@ def top_albuns_periodo(data_inicio: str, data_fim: str, limite: int) -> pd.DataF
 def top_albuns_historico(data_inicio: str, data_fim: str, limite: int) -> pd.DataFrame:
     """Álbuns mais tocados de verdade no período (histórico sincronizado
     da conta Spotify, não o que foi avaliado no Diário), rankeados por
-    número de faixas tocadas — pra colagem a partir do consumo real."""
+    número de faixas tocadas — pra colagem/mosaico a partir do consumo
+    real.
+
+    Agrupa por `album_spotify_id` (identidade real do álbum), não por
+    (nome, artista) — um álbum de compilação (ex.: "participação
+    especial") pode ter faixas creditadas a artistas diferentes, e agrupar
+    por artista contava o MESMO disco como vários álbuns distintos,
+    duplicando a mesma capa várias vezes no mosaico. Cai pra nome+artista
+    só pra faixas sincronizadas antes desse campo existir (id vazio)."""
     colunas = ["album_nome", "artista_nome", "capa_url", "total"]
     historico = models.listar_historico(limit=100000)
     if historico.empty:
@@ -191,13 +199,22 @@ def top_albuns_historico(data_inicio: str, data_fim: str, limite: int) -> pd.Dat
     if periodo.empty:
         return pd.DataFrame(columns=colunas)
 
+    periodo = periodo.copy()
+    periodo["chave_album"] = periodo["album_spotify_id"].where(
+        periodo["album_spotify_id"] != "", periodo["album_nome"] + "||" + periodo["artista_nome"],
+    )
+
     agrupado = (
-        periodo.groupby(["album_nome", "artista_nome", "capa_url"])
-        .size()
-        .reset_index(name="total")
+        periodo.groupby("chave_album")
+        .agg(
+            album_nome=("album_nome", "first"),
+            artista_nome=("artista_nome", "first"),
+            capa_url=("capa_url", "first"),
+            total=("chave_album", "size"),
+        )
         .sort_values("total", ascending=False)
     )
-    return agrupado.head(limite)
+    return agrupado[colunas].head(limite)
 
 
 def _historico_periodo(data_inicio: str, data_fim: str) -> pd.DataFrame:
