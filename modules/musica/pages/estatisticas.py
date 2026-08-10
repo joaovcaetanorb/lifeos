@@ -107,6 +107,72 @@ def _grafico_top_artistas(data_inicio: str, data_fim: str) -> None:
     st.plotly_chart(_grid_style(fig), use_container_width=True)
 
 
+def _grafico_por_decada(data_inicio: str, data_fim: str) -> None:
+    ui.eyebrow("linha do tempo musical")
+    st.subheader("Escutas por década de lançamento")
+    df = calc.escutas_por_decada(data_inicio, data_fim)
+    if df.empty:
+        st.caption("Nenhum álbum com ano de lançamento cadastrado nesse período.")
+        return
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=df["decada"], y=df["total"], marker_color=utils.COR_ACENTO))
+    st.plotly_chart(_grid_style(fig), use_container_width=True)
+
+
+def _grafico_por_genero(data_inicio: str, data_fim: str) -> None:
+    ui.eyebrow("gosto musical")
+    st.subheader("Gêneros mais escutados")
+    df = calc.escutas_por_genero(data_inicio, data_fim)
+    if df.empty:
+        st.caption(
+            "Nenhum álbum com gênero cadastrado nesse período — álbuns adicionados via busca "
+            "no Spotify já sugerem um gênero automaticamente ao cadastrar."
+        )
+        return
+    df = df.sort_values("total")
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=df["total"], y=df["genero"], orientation="h", marker_color=utils.COR_ACENTO))
+    st.plotly_chart(_grid_style(fig), use_container_width=True)
+
+
+def _grafico_nota_por_genero(data_inicio: str, data_fim: str) -> None:
+    st.subheader("Nota média por gênero")
+    df = calc.nota_media_por_genero(data_inicio, data_fim)
+    if df.empty:
+        st.caption("Nenhuma escuta avaliada com gênero cadastrado nesse período.")
+        return
+    df = df.sort_values("nota_media")
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=df["nota_media"], y=df["genero"], orientation="h", marker_color=utils.COR_ACENTO))
+    fig.update_xaxes(range=[0, 5])
+    st.plotly_chart(_grid_style(fig), use_container_width=True)
+
+
+def _grafico_nota_por_decada(data_inicio: str, data_fim: str) -> None:
+    st.subheader("Nota média por década de lançamento (disco antigo ou novo?)")
+    df = calc.nota_media_por_decada(data_inicio, data_fim)
+    if df.empty:
+        st.caption("Nenhuma escuta avaliada com ano de lançamento cadastrado nesse período.")
+        return
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=df["decada"], y=df["nota_media"], marker_color=utils.COR_ACENTO))
+    fig.update_yaxes(range=[0, 5])
+    st.plotly_chart(_grid_style(fig), use_container_width=True)
+
+
+def _grafico_top_faixas(data_inicio: str, data_fim: str) -> None:
+    ui.eyebrow("faixas")
+    st.subheader("Faixas favoritas mais marcadas")
+    df = calc.top_faixas_favoritas(data_inicio, data_fim)
+    if df.empty:
+        st.caption("Nenhuma faixa favorita marcada nesse período.")
+        return
+    df = df.sort_values("total")
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=df["total"], y=df["faixa"], orientation="h", marker_color=utils.COR_ACENTO))
+    st.plotly_chart(_grid_style(fig), use_container_width=True)
+
+
 def render() -> None:
     ui.titulo_pagina("estatísticas")
 
@@ -120,6 +186,14 @@ def render() -> None:
     _grafico_distribuicao_notas(data_inicio, data_fim)
     st.divider()
     _grafico_top_artistas(data_inicio, data_fim)
+    st.divider()
+    _grafico_por_decada(data_inicio, data_fim)
+    _grafico_nota_por_decada(data_inicio, data_fim)
+    st.divider()
+    _grafico_por_genero(data_inicio, data_fim)
+    _grafico_nota_por_genero(data_inicio, data_fim)
+    st.divider()
+    _grafico_top_faixas(data_inicio, data_fim)
 
 
 render()

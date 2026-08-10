@@ -170,7 +170,8 @@ def listar_escutas_com_album() -> pd.DataFrame:
     conn = get_connection()
     return pd.read_sql_query(
         """SELECT escutas.*, albuns.nome AS album_nome, albuns.capa_path,
-                  albuns.spotify_id AS album_spotify_id, artistas.nome AS artista_nome
+                  albuns.spotify_id AS album_spotify_id, albuns.ano_lancamento AS album_ano,
+                  albuns.genero AS album_genero, artistas.nome AS artista_nome
            FROM escutas
            JOIN albuns ON albuns.id = escutas.album_id
            JOIN artistas ON artistas.id = albuns.artista_id

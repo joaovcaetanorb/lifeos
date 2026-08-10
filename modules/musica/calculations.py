@@ -96,6 +96,87 @@ def top_artistas(data_inicio: str, data_fim: str, limit: int = 8) -> pd.DataFram
     return contagem.sort_values("total", ascending=False).head(limit)
 
 
+def escutas_por_decada(data_inicio: str, data_fim: str) -> pd.DataFrame:
+    """Escutas agrupadas pela década de lançamento do álbum (não pela data
+    da escuta) — "anos 90", "anos 2000" etc. Ignora álbuns sem ano
+    cadastrado (não entram nem como "desconhecido", pra não distorcer o
+    eixo do gráfico com uma barra sem sentido comparativo)."""
+    escutas = _filtrar_periodo(models.listar_escutas_com_album(), data_inicio, data_fim)
+    anos = escutas["album_ano"].dropna() if not escutas.empty else pd.Series(dtype=float)
+    if anos.empty:
+        return pd.DataFrame(columns=["decada", "total"])
+
+    decadas = (anos.astype(int) // 10 * 10).astype(int)
+    rotulos = decadas.map(lambda d: f"{d}s")
+    contagem = rotulos.value_counts()
+    # ordena pelo início real da década (não alfabético — "20s" não pode
+    # vir antes de "1990s")
+    ordem = sorted(contagem.index, key=lambda r: decadas[rotulos == r].iloc[0])
+    return pd.DataFrame({"decada": ordem, "total": [int(contagem[d]) for d in ordem]})
+
+
+def escutas_por_genero(data_inicio: str, data_fim: str, limit: int = 8) -> pd.DataFrame:
+    """Gêneros mais escutados no período, pelo campo `genero` do álbum
+    (preenchido manualmente ou sugerido a partir do artista no Spotify).
+    Ignora álbuns sem gênero cadastrado."""
+    escutas = _filtrar_periodo(models.listar_escutas_com_album(), data_inicio, data_fim)
+    if escutas.empty:
+        return pd.DataFrame(columns=["genero", "total"])
+    generos = escutas["album_genero"].replace("", None).dropna()
+    if generos.empty:
+        return pd.DataFrame(columns=["genero", "total"])
+    contagem = generos.value_counts().head(limit).reset_index()
+    contagem.columns = ["genero", "total"]
+    return contagem
+
+
+def nota_media_por_genero(data_inicio: str, data_fim: str, limit: int = 8) -> pd.DataFrame:
+    """Nota média das escutas avaliadas, por gênero do álbum — só entram
+    gêneros com pelo menos uma escuta com nota (ignora sem nota e sem
+    gênero cadastrado)."""
+    escutas = _filtrar_periodo(models.listar_escutas_com_album(), data_inicio, data_fim)
+    if escutas.empty:
+        return pd.DataFrame(columns=["genero", "nota_media"])
+    validas = escutas[(escutas["album_genero"] != "") & escutas["nota"].notna()]
+    if validas.empty:
+        return pd.DataFrame(columns=["genero", "nota_media"])
+    medias = validas.groupby("album_genero")["nota"].mean().round(2).sort_values(ascending=False).head(limit)
+    return medias.reset_index().rename(columns={"album_genero": "genero", "nota": "nota_media"})
+
+
+def nota_media_por_decada(data_inicio: str, data_fim: str) -> pd.DataFrame:
+    """Nota média das escutas avaliadas, por década de lançamento do
+    álbum — pra ver se você costuma gostar mais de disco antigo ou novo.
+    Ignora álbuns sem ano cadastrado e escutas sem nota."""
+    escutas = _filtrar_periodo(models.listar_escutas_com_album(), data_inicio, data_fim)
+    if escutas.empty:
+        return pd.DataFrame(columns=["decada", "nota_media"])
+    validas = escutas[escutas["album_ano"].notna() & escutas["nota"].notna()].copy()
+    if validas.empty:
+        return pd.DataFrame(columns=["decada", "nota_media"])
+    validas["decada"] = (validas["album_ano"].astype(int) // 10 * 10).astype(int)
+    medias = validas.groupby("decada")["nota"].mean().round(2)
+    ordem = sorted(medias.index)
+    return pd.DataFrame({"decada": [f"{d}s" for d in ordem], "nota_media": [medias[d] for d in ordem]})
+
+
+def top_faixas_favoritas(data_inicio: str, data_fim: str, limit: int = 8) -> pd.DataFrame:
+    """Faixas marcadas como favoritas com mais frequência entre as escutas
+    do período — uma escuta pode ter mais de uma faixa favorita marcada
+    (separadas por vírgula em `faixa_favorita`)."""
+    escutas = _filtrar_periodo(models.listar_escutas_com_album(), data_inicio, data_fim)
+    if escutas.empty:
+        return pd.DataFrame(columns=["faixa", "total"])
+    faixas = []
+    for texto in escutas["faixa_favorita"].dropna():
+        faixas.extend(f.strip() for f in texto.split(",") if f.strip())
+    if not faixas:
+        return pd.DataFrame(columns=["faixa", "total"])
+    contagem = pd.Series(faixas).value_counts().head(limit).reset_index()
+    contagem.columns = ["faixa", "total"]
+    return contagem
+
+
 def top_albuns_periodo(data_inicio: str, data_fim: str, limite: int) -> pd.DataFrame:
     """Álbuns mais escutados no período [data_inicio, data_fim] (ISO,
     ambos inclusive), rankeados por número de escutas — pra colagem."""
