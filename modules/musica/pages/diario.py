@@ -269,8 +269,6 @@ def _card_escuta(escuta: dict) -> None:
                 caminho_capa = database.DB_DIR / escuta["capa_path"]
                 if caminho_capa.exists():
                     st.image(str(caminho_capa), width=200)
-            if escuta["album_spotify_url"]:
-                st.link_button("▶ abrir no Spotify", escuta["album_spotify_url"], use_container_width=True)
 
         with col_texto:
             st.markdown(f"**{escuta['album_nome']}** — {escuta['artista_nome']}")

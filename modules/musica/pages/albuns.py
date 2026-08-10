@@ -182,8 +182,6 @@ def _card_album(album: dict) -> None:
                 caminho_capa = database.DB_DIR / album["capa_path"]
                 if caminho_capa.exists():
                     st.image(str(caminho_capa), width=220)
-            if album["spotify_url"]:
-                st.link_button("▶ abrir no Spotify", album["spotify_url"], use_container_width=True)
 
         with col_texto:
             st.subheader(album["nome"])
