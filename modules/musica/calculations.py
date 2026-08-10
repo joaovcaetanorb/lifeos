@@ -200,6 +200,137 @@ def top_albuns_historico(data_inicio: str, data_fim: str, limite: int) -> pd.Dat
     return agrupado.head(limite)
 
 
+def _historico_periodo(data_inicio: str, data_fim: str) -> pd.DataFrame:
+    historico = models.listar_historico(limit=100000)
+    if historico.empty:
+        return historico
+    dia = historico["tocado_em"].str.slice(0, 10)
+    return historico[(dia >= data_inicio) & (dia <= data_fim)]
+
+
+def _horario_brt(tocado_em: pd.Series) -> pd.Series:
+    """Spotify manda `played_at` em UTC (ex: '2026-08-10T14:23:45.000Z') —
+    converte pra horário de Brasília (UTC-3, sem horário de verão desde
+    2019) antes de agrupar por hora/dia da semana, senão o hábito de
+    escuta fica sistematicamente deslocado em 3h."""
+    utc = pd.to_datetime(tocado_em, format="ISO8601", utc=True)
+    return utc - pd.Timedelta(hours=3)
+
+
+def top_artistas_historico(data_inicio: str, data_fim: str, limite: int = 8) -> pd.DataFrame:
+    """Artistas mais tocados de verdade no período (histórico sincronizado
+    da conta Spotify), rankeados por número de faixas tocadas — diferente
+    de `top_artistas`, que conta escutas avaliadas no Diário."""
+    colunas = ["artista_nome", "total"]
+    periodo = _historico_periodo(data_inicio, data_fim)
+    if periodo.empty:
+        return pd.DataFrame(columns=colunas)
+    contagem = periodo.groupby("artista_nome").size().reset_index(name="total")
+    return contagem.sort_values("total", ascending=False).head(limite)
+
+
+def top_faixas_historico(data_inicio: str, data_fim: str, limite: int = 8) -> pd.DataFrame:
+    """Faixas mais tocadas de verdade no período (histórico sincronizado),
+    rankeadas por número de reproduções."""
+    colunas = ["faixa_nome", "artista_nome", "total"]
+    periodo = _historico_periodo(data_inicio, data_fim)
+    if periodo.empty:
+        return pd.DataFrame(columns=colunas)
+    contagem = (
+        periodo.groupby(["faixa_nome", "artista_nome"]).size().reset_index(name="total")
+        .sort_values("total", ascending=False)
+    )
+    return contagem.head(limite)
+
+
+def volume_historico_por_mes(data_inicio: str, data_fim: str) -> pd.DataFrame:
+    """Quantas faixas foram tocadas de verdade por mês dentro do período —
+    inclui meses sem nenhuma faixa (total 0), pra não sumir com o eixo do
+    gráfico."""
+    inicio = date.fromisoformat(data_inicio)
+    fim = date.fromisoformat(data_fim)
+    periodos = []
+    cursor = date(inicio.year, inicio.month, 1)
+    while cursor <= fim:
+        periodos.append(cursor.strftime("%Y-%m"))
+        cursor = utils.somar_meses(cursor, 1)
+
+    periodo = _historico_periodo(data_inicio, data_fim)
+    contagem_por_periodo = {}
+    if not periodo.empty:
+        periodo_da_faixa = periodo["tocado_em"].str.slice(0, 7)
+        contagem_por_periodo = periodo_da_faixa.value_counts().to_dict()
+
+    return pd.DataFrame({
+        "periodo": periodos,
+        "mes_nome": [utils.nome_mes_curto(p) for p in periodos],
+        "total": [int(contagem_por_periodo.get(p, 0)) for p in periodos],
+    })
+
+
+def habito_por_hora(data_inicio: str, data_fim: str) -> pd.DataFrame:
+    """Quantas faixas tocadas em cada hora do dia (0-23, horário de
+    Brasília), somando o período inteiro — pra ver em que hora do dia
+    você mais ouve música de verdade."""
+    periodo = _historico_periodo(data_inicio, data_fim)
+    horas = list(range(24))
+    if periodo.empty:
+        return pd.DataFrame({"hora": horas, "total": [0] * 24})
+    contagem = _horario_brt(periodo["tocado_em"]).dt.hour.value_counts().to_dict()
+    return pd.DataFrame({"hora": horas, "total": [int(contagem.get(h, 0)) for h in horas]})
+
+
+def resumo_periodo_real(data_inicio: str, data_fim: str) -> dict:
+    """Números do histórico real do período, pro relatório estilo Stories.
+    `minutos` só conta faixas sincronizadas depois que `duration_ms` passou
+    a ser guardado (2026-08) — faixas mais antigas do histórico entram como
+    0 nesse total, mas continuam contando normalmente pro resto (total de
+    faixas, top artista/faixa, hora favorita)."""
+    periodo = _historico_periodo(data_inicio, data_fim)
+    if periodo.empty:
+        return {
+            "total_faixas": 0, "minutos": 0, "artistas_distintos": 0,
+            "top_artista": None, "top_faixa": None, "top_faixa_artista": None,
+            "hora_favorita": None,
+        }
+
+    minutos = int(periodo["duration_ms"].fillna(0).sum() // 60000)
+
+    top_artista = None
+    contagem_artistas = periodo.groupby("artista_nome").size().sort_values(ascending=False)
+    if not contagem_artistas.empty:
+        top_artista = contagem_artistas.index[0]
+
+    top_faixa = None
+    top_faixa_artista = None
+    contagem_faixas = periodo.groupby(["faixa_nome", "artista_nome"]).size().sort_values(ascending=False)
+    if not contagem_faixas.empty:
+        top_faixa, top_faixa_artista = contagem_faixas.index[0]
+
+    hora_favorita = int(_horario_brt(periodo["tocado_em"]).dt.hour.value_counts().idxmax())
+
+    return {
+        "total_faixas": len(periodo),
+        "minutos": minutos,
+        "artistas_distintos": int(periodo["artista_nome"].nunique()),
+        "top_artista": top_artista,
+        "top_faixa": top_faixa,
+        "top_faixa_artista": top_faixa_artista,
+        "hora_favorita": hora_favorita,
+    }
+
+
+def habito_por_dia_semana(data_inicio: str, data_fim: str) -> pd.DataFrame:
+    """Quantas faixas tocadas em cada dia da semana (horário de Brasília),
+    somando o período inteiro."""
+    dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+    periodo = _historico_periodo(data_inicio, data_fim)
+    if periodo.empty:
+        return pd.DataFrame({"dia_semana": dias, "total": [0] * 7})
+    contagem = _horario_brt(periodo["tocado_em"]).dt.dayofweek.value_counts().to_dict()
+    return pd.DataFrame({"dia_semana": dias, "total": [int(contagem.get(i, 0)) for i in range(7)]})
+
+
 def resumo_periodo(data_inicio: str, data_fim: str) -> dict:
     """Números do período: álbuns novos no catálogo, escutas registradas,
     nota média e o artista mais escutado dentro dele."""

@@ -237,6 +237,7 @@ def sincronizar_historico(limit: int = 50) -> int:
             "track_spotify_id": faixa.get("id", ""),
             "album_spotify_id": album.get("id", ""),
             "tocado_em": item.get("played_at", ""),
+            "duration_ms": faixa.get("duration_ms", 0),
         })
     faixas = [f for f in faixas if f["faixa_nome"] and f["tocado_em"]]
     if not faixas:

@@ -3,13 +3,14 @@ histórico real de faixas tocadas e top artistas/faixas da conta — separado
 do Diário, que continua sendo só o que o usuário escolhe avaliar/resenhar.
 """
 
+from datetime import datetime, timedelta
+
 import streamlit as st
 
 import database
 import models
 import spotify_client
 import ui
-import utils
 
 st.set_page_config(page_title="Spotify | Música", page_icon="🎵", layout="wide")
 database.inicializar_banco()
@@ -20,12 +21,14 @@ _PERIODOS = {"short_term": "4 semanas", "medium_term": "6 meses", "long_term": "
 
 
 def _formatar_tocado_em(tocado_em: str) -> str:
-    """'2026-08-10T14:23:45.000Z' -> '10/08/2026 14:23'."""
+    """'2026-08-10T14:23:45.000Z' (UTC, como a Spotify manda) -> '10/08/2026
+    11:23' (horário de Brasília, UTC-3 — sem isso a hora mostrada fica 3h
+    adiantada em relação ao horário real que a faixa tocou)."""
     if not tocado_em or len(tocado_em) < 16:
         return ""
-    data = utils.formatar_data_br(tocado_em[:10])
-    hora = tocado_em[11:16]
-    return f"{data} {hora}"
+    utc = datetime.fromisoformat(tocado_em.replace("Z", "+00:00"))
+    brt = utc - timedelta(hours=3)
+    return brt.strftime("%d/%m/%Y %H:%M")
 
 
 def _processar_callback_oauth() -> None:

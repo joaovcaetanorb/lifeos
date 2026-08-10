@@ -9,6 +9,8 @@ import streamlit as st
 import calculations as calc
 import database
 import models
+import relatorio_stories
+import spotify_client
 import ui
 import utils
 
@@ -160,6 +162,113 @@ def _grafico_nota_por_decada(data_inicio: str, data_fim: str) -> None:
     st.plotly_chart(_grid_style(fig), use_container_width=True)
 
 
+def _grafico_top_artistas_real(data_inicio: str, data_fim: str) -> None:
+    ui.eyebrow("consumo real")
+    st.subheader("Artistas mais tocados de verdade")
+    df = calc.top_artistas_historico(data_inicio, data_fim, 8)
+    if df.empty:
+        st.caption("Nenhuma faixa sincronizada nesse período.")
+        return
+    df = df.sort_values("total")
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=df["total"], y=df["artista_nome"], orientation="h", marker_color=utils.COR_ACENTO))
+    st.plotly_chart(_grid_style(fig), use_container_width=True)
+
+
+def _grafico_top_faixas_real(data_inicio: str, data_fim: str) -> None:
+    st.subheader("Faixas mais tocadas de verdade")
+    df = calc.top_faixas_historico(data_inicio, data_fim, 8)
+    if df.empty:
+        st.caption("Nenhuma faixa sincronizada nesse período.")
+        return
+    df = df.sort_values("total")
+    rotulos = [f"{faixa} — {artista}" for faixa, artista in zip(df["faixa_nome"], df["artista_nome"])]
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=df["total"], y=rotulos, orientation="h", marker_color=utils.COR_ACENTO))
+    st.plotly_chart(_grid_style(fig), use_container_width=True)
+
+
+def _grafico_volume_historico(data_inicio: str, data_fim: str) -> None:
+    st.subheader("Faixas tocadas por mês")
+    df = calc.volume_historico_por_mes(data_inicio, data_fim)
+    if df["total"].sum() == 0:
+        st.caption("Nenhuma faixa sincronizada nesse período.")
+        return
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=df["mes_nome"], y=df["total"], marker_color=utils.COR_ACENTO))
+    st.plotly_chart(_grid_style(fig), use_container_width=True)
+
+
+def _grafico_habito_hora(data_inicio: str, data_fim: str) -> None:
+    ui.eyebrow("hábito de escuta")
+    st.subheader("Horário em que você mais escuta")
+    df = calc.habito_por_hora(data_inicio, data_fim)
+    if df["total"].sum() == 0:
+        st.caption("Nenhuma faixa sincronizada nesse período.")
+        return
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=[f"{h}h" for h in df["hora"]], y=df["total"], marker_color=utils.COR_ACENTO))
+    st.plotly_chart(_grid_style(fig), use_container_width=True)
+
+
+def _grafico_habito_dia_semana(data_inicio: str, data_fim: str) -> None:
+    st.subheader("Dia da semana em que você mais escuta")
+    df = calc.habito_por_dia_semana(data_inicio, data_fim)
+    if df["total"].sum() == 0:
+        st.caption("Nenhuma faixa sincronizada nesse período.")
+        return
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=df["dia_semana"], y=df["total"], marker_color=utils.COR_ACENTO))
+    st.plotly_chart(_grid_style(fig), use_container_width=True)
+
+
+def _botao_relatorio_stories(data_inicio: str, data_fim: str, rotulo: str) -> None:
+    dados = calc.resumo_periodo_real(data_inicio, data_fim)
+    if dados["total_faixas"] == 0:
+        return
+    imagem = relatorio_stories.gerar_relatorio_stories(dados, rotulo)
+    st.download_button(
+        "baixar relatório estilo Stories",
+        data=imagem,
+        file_name=f"spotify-{data_inicio}-a-{data_fim}.png",
+        mime="image/png",
+        use_container_width=True,
+    )
+
+
+def _secao_spotify_real(data_inicio: str, data_fim: str, rotulo: str) -> None:
+    """Estatísticas a partir do histórico real sincronizado da conta
+    Spotify — diferente de todo o resto da página, que vem do que você
+    avalia manualmente no Diário. Só aparece se a conta estiver
+    conectada; se não, indica onde conectar em vez de mostrar gráficos
+    vazios."""
+    st.divider()
+    st.subheader("Segundo o Spotify")
+    st.caption(
+        "Baseado no histórico real sincronizado da sua conta — o que você de fato ouviu, "
+        "não o que cadastrou ou avaliou no Diário."
+    )
+    if not spotify_client.conta_conectada():
+        st.caption("Conecte sua conta na página **Spotify** para ver essas estatísticas.")
+        return
+
+    _botao_relatorio_stories(data_inicio, data_fim, rotulo)
+    st.divider()
+
+    col1, col2 = st.columns(2)
+    with col1:
+        _grafico_top_artistas_real(data_inicio, data_fim)
+    with col2:
+        _grafico_top_faixas_real(data_inicio, data_fim)
+    _grafico_volume_historico(data_inicio, data_fim)
+
+    col3, col4 = st.columns(2)
+    with col3:
+        _grafico_habito_hora(data_inicio, data_fim)
+    with col4:
+        _grafico_habito_dia_semana(data_inicio, data_fim)
+
+
 def render() -> None:
     ui.titulo_pagina("estatísticas")
 
@@ -179,6 +288,7 @@ def render() -> None:
     st.divider()
     _grafico_por_genero(data_inicio, data_fim)
     _grafico_nota_por_genero(data_inicio, data_fim)
+    _secao_spotify_real(data_inicio, data_fim, rotulo)
 
 
 render()

@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS spotify_historico (
     track_spotify_id TEXT DEFAULT '',
     album_spotify_id TEXT DEFAULT '',
     tocado_em TEXT NOT NULL,
+    duration_ms INTEGER NOT NULL DEFAULT 0,
     registrado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (track_spotify_id, tocado_em)
 );
@@ -142,6 +143,10 @@ def _migrar_schema(conn) -> None:
     colunas_albuns = {r[1] for r in conn.execute("PRAGMA table_info(albuns)").fetchall()}
     if "favorito" not in colunas_albuns:
         conn.execute("ALTER TABLE albuns ADD COLUMN favorito INTEGER NOT NULL DEFAULT 0")
+
+    colunas_historico = {r[1] for r in conn.execute("PRAGMA table_info(spotify_historico)").fetchall()}
+    if "duration_ms" not in colunas_historico:
+        conn.execute("ALTER TABLE spotify_historico ADD COLUMN duration_ms INTEGER NOT NULL DEFAULT 0")
 
     conn.commit()
 
