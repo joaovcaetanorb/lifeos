@@ -160,19 +160,6 @@ def _grafico_nota_por_decada(data_inicio: str, data_fim: str) -> None:
     st.plotly_chart(_grid_style(fig), use_container_width=True)
 
 
-def _grafico_top_faixas(data_inicio: str, data_fim: str) -> None:
-    ui.eyebrow("faixas")
-    st.subheader("Faixas favoritas mais marcadas")
-    df = calc.top_faixas_favoritas(data_inicio, data_fim)
-    if df.empty:
-        st.caption("Nenhuma faixa favorita marcada nesse período.")
-        return
-    df = df.sort_values("total")
-    fig = go.Figure()
-    fig.add_trace(go.Bar(x=df["total"], y=df["faixa"], orientation="h", marker_color=utils.COR_ACENTO))
-    st.plotly_chart(_grid_style(fig), use_container_width=True)
-
-
 def render() -> None:
     ui.titulo_pagina("estatísticas")
 
@@ -192,8 +179,6 @@ def render() -> None:
     st.divider()
     _grafico_por_genero(data_inicio, data_fim)
     _grafico_nota_por_genero(data_inicio, data_fim)
-    st.divider()
-    _grafico_top_faixas(data_inicio, data_fim)
 
 
 render()

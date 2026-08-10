@@ -32,7 +32,9 @@ _STATIC_DIR = Path(__file__).resolve().parent / "static"
 # (conferida nos imports de cada um) — utils/database não dependem de
 # nada daqui, models depende de database, calculations depende de
 # models+utils(+database em alguns módulos), relatorio depende de tudo
-# isso. _preload_nomes_compartilhados() carrega nessa ordem.
+# isso, spotify_client (música) depende de models pra guardar token/
+# histórico da conta conectada. _preload_nomes_compartilhados() carrega
+# nessa ordem.
 _NOMES_COMPARTILHADOS = [
     "utils", "database", "models", "calculations", "ui",
     "colagem", "relatorio", "spotify_client", "groq_client",
@@ -334,6 +336,8 @@ paginas = {
                 title="Colagem", icon="🖼️", url_path="musica-colagem"),
         st.Page(_pagina("musica", "pages/estatisticas.py"),
                 title="Estatísticas", icon="📈", url_path="musica-estatisticas"),
+        st.Page(_pagina("musica", "pages/spotify_conta.py"),
+                title="Spotify", icon="🔗", url_path="musica-spotify"),
     ],
 }
 

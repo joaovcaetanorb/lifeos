@@ -1,19 +1,27 @@
-"""Integração com a Web API do Spotify via spotipy — só busca de metadado
-público (nome, artista, ano, capa, gênero). Nunca lê o que o usuário está
-ouvindo nem precisa de login pessoal (Client Credentials Flow, credenciais
-de app em .streamlit/secrets.toml) — a conta dona do app precisa ter
-Premium ativo pra esse modo de busca funcionar (exigência da própria
-Spotify desde início de 2026).
+"""Integração com a Web API do Spotify via spotipy — duas formas de auth
+diferentes, cada uma pro seu propósito:
+
+1. Client Credentials (`_get_client`) — credenciais do app só, sem login
+   de ninguém. Só dá acesso a catálogo público (busca de álbum/artista).
+   A conta dona do app precisa ter Premium ativo pra esse modo funcionar
+   (exigência da própria Spotify desde início de 2026).
+2. Authorization Code (`_get_oauth`) — login de verdade do usuário, com
+   tela de consentimento. Dá acesso a dado da conta pessoal (histórico de
+   faixas tocadas, top artistas/faixas) que o modo 1 nunca alcança.
 
 Qualquer falha aqui (sem credencial configurada, erro de rede, timeout)
-degrada pra "recurso indisponível" em vez de quebrar a página — a busca é
-um atalho opcional, o cadastro manual sempre continua funcionando.
+degrada pra "recurso indisponível" em vez de quebrar a página — tanto a
+busca de catálogo quanto a conta conectada são atalhos opcionais, o
+cadastro manual sempre continua funcionando.
 """
 
 import requests
 import spotipy
 import streamlit as st
-from spotipy.oauth2 import SpotifyClientCredentials
+from spotipy.cache_handler import CacheHandler
+from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
+
+import models
 
 
 @st.cache_resource(show_spinner=False)
@@ -121,3 +129,161 @@ def baixar_capa(url: str) -> bytes | None:
         return resposta.content
     except Exception:
         return None
+
+
+# ---------------------------------------------------------------------------
+# Conta conectada (Authorization Code — login de usuário, dado pessoal)
+# ---------------------------------------------------------------------------
+
+class _TursoCacheHandler(CacheHandler):
+    """Guarda o token OAuth no Turso (via models.py) em vez do arquivo
+    local que o spotipy usa por padrão — um arquivo não sobrevive no disco
+    efêmero do Streamlit Cloud, e também não faria sentido compartilhar
+    entre processos/sessões diferentes."""
+
+    def get_cached_token(self):
+        return models.obter_token_spotify()
+
+    def save_token_to_cache(self, token_info):
+        models.salvar_token_spotify(token_info)
+
+
+def _get_oauth() -> SpotifyOAuth | None:
+    try:
+        client_id = st.secrets["SPOTIFY_CLIENT_ID"]
+        client_secret = st.secrets["SPOTIFY_CLIENT_SECRET"]
+        redirect_uri = st.secrets["SPOTIFY_REDIRECT_URI"]
+    except (KeyError, FileNotFoundError):
+        return None
+    return SpotifyOAuth(
+        client_id=client_id,
+        client_secret=client_secret,
+        redirect_uri=redirect_uri,
+        scope="user-read-recently-played user-top-read",
+        cache_handler=_TursoCacheHandler(),
+        open_browser=False,
+    )
+
+
+def conta_conectada() -> bool:
+    """True se há um token salvo e válido — `validate_token` já renova
+    sozinho (e persiste a renovação) se o access_token expirou mas o
+    refresh_token ainda vale. Se o refresh_token foi revogado (usuário
+    desconectou pelo lado da Spotify) essa renovação falha com exceção;
+    trata como "não conectado" em vez de derrubar a página."""
+    oauth = _get_oauth()
+    if oauth is None:
+        return False
+    token = oauth.cache_handler.get_cached_token()
+    if token is None:
+        return False
+    try:
+        return oauth.validate_token(token) is not None
+    except Exception:
+        return False
+
+
+def url_autorizacao() -> str | None:
+    oauth = _get_oauth()
+    return oauth.get_authorize_url() if oauth else None
+
+
+def completar_conexao(code: str) -> bool:
+    """Troca o `code` (query param que a Spotify manda de volta depois do
+    login) por um token de verdade, e já deixa salvo via cache_handler."""
+    oauth = _get_oauth()
+    if oauth is None:
+        return False
+    try:
+        oauth.get_access_token(code, as_dict=True, check_cache=False)
+        return True
+    except Exception:
+        return False
+
+
+def desconectar() -> None:
+    models.limpar_token_spotify()
+
+
+def _cliente_conta() -> spotipy.Spotify | None:
+    if not conta_conectada():
+        return None
+    return spotipy.Spotify(auth_manager=_get_oauth())
+
+
+def sincronizar_historico(limit: int = 50) -> int:
+    """Puxa as últimas faixas tocadas (a API só devolve até 50, sempre a
+    partir de agora pra trás) e salva as que ainda não estavam no
+    histórico. Retorna quantas eram novas — 0 em qualquer falha, nunca
+    derruba a página."""
+    sp = _cliente_conta()
+    if sp is None:
+        return 0
+    try:
+        resultado = sp.current_user_recently_played(limit=limit)
+    except Exception:
+        return 0
+
+    faixas = []
+    for item in resultado.get("items", []):
+        faixa = item.get("track", {})
+        artistas = faixa.get("artists", [])
+        album = faixa.get("album", {})
+        faixas.append({
+            "faixa_nome": faixa.get("name", ""),
+            "artista_nome": artistas[0].get("name", "") if artistas else "",
+            "album_nome": album.get("name", ""),
+            "capa_url": album["images"][0]["url"] if album.get("images") else "",
+            "track_spotify_id": faixa.get("id", ""),
+            "album_spotify_id": album.get("id", ""),
+            "tocado_em": item.get("played_at", ""),
+        })
+    faixas = [f for f in faixas if f["faixa_nome"] and f["tocado_em"]]
+    if not faixas:
+        return 0
+    return models.inserir_historico_faixas(faixas)
+
+
+def top_artistas_conta(time_range: str = "medium_term", limit: int = 10) -> list[dict]:
+    """[{nome, capa_url, spotify_url}, ...] — top artistas da conta no
+    período (short_term=4 semanas, medium_term=6 meses, long_term=geral).
+    Lista vazia se desconectado ou erro."""
+    sp = _cliente_conta()
+    if sp is None:
+        return []
+    try:
+        resultado = sp.current_user_top_artists(limit=limit, time_range=time_range)
+    except Exception:
+        return []
+    artistas = []
+    for item in resultado.get("items", []):
+        artistas.append({
+            "nome": item.get("name", ""),
+            "capa_url": item["images"][0]["url"] if item.get("images") else "",
+            "spotify_url": item.get("external_urls", {}).get("spotify", ""),
+        })
+    return artistas
+
+
+def top_faixas_conta(time_range: str = "medium_term", limit: int = 10) -> list[dict]:
+    """[{nome, artista, album, capa_url, spotify_url}, ...] — top faixas
+    da conta no período. Lista vazia se desconectado ou erro."""
+    sp = _cliente_conta()
+    if sp is None:
+        return []
+    try:
+        resultado = sp.current_user_top_tracks(limit=limit, time_range=time_range)
+    except Exception:
+        return []
+    faixas = []
+    for item in resultado.get("items", []):
+        artistas = item.get("artists", [])
+        album = item.get("album", {})
+        faixas.append({
+            "nome": item.get("name", ""),
+            "artista": artistas[0].get("name", "") if artistas else "",
+            "album": album.get("name", ""),
+            "capa_url": album["images"][0]["url"] if album.get("images") else "",
+            "spotify_url": item.get("external_urls", {}).get("spotify", ""),
+        })
+    return faixas

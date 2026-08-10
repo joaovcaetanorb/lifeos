@@ -76,6 +76,28 @@ CREATE TABLE IF NOT EXISTS escutas (
     faixa_favorita TEXT DEFAULT '',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Conta Spotify conectada (login de usuário via OAuth, separado das
+-- credenciais de app usadas na busca de catálogo) — usada pra guardar o
+-- token e o histórico bruto de faixas tocadas de verdade.
+CREATE TABLE IF NOT EXISTS spotify_token (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    token_json TEXT NOT NULL,
+    atualizado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS spotify_historico (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    faixa_nome TEXT NOT NULL,
+    artista_nome TEXT NOT NULL,
+    album_nome TEXT NOT NULL,
+    capa_url TEXT DEFAULT '',
+    track_spotify_id TEXT DEFAULT '',
+    album_spotify_id TEXT DEFAULT '',
+    tocado_em TEXT NOT NULL,
+    registrado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (track_spotify_id, tocado_em)
+);
 """
 
 

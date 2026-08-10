@@ -160,23 +160,6 @@ def nota_media_por_decada(data_inicio: str, data_fim: str) -> pd.DataFrame:
     return pd.DataFrame({"decada": [f"{d}s" for d in ordem], "nota_media": [medias[d] for d in ordem]})
 
 
-def top_faixas_favoritas(data_inicio: str, data_fim: str, limit: int = 8) -> pd.DataFrame:
-    """Faixas marcadas como favoritas com mais frequência entre as escutas
-    do período — uma escuta pode ter mais de uma faixa favorita marcada
-    (separadas por vírgula em `faixa_favorita`)."""
-    escutas = _filtrar_periodo(models.listar_escutas_com_album(), data_inicio, data_fim)
-    if escutas.empty:
-        return pd.DataFrame(columns=["faixa", "total"])
-    faixas = []
-    for texto in escutas["faixa_favorita"].dropna():
-        faixas.extend(f.strip() for f in texto.split(",") if f.strip())
-    if not faixas:
-        return pd.DataFrame(columns=["faixa", "total"])
-    contagem = pd.Series(faixas).value_counts().head(limit).reset_index()
-    contagem.columns = ["faixa", "total"]
-    return contagem
-
-
 def top_albuns_periodo(data_inicio: str, data_fim: str, limite: int) -> pd.DataFrame:
     """Álbuns mais escutados no período [data_inicio, data_fim] (ISO,
     ambos inclusive), rankeados por número de escutas — pra colagem."""

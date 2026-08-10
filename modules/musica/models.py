@@ -7,6 +7,8 @@ A conexão (`get_connection()`) é compartilhada/cacheada (ver database.py) —
 por isso nenhuma função aqui chama `conn.close()`.
 """
 
+import json
+
 import pandas as pd
 import streamlit as st
 from database import get_connection, linha_para_dict
@@ -221,3 +223,69 @@ def excluir_escuta(escuta_id: int) -> None:
     conn.execute("DELETE FROM escutas WHERE id = ?", (escuta_id,))
     conn.commit()
     st.cache_data.clear()
+
+
+# ---------------------------------------------------------------------------
+# Conta Spotify (token OAuth + histórico bruto de faixas tocadas)
+# ---------------------------------------------------------------------------
+
+def obter_token_spotify() -> dict | None:
+    """Token OAuth salvo (access+refresh+validade), ou None se a conta
+    nunca foi conectada. Sem @st.cache_data de propósito: cachear token
+    arriscaria servir uma versão velha logo depois de conectar/desconectar
+    ou de o spotipy renovar o access_token internamente."""
+    conn = get_connection()
+    row = conn.execute("SELECT token_json FROM spotify_token WHERE id = 1").fetchone()
+    if row is None:
+        return None
+    return json.loads(row[0])
+
+
+def salvar_token_spotify(token_info: dict) -> None:
+    conn = get_connection()
+    conn.execute(
+        """INSERT INTO spotify_token (id, token_json, atualizado_em)
+           VALUES (1, ?, CURRENT_TIMESTAMP)
+           ON CONFLICT(id) DO UPDATE SET token_json = excluded.token_json,
+               atualizado_em = excluded.atualizado_em""",
+        (json.dumps(token_info),),
+    )
+    conn.commit()
+
+
+def limpar_token_spotify() -> None:
+    conn = get_connection()
+    conn.execute("DELETE FROM spotify_token WHERE id = 1")
+    conn.commit()
+
+
+def inserir_historico_faixas(faixas: list[dict]) -> int:
+    """Insere faixas do histórico (uma vez cada — o UNIQUE de
+    track_spotify_id+tocado_em cuida de não duplicar entre sincronizações
+    que se sobrepõem). Retorna quantas eram realmente novas."""
+    if not faixas:
+        return 0
+    conn = get_connection()
+    novas = 0
+    for f in faixas:
+        cur = conn.execute(
+            """INSERT OR IGNORE INTO spotify_historico
+               (faixa_nome, artista_nome, album_nome, capa_url, track_spotify_id, album_spotify_id, tocado_em)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                f["faixa_nome"], f["artista_nome"], f["album_nome"], f.get("capa_url", ""),
+                f.get("track_spotify_id", ""), f.get("album_spotify_id", ""), f["tocado_em"],
+            ),
+        )
+        novas += cur.rowcount
+    conn.commit()
+    st.cache_data.clear()
+    return novas
+
+
+@st.cache_data(show_spinner=False)
+def listar_historico(limit: int = 50) -> pd.DataFrame:
+    conn = get_connection()
+    return pd.read_sql_query(
+        "SELECT * FROM spotify_historico ORDER BY tocado_em DESC LIMIT ?", conn, params=[limit],
+    )
