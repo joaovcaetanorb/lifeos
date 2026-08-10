@@ -23,14 +23,17 @@ def _salvar_capa(album_id: int, arquivo) -> str:
     extensao = Path(arquivo.name).suffix
     caminho = database.UPLOADS_DIR / f"{album_id}{extensao}"
     caminho.write_bytes(arquivo.getbuffer())
-    return str(caminho.relative_to(database.DB_DIR))
+    # .as_posix() (não str()) — no Windows, str(caminho) usa barra invertida,
+    # o que quebra a leitura da capa quando o mesmo banco é lido pelo app
+    # rodando em produção (Linux), onde barra invertida não separa diretório.
+    return caminho.relative_to(database.DB_DIR).as_posix()
 
 
 def _salvar_capa_de_bytes(album_id: int, conteudo: bytes) -> str:
     database.UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     caminho = database.UPLOADS_DIR / f"{album_id}.jpg"
     caminho.write_bytes(conteudo)
-    return str(caminho.relative_to(database.DB_DIR))
+    return caminho.relative_to(database.DB_DIR).as_posix()
 
 
 def _secao_busca_spotify() -> dict:

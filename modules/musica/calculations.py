@@ -229,6 +229,23 @@ def top_artistas_historico(data_inicio: str, data_fim: str, limite: int = 8) -> 
     return contagem.sort_values("total", ascending=False).head(limite)
 
 
+def top_artistas_historico_com_id(data_inicio: str, data_fim: str, limite: int = 15) -> pd.DataFrame:
+    """Como `top_artistas_historico`, mas inclui `artista_spotify_id` —
+    usado só pra buscar o gênero de cada artista depois (ver
+    spotify_client.buscar_genero_artista), não faz sentido pros gráficos
+    de ranking normais. Faixas sincronizadas antes de 2026-08 não têm esse
+    id salvo e entram com string vazia (não dá pra buscar gênero delas)."""
+    colunas = ["artista_nome", "artista_spotify_id", "total"]
+    periodo = _historico_periodo(data_inicio, data_fim)
+    if periodo.empty:
+        return pd.DataFrame(columns=colunas)
+    contagem = (
+        periodo.groupby(["artista_nome", "artista_spotify_id"]).size().reset_index(name="total")
+        .sort_values("total", ascending=False)
+    )
+    return contagem.head(limite)
+
+
 def top_faixas_historico(data_inicio: str, data_fim: str, limite: int = 8) -> pd.DataFrame:
     """Faixas mais tocadas de verdade no período (histórico sincronizado),
     rankeadas por número de reproduções."""
@@ -241,31 +258,6 @@ def top_faixas_historico(data_inicio: str, data_fim: str, limite: int = 8) -> pd
         .sort_values("total", ascending=False)
     )
     return contagem.head(limite)
-
-
-def volume_historico_por_mes(data_inicio: str, data_fim: str) -> pd.DataFrame:
-    """Quantas faixas foram tocadas de verdade por mês dentro do período —
-    inclui meses sem nenhuma faixa (total 0), pra não sumir com o eixo do
-    gráfico."""
-    inicio = date.fromisoformat(data_inicio)
-    fim = date.fromisoformat(data_fim)
-    periodos = []
-    cursor = date(inicio.year, inicio.month, 1)
-    while cursor <= fim:
-        periodos.append(cursor.strftime("%Y-%m"))
-        cursor = utils.somar_meses(cursor, 1)
-
-    periodo = _historico_periodo(data_inicio, data_fim)
-    contagem_por_periodo = {}
-    if not periodo.empty:
-        periodo_da_faixa = periodo["tocado_em"].str.slice(0, 7)
-        contagem_por_periodo = periodo_da_faixa.value_counts().to_dict()
-
-    return pd.DataFrame({
-        "periodo": periodos,
-        "mes_nome": [utils.nome_mes_curto(p) for p in periodos],
-        "total": [int(contagem_por_periodo.get(p, 0)) for p in periodos],
-    })
 
 
 def habito_por_hora(data_inicio: str, data_fim: str) -> pd.DataFrame:

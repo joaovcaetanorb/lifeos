@@ -2,6 +2,7 @@
 filtráveis por período e por fonte (o que você mesmo avalia no Diário, ou
 o que a conta Spotify realmente tocou)."""
 
+import re
 from datetime import date, timedelta
 
 import pandas as pd
@@ -198,6 +199,19 @@ def _relogio_radial(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
+def _linhas_insight(texto: str) -> list[str]:
+    """Quebra a resposta do Groq (lista curta, uma observação por linha)
+    em itens limpos — tira marcador de lista ('-', '*', '1.') de cada
+    linha pra virar um cartão por observação em vez de um bloco só."""
+    linhas = []
+    for bruto in texto.splitlines():
+        linha = re.sub(r"^[-*•]\s*", "", bruto.strip())
+        linha = re.sub(r"^\d+[.)]\s*", "", linha)
+        if linha:
+            linhas.append(linha)
+    return linhas or [texto.strip()]
+
+
 def _secao_insights_ia(chave: str, contexto_fn) -> None:
     ui.eyebrow("groq")
     st.subheader("O que a IA notou")
@@ -207,7 +221,8 @@ def _secao_insights_ia(chave: str, contexto_fn) -> None:
 
     cache = st.session_state.setdefault("musica_insights_cache", {})
     if chave in cache:
-        st.markdown(cache[chave])
+        for linha in _linhas_insight(cache[chave]):
+            ui.cartao_insight(linha)
         if st.button("gerar de novo", key=f"regerar_{chave}"):
             del cache[chave]
             st.rerun()
@@ -426,14 +441,40 @@ def _grafico_top_faixas_real(data_inicio: str, data_fim: str) -> None:
     st.plotly_chart(_lollipop_horizontal(df, "rotulo", "total"), use_container_width=True)
 
 
-def _grafico_volume_historico(data_inicio: str, data_fim: str) -> None:
-    st.subheader("Faixas tocadas por mês")
-    df = calc.volume_historico_por_mes(data_inicio, data_fim)
-    if df["total"].sum() == 0:
+@st.cache_data(show_spinner=False, ttl=3600)
+def _genero_do_artista(artista_spotify_id: str) -> str:
+    return spotify_client.buscar_genero_artista(artista_spotify_id)
+
+
+def _grafico_genero_real(data_inicio: str, data_fim: str) -> None:
+    st.subheader("Gêneros mais escutados de verdade")
+    if not spotify_client.disponivel():
+        st.caption("Busca de gênero indisponível (credenciais do Spotify não configuradas).")
+        return
+
+    top = calc.top_artistas_historico_com_id(data_inicio, data_fim, 15)
+    if top.empty:
         st.caption("Nenhuma faixa sincronizada nesse período.")
         return
-    fig = _com_tendencia(_area_temporal(df, "mes_nome", "total"), df, "mes_nome", "total")
-    st.plotly_chart(fig, use_container_width=True)
+
+    linhas = []
+    for _, artista in top.iterrows():
+        if not artista["artista_spotify_id"]:
+            continue
+        genero = _genero_do_artista(artista["artista_spotify_id"])
+        if genero:
+            linhas.append({"genero": genero, "total": artista["total"]})
+
+    if not linhas:
+        st.caption(
+            "Não consegui identificar gênero pros artistas mais tocados — só funciona pra faixas "
+            "sincronizadas depois que passamos a guardar o ID do artista (sincronize de novo pra "
+            "atualizar o histórico recente)."
+        )
+        return
+
+    df = pd.DataFrame(linhas).groupby("genero", as_index=False)["total"].sum()
+    st.plotly_chart(_donut(df, "genero", "total"), use_container_width=True)
 
 
 def _grafico_habito_hora(data_inicio: str, data_fim: str) -> None:
@@ -496,7 +537,7 @@ def _secao_spotify(data_inicio: str, data_fim: str, rotulo: str) -> None:
         _grafico_top_artistas_real(data_inicio, data_fim)
     with col2:
         _grafico_top_faixas_real(data_inicio, data_fim)
-    _grafico_volume_historico(data_inicio, data_fim)
+    _grafico_genero_real(data_inicio, data_fim)
 
     col3, col4 = st.columns(2)
     with col3:

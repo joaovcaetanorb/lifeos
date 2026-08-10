@@ -286,12 +286,13 @@ def inserir_historico_faixas(faixas: list[dict]) -> int:
     for f in faixas:
         cur = conn.execute(
             """INSERT OR IGNORE INTO spotify_historico
-               (faixa_nome, artista_nome, album_nome, capa_url, track_spotify_id, album_spotify_id, tocado_em, duration_ms)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               (faixa_nome, artista_nome, album_nome, capa_url, track_spotify_id, album_spotify_id,
+                artista_spotify_id, tocado_em, duration_ms)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 f["faixa_nome"], f["artista_nome"], f["album_nome"], f.get("capa_url", ""),
-                f.get("track_spotify_id", ""), f.get("album_spotify_id", ""), f["tocado_em"],
-                f.get("duration_ms", 0),
+                f.get("track_spotify_id", ""), f.get("album_spotify_id", ""),
+                f.get("artista_spotify_id", ""), f["tocado_em"], f.get("duration_ms", 0),
             ),
         )
         novas += cur.rowcount

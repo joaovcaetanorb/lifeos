@@ -5,6 +5,8 @@ independente, mas mantém a mesma identidade visual). Chamado por toda
 página logo após st.set_page_config().
 """
 
+import html
+
 import streamlit as st
 
 _CSS = """
@@ -72,6 +74,20 @@ button[title="View fullscreen"] {
     color: #3FA66B;
     letter-spacing: 0.02em;
     margin: 0.1rem 0 0.2rem 0;
+}
+
+/* card de insight (ex: observação da IA) — tarja de destaque à esquerda
+   em vez de borda inteira, pra não competir visualmente com o resto do
+   ledger que já usa hairline em tudo */
+.ledger-card {
+    border: 1px solid #2A2D23;
+    border-left: 3px solid #3FA66B;
+    background: rgba(63, 166, 107, 0.06);
+    padding: 0.8rem 1rem;
+    margin-bottom: 0.6rem;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    color: #E8E6DC;
 }
 
 /* celular: menos padding lateral, números menores */
@@ -143,6 +159,13 @@ def eyebrow(texto: str) -> None:
 
 def nota_destaque(texto: str) -> None:
     st.markdown(f'<div class="nota-destaque">{texto}</div>', unsafe_allow_html=True)
+
+
+def cartao_insight(texto: str) -> None:
+    """Cartão de observação (ex: um item do que a IA notou) — `texto` é
+    escapado antes de virar HTML, já que pode vir de fora (resposta de
+    modelo de linguagem)."""
+    st.markdown(f'<div class="ledger-card">{html.escape(texto)}</div>', unsafe_allow_html=True)
 
 
 _CHAVE_TOAST = "_toast_pendente"

@@ -236,6 +236,7 @@ def sincronizar_historico(limit: int = 50) -> int:
             "capa_url": album["images"][0]["url"] if album.get("images") else "",
             "track_spotify_id": faixa.get("id", ""),
             "album_spotify_id": album.get("id", ""),
+            "artista_spotify_id": artistas[0].get("id", "") if artistas else "",
             "tocado_em": item.get("played_at", ""),
             "duration_ms": faixa.get("duration_ms", 0),
         })

@@ -32,7 +32,17 @@ def _salvar_capa(album_id: int, arquivo) -> str:
     extensao = Path(arquivo.name).suffix
     caminho = database.UPLOADS_DIR / f"{album_id}{extensao}"
     caminho.write_bytes(arquivo.getbuffer())
-    return str(caminho.relative_to(database.DB_DIR))
+    # .as_posix() (não str()) — no Windows, str(caminho) usa barra invertida,
+    # o que quebra a leitura da capa quando o mesmo banco é lido pelo app
+    # rodando em produção (Linux), onde barra invertida não separa diretório.
+    return caminho.relative_to(database.DB_DIR).as_posix()
+
+
+def _salvar_capa_de_bytes(album_id: int, conteudo: bytes) -> str:
+    database.UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    caminho = database.UPLOADS_DIR / f"{album_id}.jpg"
+    caminho.write_bytes(conteudo)
+    return caminho.relative_to(database.DB_DIR).as_posix()
 
 
 def _resumo() -> None:
@@ -143,8 +153,54 @@ def _secao_escutas(album_id: int, spotify_id: str) -> None:
             st.rerun()
 
 
+def _secao_buscar_capa(album: dict) -> None:
+    """Busca no Spotify pra trocar só a capa do álbum, mantendo nome/ano/
+    gênero como estão — útil quando a capa salva está errada (ex: sobra de
+    arquivo de teste antigo reaproveitando o mesmo id)."""
+    album_id = int(album["id"])
+    if not spotify_client.disponivel():
+        return
+
+    with st.expander("buscar capa no Spotify"):
+        c1, c2 = st.columns([4, 1])
+        query = c1.text_input(
+            "Buscar álbum", key=f"capa_query_{album_id}", label_visibility="collapsed",
+            placeholder="Ex.: Nei Lopes Sincopando o Breque",
+        )
+        if c2.button("buscar", key=f"capa_buscar_{album_id}"):
+            st.session_state[f"capa_resultados_{album_id}"] = spotify_client.buscar_albuns(query)
+
+        erro = spotify_client.ultimo_erro()
+        if erro:
+            st.warning(erro)
+
+        resultados = st.session_state.get(f"capa_resultados_{album_id}", [])
+        for i, r in enumerate(resultados):
+            col_capa, col_info, col_btn = st.columns([1.2, 4.8, 1])
+            with col_capa:
+                if r["capa_url"]:
+                    st.image(r["capa_url"], width=90)
+            with col_info:
+                st.caption(f"{r['nome']} — {r['artista']} ({r['ano'] or '?'})")
+            with col_btn:
+                if st.button("usar essa capa", key=f"capa_usar_{album_id}_{i}"):
+                    conteudo = spotify_client.baixar_capa(r["capa_url"])
+                    if conteudo is None:
+                        st.warning("Não consegui baixar essa capa agora.")
+                    else:
+                        caminho = _salvar_capa_de_bytes(album_id, conteudo)
+                        models.atualizar_album(
+                            album_id, album["nome"], _ano_valido(album["ano_lancamento"]),
+                            album["genero"], capa_path=caminho,
+                        )
+                        st.session_state[f"capa_resultados_{album_id}"] = []
+                        ui.marcar_toast("Capa atualizada.")
+                        st.rerun()
+
+
 def _secao_editar(album: dict) -> None:
     album_id = int(album["id"])
+    _secao_buscar_capa(album)
     with st.form(f"form_editar_album_{album_id}"):
         nome = st.text_input("Álbum", value=album["nome"])
         ano = st.number_input(
