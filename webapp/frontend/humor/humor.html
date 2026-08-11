@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Humor · lifeOS</title>
+<link rel="stylesheet" href="/static/tokens.css" />
+<link rel="stylesheet" href="/static/effects.css" />
+<style>
+.slider-row{ display:flex; align-items:center; gap:.9rem; }
+input[type="range"]{ flex:1; accent-color:var(--accent); }
+.nota-badge{ font-family:var(--font-data); font-weight:700; font-size:1.05rem; min-width:3.4em; text-align:center; padding:.35rem .5rem; border-radius:2px; border:1px solid var(--hair-bright); transition:border-color .15s ease, color .15s ease; }
+
+.chip-row{ display:flex; flex-wrap:wrap; gap:.4rem; }
+.chip{ font-family:var(--font-label); font-size:.7rem; letter-spacing:.03em; text-transform:uppercase; padding:.4rem .75rem; border-radius:20px; border:1px solid var(--hair); color:var(--ink-muted); cursor:pointer; background:var(--panel); transition:all .15s ease; user-select:none; }
+.chip:hover{ border-color:var(--hair-bright); color:var(--ink); }
+.chip.selected.pos{ background:rgba(57,135,229,.16); border-color:#3987e5; color:#a9cbf2; }
+.chip.selected.neg{ background:rgba(230,103,103,.16); border-color:#e66767; color:#f0b3b3; }
+
+.registro-row{ display:flex; gap:.9rem; align-items:flex-start; padding:.8rem 0; border-bottom:1px solid var(--hair); }
+.registro-row:last-child{ border-bottom:none; }
+.registro-nota{ flex:none; width:2.5em; height:2.5em; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.82rem; color:#0b0d09; }
+.registro-main{ flex:1; min-width:0; }
+.registro-meta{ color:var(--ink-dim); font-size:.76rem; }
+.registro-tags{ display:flex; flex-wrap:wrap; gap:.3rem; margin-top:.4rem; }
+.registro-tag{ font-size:.64rem; font-family:var(--font-label); padding:.15rem .55rem; border-radius:20px; border:1px solid; text-transform:uppercase; letter-spacing:.03em; }
+.registro-livre{ color:var(--ink-muted); font-size:.82rem; margin-top:.4rem; }
+.registro-actions{ display:flex; gap:.4rem; flex:none; }
+.registro-actions button{ background:none; border:1px solid var(--hair); color:var(--ink-dim); font-size:.7rem; padding:.3rem .6rem; border-radius:2px; cursor:pointer; }
+.registro-actions button:hover{ border-color:var(--accent); color:var(--accent-bright); }
+
+.cal-dow{ text-align:center; font-family:var(--font-label); font-size:.62rem; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim); padding-bottom:.3rem; }
+.cal-day{ height:52px; border:1px solid var(--hair); border-radius:2px; display:flex; align-items:flex-start; justify-content:flex-start; padding:.35rem; font-size:.8rem; font-variant-numeric:tabular-nums; cursor:pointer; position:relative; color:var(--ink); transition:border-color .15s ease, filter .1s ease; box-sizing:border-box; }
+.cal-day:hover{ border-color:var(--ink); filter:brightness(1.15); }
+.cal-day.hoje{ border-color:#fff; border-width:2px; font-weight:700; }
+.cal-day.vazio{ border:none; cursor:default; height:52px; }
+.cal-day.vazio:hover{ filter:none; }
+@media (max-width:640px){ .cal-day, .cal-day.vazio{ height:38px; font-size:.7rem; } }
+.dia-registro-row{ display:flex; align-items:center; gap:.6rem; padding:.55rem .7rem; border:1px solid var(--hair); border-radius:2px; font-size:.86rem; cursor:pointer; transition:border-color .15s ease; }
+.dia-registro-row:hover{ border-color:var(--accent); }
+.dia-registro-row .badge{ flex:none; width:1.9em; height:1.9em; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.72rem; color:#0b0d09; }
+.dia-registro-row .grow{ flex:1; min-width:0; }
+.dia-registro-row .grow small{ color:var(--ink-dim); }
+
+.legenda-cor{ display:flex; align-items:center; gap:.5rem; font-size:.76rem; color:var(--ink-muted); margin-top:.5rem; }
+.legenda-barra{ width:80px; height:8px; border-radius:4px; background:linear-gradient(90deg, #e66767, #383835, #3987e5); }
+
+.modal-overlay{ position:fixed; inset:0; z-index:70; display:flex; align-items:center; justify-content:center; padding:1.2rem;
+  background:rgba(5,6,4,.6); backdrop-filter:blur(4px); opacity:0; pointer-events:none; transition:opacity .2s ease; }
+.modal-overlay.open{ opacity:1; pointer-events:auto; }
+.modal-box{ background:var(--panel); border:1px solid var(--hair-bright); border-radius:var(--radius); padding:1.3rem 1.4rem 1.5rem;
+  width:min(460px, 100%); max-height:88vh; overflow-y:auto; box-shadow:0 24px 60px -20px rgba(0,0,0,.8); transform:scale(.96) translateY(10px); transition:transform .2s cubic-bezier(.16,.8,.3,1); }
+.modal-overlay.open .modal-box{ transform:scale(1) translateY(0); }
+.modal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
+.modal-head h3{ margin:0; font-size:1rem; font-weight:700; }
+.modal-close{ background:none; border:1px solid var(--hair); color:var(--ink-muted); width:26px; height:26px; border-radius:2px; cursor:pointer; line-height:1; }
+.modal-close:hover{ border-color:var(--accent); color:var(--accent-bright); }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div><div class="vignette"></div><div class="grain"></div><div class="glow-blob" id="glowBlob"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="id"><span class="led-dot"></span> LIFEOS · MÓDULO HUMOR</div>
+    <div class="id"><span class="clock" id="clock">--:--:--</span></div>
+  </div>
+
+  <div class="hero boot-flicker">
+    <div class="eyebrow">diário de humor — dados reais</div>
+    <h1 class="title">$ humor<span class="cursor"></span></h1>
+    <p id="resumoTxt">Carregando…</p>
+  </div>
+
+  <section class="module" data-reveal>
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">novo registro</div><h3>Como você está agora?</h3></div></div>
+    <div class="field-row">
+      <div class="field"><label>Data</label><input type="date" id="frData" /></div>
+      <div class="field"><label>Hora</label><input type="text" id="frHora" placeholder="HH:MM" /></div>
+    </div>
+    <div class="field" style="margin-top:.9rem;">
+      <label>Nota</label>
+      <div class="slider-row">
+        <input type="range" id="frNota" min="1" max="10" value="6" />
+        <div class="nota-badge" id="frNotaBadge">6/10</div>
+      </div>
+    </div>
+    <div class="field" style="margin-top:.9rem;">
+      <label>Tags</label>
+      <div class="chip-row" id="frTags"></div>
+    </div>
+    <div class="field" style="margin-top:.9rem;">
+      <label>Nota livre (opcional)</label>
+      <textarea id="frLivre" placeholder="O que aconteceu, se quiser registrar..."></textarea>
+    </div>
+    <div class="btn-row"><button class="btn btn-primary" id="btnRegistrar">registrar</button></div>
+  </section>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">consistência</div><h3 id="calMesTitulo">mês</h3></div>
+      <div class="btn-row" style="margin:0;">
+        <button class="btn" id="calMesAnterior" style="padding:.4rem .7rem;">‹</button>
+        <button class="btn" id="calMesProximo" style="padding:.4rem .7rem;">›</button>
+      </div>
+    </div>
+    <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;"></div>
+    <div class="legenda-cor"><span>nota baixa</span><span class="legenda-barra"></span><span>nota alta</span></div>
+    <p class="empty-state" style="padding-top:.4rem;">clica num dia pra ver (e editar) os registros dele</p>
+  </section>
+
+  <div class="pills" id="periodoPills" style="margin:1rem 0;">
+    <button class="pill" data-val="mes">este mês</button>
+    <button class="pill active" data-val="ano">este ano</button>
+    <button class="pill" data-val="tudo">todos os tempos</button>
+    <button class="pill" data-val="personalizado">personalizado</button>
+  </div>
+  <div class="field-row" id="periodoPersonalizado" style="display:none;max-width:420px;margin:-.4rem 0 1rem;">
+    <div class="field"><label>De</label><input type="date" id="dataDe" /></div>
+    <div class="field"><label>Até</label><input type="date" id="dataAte" /></div>
+  </div>
+
+  <div class="modules">
+    <section class="module" data-reveal>
+      <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">análises</div><h3>Humor por horário do dia</h3></div></div>
+      <div class="chart-wrap" id="chart-hora"><svg id="svg-hora" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-hora"></div></div>
+      <p class="empty-state" style="padding:.4rem 0 0;">vermelho = nota baixa · azul = nota alta</p>
+    </section>
+    <section class="module" data-reveal>
+      <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">análises</div><h3>Tags mais frequentes</h3></div></div>
+      <div class="chart-wrap" id="chart-tags"><svg id="svg-tags" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-tags"></div></div>
+      <p class="empty-state" style="padding:.4rem 0 0;">azul = sentimento positivo · vermelho = negativo</p>
+    </section>
+  </div>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">histórico</div><h3>Registros</h3></div></div>
+    <div id="historicoLista"><p class="empty-state">Carregando…</p></div>
+  </section>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">fechamento</div><h3>Relatório em PDF</h3></div></div>
+    <p style="color:var(--ink-muted);font-size:.86rem;margin:0 0 .8rem;">Resumo do período, calendário de humor, tags mais frequentes, histórico e a nota final.</p>
+    <div class="field" style="max-width:220px;"><label>Período</label>
+      <select id="selDiasRelatorio"><option value="7">últimos 7 dias</option><option value="30" selected>últimos 30 dias</option><option value="90">últimos 90 dias</option></select>
+    </div>
+    <div class="btn-row"><button class="btn btn-primary" id="btnRelatorio">gerar e baixar relatório</button></div>
+  </section>
+
+  <footer><span>backend FastAPI próprio · escreve no banco de verdade</span><span id="genTime"></span></footer>
+</div>
+
+<div class="modal-overlay" id="modalRegistro">
+  <div class="modal-box">
+    <div class="modal-head"><h3 id="modalRegistroTitulo">editar registro</h3><button type="button" class="modal-close" id="modalRegistroFechar">×</button></div>
+    <div class="field-row">
+      <div class="field"><label>Data</label><input type="date" id="mrData" /></div>
+      <div class="field"><label>Hora</label><input type="text" id="mrHora" placeholder="HH:MM" /></div>
+    </div>
+    <div class="field" style="margin-top:.9rem;">
+      <label>Nota</label>
+      <div class="slider-row">
+        <input type="range" id="mrNota" min="1" max="10" value="6" />
+        <div class="nota-badge" id="mrNotaBadge">6/10</div>
+      </div>
+    </div>
+    <div class="field" style="margin-top:.9rem;">
+      <label>Tags</label>
+      <div class="chip-row" id="mrTags"></div>
+    </div>
+    <div class="field" style="margin-top:.9rem;">
+      <label>Nota livre</label>
+      <textarea id="mrLivre"></textarea>
+    </div>
+    <div class="btn-row">
+      <button type="button" class="btn btn-primary" id="btnSalvarRegistro">salvar</button>
+      <button type="button" class="btn" id="btnCancelarRegistro">cancelar</button>
+    </div>
+    <div style="margin-top:1rem;padding-top:1rem;border-top:1px dashed var(--hair);">
+      <button type="button" class="btn btn-danger" id="btnExcluirRegistro" style="width:100%;">excluir registro</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalDia">
+  <div class="modal-box">
+    <div class="modal-head"><h3 id="modalDiaTitulo">dia</h3><button type="button" class="modal-close" id="modalDiaFechar">×</button></div>
+    <div id="modalDiaLista" style="display:flex;flex-direction:column;gap:.5rem;"></div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+(function(){
+"use strict";
+const L = LifeOS;
+const reduced = L.reduced;
+
+const TAGS_POSITIVAS = new Set(["Animado","Grato","Motivado","Calmo","Realizado","Confiante","Focado"]);
+let TAGS_HUMOR = [];
+
+function corNota(nota) {
+  const NEG = [0xe6,0x67,0x67], NEU = [0x38,0x38,0x35], POS = [0x39,0x87,0xe5];
+  const t = Math.min(Math.max((nota - 1) / 9, 0), 1);
+  let a, b, tt;
+  if (t <= 0.5) { a = NEG; b = NEU; tt = t / 0.5; } else { a = NEU; b = POS; tt = (t - 0.5) / 0.5; }
+  const c = a.map((v, i) => Math.round(v + (b[i] - v) * tt));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+function corTag(tag) { return TAGS_POSITIVAS.has(tag) ? '#3987e5' : '#e66767'; }
+
+/* ---------------- chips de tags (form + modal) ---------------- */
+function montarChips(containerId, selecionadas) {
+  const wrap = document.getElementById(containerId);
+  const sel = new Set(selecionadas || []);
+  wrap.innerHTML = TAGS_HUMOR.map(t => {
+    const cls = TAGS_POSITIVAS.has(t) ? 'pos' : 'neg';
+    return `<button type="button" class="chip ${cls} ${sel.has(t) ? 'selected' : ''}" data-tag="${t}">${t}</button>`;
+  }).join('');
+  wrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => chip.classList.toggle('selected'));
+  });
+}
+function chipsSelecionadas(containerId) {
+  return [...document.querySelectorAll(`#${containerId} .chip.selected`)].map(c => c.dataset.tag);
+}
+
+async function carregarTags() {
+  const r = await L.api('/api/humor/tags');
+  TAGS_HUMOR = r.tags;
+  montarChips('frTags', []);
+  montarChips('mrTags', []);
+}
+
+/* ---------------- resumo ---------------- */
+async function carregarResumo() {
+  const r = await L.api('/api/humor/resumo');
+  document.getElementById('resumoTxt').textContent = r.total_registros
+    ? `${r.total_registros} registro(s) · nota média geral ${r.nota_media_geral.toFixed(1)} · últimos 7 dias ${r.nota_media_7d != null ? r.nota_media_7d.toFixed(1) : '—'}`
+    : 'Nenhum registro ainda — registra o primeiro acima.';
+}
+
+/* ---------------- novo registro ---------------- */
+function atualizarBadgeNota(inputId, badgeId) {
+  const v = +document.getElementById(inputId).value;
+  const badge = document.getElementById(badgeId);
+  badge.textContent = `${v}/10`;
+  badge.style.borderColor = corNota(v);
+  badge.style.color = corNota(v);
+}
+document.getElementById('frNota').addEventListener('input', () => atualizarBadgeNota('frNota', 'frNotaBadge'));
+document.getElementById('mrNota').addEventListener('input', () => atualizarBadgeNota('mrNota', 'mrNotaBadge'));
+
+document.getElementById('frData').value = new Date().toISOString().slice(0, 10);
+document.getElementById('frHora').value = new Date().toTimeString().slice(0, 5);
+
+document.getElementById('btnRegistrar').addEventListener('click', async () => {
+  const btn = document.getElementById('btnRegistrar');
+  const body = {
+    data: document.getElementById('frData').value,
+    hora: document.getElementById('frHora').value.trim(),
+    nota: +document.getElementById('frNota').value,
+    tags: chipsSelecionadas('frTags'),
+    nota_livre: document.getElementById('frLivre').value.trim(),
+  };
+  if (!body.data) { L.toast('Informe a data.', true); return; }
+  btn.disabled = true;
+  try {
+    await L.api('/api/humor/registros', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    L.toast('Registro salvo.');
+    document.getElementById('frLivre').value = '';
+    montarChips('frTags', []);
+    document.getElementById('frNota').value = 6;
+    atualizarBadgeNota('frNota', 'frNotaBadge');
+    carregarResumo(); carregarCalendarioMes(); carregarHistorico(); carregarAnalises();
+  } catch (e) { L.toast(e.message, true); } finally { btn.disabled = false; }
+});
+
+/* ---------------- modal de edição ---------------- */
+let modalRegistroId = null;
+function abrirModalRegistro(r) {
+  modalRegistroId = r.id;
+  document.getElementById('modalRegistroTitulo').textContent = `registro de ${r.data.split('-').reverse().join('/')}`;
+  document.getElementById('mrData').value = r.data;
+  document.getElementById('mrHora').value = r.hora || '';
+  document.getElementById('mrNota').value = r.nota;
+  atualizarBadgeNota('mrNota', 'mrNotaBadge');
+  montarChips('mrTags', r.tags || []);
+  document.getElementById('mrLivre').value = r.nota_livre || '';
+  document.getElementById('modalRegistro').classList.add('open');
+}
+function fecharModalRegistro() { document.getElementById('modalRegistro').classList.remove('open'); modalRegistroId = null; }
+document.getElementById('modalRegistroFechar').addEventListener('click', fecharModalRegistro);
+document.getElementById('btnCancelarRegistro').addEventListener('click', fecharModalRegistro);
+document.getElementById('modalRegistro').addEventListener('click', e => { if (e.target.id === 'modalRegistro') fecharModalRegistro(); });
+
+document.getElementById('btnSalvarRegistro').addEventListener('click', async () => {
+  if (!modalRegistroId) return;
+  const body = {
+    data: document.getElementById('mrData').value,
+    hora: document.getElementById('mrHora').value.trim(),
+    nota: +document.getElementById('mrNota').value,
+    tags: chipsSelecionadas('mrTags'),
+    nota_livre: document.getElementById('mrLivre').value.trim(),
+  };
+  try {
+    await L.api(`/api/humor/registros/${modalRegistroId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    L.toast('Registro atualizado.');
+    fecharModalRegistro();
+    carregarResumo(); carregarCalendarioMes(); carregarHistorico(); carregarAnalises();
+  } catch (e) { L.toast(e.message, true); }
+});
+document.getElementById('btnExcluirRegistro').addEventListener('click', async () => {
+  if (!modalRegistroId || !confirm('Excluir esse registro?')) return;
+  await L.api(`/api/humor/registros/${modalRegistroId}`, { method: 'DELETE' });
+  L.toast('Registro excluído.', false);
+  fecharModalRegistro();
+  fecharModalDia();
+  carregarResumo(); carregarCalendarioMes(); carregarHistorico(); carregarAnalises();
+});
+
+/* ---------------- histórico ---------------- */
+async function carregarHistorico() {
+  const lista = document.getElementById('historicoLista');
+  const registros = await L.api('/api/humor/registros?limite=30');
+  if (!registros.length) { lista.innerHTML = '<p class="empty-state">Nenhum registro ainda.</p>'; return; }
+  lista.innerHTML = registros.map(r => `
+    <div class="registro-row" data-id="${r.id}">
+      <div class="registro-nota" style="background:${corNota(r.nota)};">${r.nota}</div>
+      <div class="registro-main">
+        <div class="registro-meta">${r.data.split('-').reverse().join('/')} ${r.hora || ''}</div>
+        <div class="registro-tags">${r.tags.map(t => `<span class="registro-tag" style="border-color:${corTag(t)};color:${corTag(t)};">${t}</span>`).join('') || ''}</div>
+        ${r.nota_livre ? `<div class="registro-livre">${r.nota_livre}</div>` : ''}
+      </div>
+      <div class="registro-actions"><button data-action="editar">editar</button></div>
+    </div>
+  `).join('');
+  lista.querySelectorAll('.registro-row').forEach(row => {
+    const r = registros.find(x => x.id == row.dataset.id);
+    row.querySelector('[data-action="editar"]').addEventListener('click', () => abrirModalRegistro(r));
+  });
+}
+
+/* ---------------- calendário do mês ---------------- */
+const NOMES_MES_LONGO = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const DOW_LABELS = ['dom','seg','ter','qua','qui','sex','sáb'];
+const hoje0 = new Date();
+let calState = { ano: hoje0.getFullYear(), mes: hoje0.getMonth() };
+let registrosMesCache = [];
+
+async function carregarCalendarioMes() {
+  const primeiro = new Date(calState.ano, calState.mes, 1);
+  const ultimo = new Date(calState.ano, calState.mes + 1, 0);
+  const inicio = primeiro.toISOString().slice(0, 10);
+  const fim = ultimo.toISOString().slice(0, 10);
+  registrosMesCache = await L.api(`/api/humor/registros?inicio=${inicio}&fim=${fim}&limite=0`);
+  renderCalendarioMes();
+}
+
+function renderCalendarioMes() {
+  const grid = document.getElementById('calGrid');
+  document.getElementById('calMesTitulo').textContent = `${NOMES_MES_LONGO[calState.mes]} ${calState.ano}`;
+
+  const porData = {};
+  registrosMesCache.forEach(r => { (porData[r.data] = porData[r.data] || []).push(r); });
+
+  const primeiroDoMes = new Date(calState.ano, calState.mes, 1);
+  const ultimoDoMes = new Date(calState.ano, calState.mes + 1, 0);
+  const offset = primeiroDoMes.getDay();
+  const hojeIso = new Date().toISOString().slice(0, 10);
+
+  let html = DOW_LABELS.map(l => `<div class="cal-dow">${l}</div>`).join('');
+  for (let i = 0; i < offset; i++) html += `<div class="cal-day vazio"></div>`;
+  for (let dia = 1; dia <= ultimoDoMes.getDate(); dia++) {
+    const iso = `${calState.ano}-${String(calState.mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+    const regs = porData[iso];
+    const bg = regs ? corNota(regs.reduce((s, r) => s + r.nota, 0) / regs.length) : 'transparent';
+    const cor = regs ? '#0b0d09' : 'var(--ink)';
+    html += `<div class="cal-day ${iso === hojeIso ? 'hoje' : ''}" data-data="${iso}" style="background:${bg};color:${cor};">${dia}</div>`;
+  }
+  grid.innerHTML = html;
+  grid.querySelectorAll('.cal-day[data-data]').forEach(el => {
+    el.addEventListener('click', () => abrirModalDia(el.dataset.data));
+  });
+}
+
+document.getElementById('calMesAnterior').addEventListener('click', () => {
+  calState.mes -= 1;
+  if (calState.mes < 0) { calState.mes = 11; calState.ano -= 1; }
+  carregarCalendarioMes();
+});
+document.getElementById('calMesProximo').addEventListener('click', () => {
+  calState.mes += 1;
+  if (calState.mes > 11) { calState.mes = 0; calState.ano += 1; }
+  carregarCalendarioMes();
+});
+
+/* ---------------- modal de detalhe do dia ---------------- */
+function abrirModalDia(dataIso) {
+  const [a, m, d] = dataIso.split('-');
+  document.getElementById('modalDiaTitulo').textContent = `${d}/${m}/${a}`;
+  const regs = registrosMesCache.filter(r => r.data === dataIso).sort((x, y) => (x.hora || '').localeCompare(y.hora || ''));
+  const lista = document.getElementById('modalDiaLista');
+  if (!regs.length) {
+    lista.innerHTML = '<p class="empty-state">Nenhum registro nesse dia.</p>';
+  } else {
+    lista.innerHTML = regs.map(r => `
+      <div class="dia-registro-row" data-id="${r.id}">
+        <span class="badge" style="background:${corNota(r.nota)};">${r.nota}</span>
+        <div class="grow">${r.hora || '—'} <small>${(r.tags || []).join(', ') || 'sem tags'}</small></div>
+      </div>
+    `).join('');
+    lista.querySelectorAll('.dia-registro-row').forEach(row => {
+      const r = regs.find(x => x.id == row.dataset.id);
+      row.addEventListener('click', () => { fecharModalDia(); abrirModalRegistro(r); });
+    });
+  }
+  document.getElementById('modalDia').classList.add('open');
+}
+function fecharModalDia() { document.getElementById('modalDia').classList.remove('open'); }
+document.getElementById('modalDiaFechar').addEventListener('click', fecharModalDia);
+document.getElementById('modalDia').addEventListener('click', e => { if (e.target.id === 'modalDia') fecharModalDia(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { fecharModalRegistro(); fecharModalDia(); } });
+
+/* ---------------- análises: período + gráficos ---------------- */
+let state = { periodo: 'ano' };
+
+function periodoIso(periodo) {
+  const hoje = new Date();
+  const fim = hoje.toISOString().slice(0, 10);
+  if (periodo === 'personalizado') {
+    return { inicio: document.getElementById('dataDe').value, fim: document.getElementById('dataAte').value };
+  }
+  if (periodo === 'mes') {
+    const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+    return { inicio, fim };
+  }
+  if (periodo === 'ano') {
+    const inicio = new Date(hoje.getFullYear(), 0, 1).toISOString().slice(0, 10);
+    return { inicio, fim };
+  }
+  return { inicio: null, fim };
+}
+
+function renderScatterHora(svgId, ttId, registros) {
+  const svg = document.getElementById(svgId), tt = document.getElementById(ttId);
+  const W = 520, H = 260, padL = 34, padR = 16, padT = 16, padB = 26;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  if (!registros.length) { svg.innerHTML = '<text class="axis-label" x="10" y="20">Nenhum registro nesse período.</text>'; return; }
+
+  const tempos = registros.map(r => new Date(r.data + 'T00:00:00').getTime());
+  let tMin = Math.min(...tempos), tMax = Math.max(...tempos);
+  if (tMin === tMax) { tMin -= 86400000; tMax += 86400000; } else { const m = (tMax - tMin) * 0.06; tMin -= m; tMax += m; }
+  const x = t => padL + innerW * (t - tMin) / (tMax - tMin);
+  const y = h => padT + innerH * h / 24;
+
+  const yTicks = [0, 6, 12, 18, 24];
+  let html = yTicks.map(v => `<line class="grid-line" x1="${padL}" y1="${y(v).toFixed(1)}" x2="${W - padR}" y2="${y(v).toFixed(1)}"/><text class="axis-label" x="${padL - 6}" y="${(y(v)+3).toFixed(1)}" text-anchor="end">${String(v).padStart(2,'0')}h</text>`).join('');
+
+  const dMin = new Date(tMin), dMax = new Date(tMax);
+  html += `<text class="axis-label" x="${padL}" y="${H-6}">${dMin.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</text>`;
+  html += `<text class="axis-label" x="${W-padR}" y="${H-6}" text-anchor="end">${dMax.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</text>`;
+
+  html += registros.map((r, i) => {
+    const cx = x(new Date(r.data + 'T00:00:00').getTime()).toFixed(1);
+    const cy = y(r.hora_decimal).toFixed(1);
+    return `<circle class="pt" data-i="${i}" cx="${cx}" cy="${cy}" r="0" fill="${r.cor}" stroke="var(--panel)" stroke-width="1.5"/>`;
+  }).join('');
+  svg.innerHTML = html;
+
+  const pts = svg.querySelectorAll('.pt');
+  if (!reduced) pts.forEach((p, i) => { p.style.transition = `r .4s cubic-bezier(.16,.8,.3,1) ${i * 15}ms`; requestAnimationFrame(() => p.setAttribute('r', 5)); });
+  else pts.forEach(p => p.setAttribute('r', 5));
+  pts.forEach(p => {
+    p.addEventListener('mousemove', e => {
+      const i = +p.dataset.i, r = registros[i];
+      const rect = svg.closest('.chart-wrap').getBoundingClientRect();
+      const hh = String(Math.floor(r.hora_decimal)).padStart(2, '0'), mm = String(Math.round((r.hora_decimal % 1) * 60)).padStart(2, '0');
+      L.showTT(tt, e.clientX - rect.left, e.clientY - rect.top, `<b>${r.data.split('-').reverse().join('/')} ${hh}:${mm}</b><br>${r.nota}/10${r.tags.length ? ' · ' + r.tags.join(', ') : ''}`);
+    });
+    p.addEventListener('mouseleave', () => L.hideTT(tt));
+  });
+}
+
+function renderLollipopTags(svgId, ttId, items) {
+  const svg = document.getElementById(svgId), tt = document.getElementById(ttId);
+  const W = 520, rowH = 30, labelW = 120, padR = 50;
+  const H = rowH * Math.max(items.length, 1) + 10;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  if (!items.length) { svg.innerHTML = '<text class="axis-label" x="10" y="20">Nenhuma tag registrada nesse período.</text>'; return; }
+  const max = Math.max(...items.map(d => d.total));
+  const innerW = W - labelW - padR;
+  svg.innerHTML = items.map((d, i) => {
+    const cy = rowH * i + rowH / 2 + 4;
+    const full = (innerW * d.total) / max;
+    return `
+      <text x="${labelW - 10}" y="${cy + 4}" text-anchor="end" class="axis-label" fill="var(--ink-muted)">${d.tag}</text>
+      <line class="lolli-line" x1="${labelW}" y1="${cy}" x2="${labelW}" y2="${cy}" data-full="${(labelW + full).toFixed(1)}" stroke="${d.cor}" stroke-width="6" stroke-linecap="round"/>
+      <text x="${(labelW + full + 10).toFixed(1)}" y="${cy + 4}" class="value-label">${d.total}</text>
+      <rect class="hit" data-i="${i}" x="0" y="${rowH * i}" width="${W}" height="${rowH}"/>
+    `;
+  }).join('');
+  const lines = svg.querySelectorAll('.lolli-line');
+  if (!reduced) lines.forEach((l, i) => { l.style.transition = `all .6s cubic-bezier(.16,.8,.3,1) ${i * 60}ms`; requestAnimationFrame(() => l.setAttribute('x2', l.dataset.full)); });
+  else lines.forEach(l => l.setAttribute('x2', l.dataset.full));
+  svg.querySelectorAll('.hit').forEach(r => {
+    r.addEventListener('mousemove', e => {
+      const i = +r.dataset.i;
+      const rect = svg.closest('.chart-wrap').getBoundingClientRect();
+      L.showTT(tt, e.clientX - rect.left, e.clientY - rect.top, `<b>${items[i].tag}</b><br>${items[i].total}x`);
+    });
+    r.addEventListener('mouseleave', () => L.hideTT(tt));
+  });
+}
+
+async function carregarAnalises() {
+  const { inicio, fim } = periodoIso(state.periodo);
+  const q = inicio ? `?inicio=${inicio}&fim=${fim}` : '';
+  const [hora, tags] = await Promise.all([
+    L.api(`/api/humor/estatisticas/hora-dia${q}`),
+    L.api(`/api/humor/estatisticas/tags${q}`),
+  ]);
+  renderScatterHora('svg-hora', 'tt-hora', hora.registros);
+  renderLollipopTags('svg-tags', 'tt-tags', tags.tags);
+}
+
+L.initPills('periodoPills', val => {
+  state.periodo = val;
+  document.getElementById('periodoPersonalizado').style.display = val === 'personalizado' ? 'grid' : 'none';
+  if (val !== 'personalizado' || (document.getElementById('dataDe').value && document.getElementById('dataAte').value)) carregarAnalises();
+});
+['dataDe', 'dataAte'].forEach(id => document.getElementById(id).addEventListener('change', () => {
+  if (state.periodo === 'personalizado' && document.getElementById('dataDe').value && document.getElementById('dataAte').value) carregarAnalises();
+}));
+
+/* ---------------- relatório PDF ---------------- */
+document.getElementById('btnRelatorio').addEventListener('click', async () => {
+  const btn = document.getElementById('btnRelatorio');
+  const dias = parseInt(document.getElementById('selDiasRelatorio').value, 10);
+  btn.disabled = true; btn.textContent = 'gerando...';
+  try {
+    const res = await fetch('/api/humor/relatorio-pdf', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dias }),
+    });
+    if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || `erro ${res.status}`); }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `relatorio_humor_${dias}d.pdf`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    L.toast('Relatório gerado e baixado.');
+  } catch (e) {
+    L.toast(`Não consegui gerar o relatório: ${e.message}`, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'gerar e baixar relatório';
+  }
+});
+
+L.initReveal();
+L.initClock();
+L.initGlow();
+L.initModuleSwitcher('humor');
+document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
+
+(async function boot() {
+  await carregarTags();
+  carregarResumo();
+  carregarCalendarioMes();
+  carregarHistorico();
+  carregarAnalises();
+})();
+})();
+</script>
+</body>
+</html>

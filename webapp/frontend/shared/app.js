@@ -98,7 +98,7 @@ const LifeOS = (() => {
     { key: 'livros', label: 'Livros', href: '/livros/estante.html' },
     { key: 'habitos', label: 'Hábitos', href: '/habitos/habitos.html' },
     { key: 'projetos', label: 'Projetos' },
-    { key: 'humor', label: 'Humor' },
+    { key: 'humor', label: 'Humor', href: '/humor/humor.html' },
     { key: 'dashboard_geral', label: 'Dashboard Geral' },
     { key: 'analytics', label: 'Analytics' },
     { key: 'financeiro', label: 'Financeiro' },

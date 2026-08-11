@@ -22,6 +22,8 @@ class Settings:
     turso_livros_token: str | None = os.environ.get("TURSO_LIVROS_TOKEN") or None
     turso_habitos_url: str | None = os.environ.get("TURSO_HABITOS_URL") or None
     turso_habitos_token: str | None = os.environ.get("TURSO_HABITOS_TOKEN") or None
+    turso_humor_url: str | None = os.environ.get("TURSO_HUMOR_URL") or None
+    turso_humor_token: str | None = os.environ.get("TURSO_HUMOR_TOKEN") or None
     spotify_client_id: str | None = os.environ.get("SPOTIFY_CLIENT_ID") or None
     spotify_client_secret: str | None = os.environ.get("SPOTIFY_CLIENT_SECRET") or None
     spotify_redirect_uri: str | None = os.environ.get("SPOTIFY_REDIRECT_URI") or None

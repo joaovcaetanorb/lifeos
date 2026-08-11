@@ -22,6 +22,8 @@ from fastapi.staticfiles import StaticFiles
 
 from habitos.db import inicializar_banco as inicializar_banco_habitos
 from habitos.router import router as habitos_router
+from humor.db import inicializar_banco as inicializar_banco_humor
+from humor.router import router as humor_router
 from livros.db import UPLOADS_DIR as LIVROS_UPLOADS_DIR
 from livros.db import inicializar_banco as inicializar_banco_livros
 from livros.router import router as livros_router
@@ -40,6 +42,7 @@ LIVROS_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 (_FRONTEND_DIR / "musica").mkdir(parents=True, exist_ok=True)
 (_FRONTEND_DIR / "livros").mkdir(parents=True, exist_ok=True)
 (_FRONTEND_DIR / "habitos").mkdir(parents=True, exist_ok=True)
+(_FRONTEND_DIR / "humor").mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="LifeOS — fora do Streamlit")
 
@@ -54,6 +57,7 @@ def _startup() -> None:
         ("música", inicializar_banco_musica),
         ("livros", inicializar_banco_livros),
         ("hábitos", inicializar_banco_habitos),
+        ("humor", inicializar_banco_humor),
     )
     for nome, fn in modulos:
         try:
@@ -67,6 +71,7 @@ app.include_router(musica_spotify_router)
 app.include_router(musica_export_router)
 app.include_router(livros_router)
 app.include_router(habitos_router)
+app.include_router(humor_router)
 
 app.mount("/static/musica-covers", StaticFiles(directory=str(MUSICA_UPLOADS_DIR)), name="musica-covers")
 app.mount("/static/livros-covers", StaticFiles(directory=str(LIVROS_UPLOADS_DIR)), name="livros-covers")
@@ -74,6 +79,7 @@ app.mount("/static", StaticFiles(directory=str(_FRONTEND_DIR / "shared")), name=
 app.mount("/musica", StaticFiles(directory=str(_FRONTEND_DIR / "musica"), html=True), name="musica-frontend")
 app.mount("/livros", StaticFiles(directory=str(_FRONTEND_DIR / "livros"), html=True), name="livros-frontend")
 app.mount("/habitos", StaticFiles(directory=str(_FRONTEND_DIR / "habitos"), html=True), name="habitos-frontend")
+app.mount("/humor", StaticFiles(directory=str(_FRONTEND_DIR / "humor"), html=True), name="humor-frontend")
 
 
 @app.get("/", response_class=HTMLResponse)

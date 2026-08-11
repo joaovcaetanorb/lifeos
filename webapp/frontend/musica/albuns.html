@@ -40,18 +40,17 @@
 @media (prefers-reduced-motion: no-preference){ .modal-box{ transition:transform .2s cubic-bezier(.16,.8,.3,1), opacity .2s ease; } }
 
 .modal-box.wide{ width:min(560px, 100%); }
-.carrossel{ display:flex; gap:.8rem; overflow-x:auto; scroll-snap-type:x mandatory; padding-bottom:.6rem; margin:0 -.2rem; }
-.carrossel::-webkit-scrollbar{ height:8px; }
-.carrossel-slide{ scroll-snap-align:start; flex:0 0 auto; width:240px; background:var(--panel-raised); border:1px solid var(--hair); border-radius:2px; padding:.9rem; display:flex; flex-direction:column; gap:.5rem; }
-.carrossel-slide .cs-data{ font-family:var(--font-label); font-size:.68rem; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-muted); }
-.carrossel-slide .cs-nota{ color:var(--accent-bright); font-weight:700; font-size:1.1rem; }
-.carrossel-slide .cs-faixa{ font-size:.76rem; color:var(--ink-muted); }
-.carrossel-slide .cs-review{ font-size:.82rem; color:var(--ink); line-height:1.45; flex:1; overflow-y:auto; max-height:120px; }
-.carrossel-slide .cs-actions{ display:flex; gap:.4rem; margin-top:.3rem; }
-.carrossel-slide .cs-actions button{ flex:1; background:none; border:1px solid var(--hair); color:var(--ink-dim); font-size:.66rem; padding:.28rem; border-radius:2px; cursor:pointer; }
-.carrossel-slide .cs-actions button:hover{ border-color:var(--accent); color:var(--accent-bright); }
-.carrossel-add{ scroll-snap-align:start; flex:0 0 auto; width:240px; border:1px dashed var(--hair-bright); border-radius:2px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink-muted); font-size:1.6rem; min-height:120px; }
-.carrossel-add:hover{ border-color:var(--accent); color:var(--accent-bright); }
+.revisoes{ display:flex; flex-direction:column; gap:.8rem; max-height:min(70vh, 620px); overflow-y:auto; padding-right:.2rem; }
+.revisao-item{ background:var(--panel-raised); border:1px solid var(--hair); border-radius:2px; padding:1rem 1.1rem; display:flex; flex-direction:column; gap:.5rem; }
+.revisao-item .cs-data{ font-family:var(--font-label); font-size:.68rem; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-muted); }
+.revisao-item .cs-nota{ color:var(--accent-bright); font-weight:700; font-size:1.15rem; }
+.revisao-item .cs-faixa{ font-size:.8rem; color:var(--ink-muted); }
+.revisao-item .cs-review{ font-size:.88rem; color:var(--ink); line-height:1.5; white-space:pre-wrap; }
+.revisao-item .cs-actions{ display:flex; gap:.5rem; margin-top:.2rem; }
+.revisao-item .cs-actions button{ background:none; border:1px solid var(--hair); color:var(--ink-dim); font-size:.7rem; padding:.3rem .7rem; border-radius:2px; cursor:pointer; }
+.revisao-item .cs-actions button:hover{ border-color:var(--accent); color:var(--accent-bright); }
+.revisao-add{ border:1px dashed var(--hair-bright); border-radius:2px; display:flex; align-items:center; justify-content:center; gap:.5rem; cursor:pointer; color:var(--ink-muted); font-size:.86rem; padding:1rem; }
+.revisao-add:hover{ border-color:var(--accent); color:var(--accent-bright); }
 </style>
 </head>
 <body>
@@ -124,7 +123,7 @@
 <div class="modal-overlay" id="modalEscutas">
   <div class="modal-box wide">
     <div class="modal-head"><h3 id="escutasTitulo">escutas</h3><button type="button" class="modal-close" id="modalEscutasFechar">×</button></div>
-    <div class="carrossel" id="carrosselEscutas"></div>
+    <div class="revisoes" id="carrosselEscutas"></div>
   </div>
 </div>
 
@@ -346,7 +345,7 @@ function dataBr(iso) { if (!iso) return ''; const [a, m, d] = iso.split('-'); re
 
 function slideHtml(e) {
   return `
-  <div class="carrossel-slide" data-id="${e.id}">
+  <div class="revisao-item" data-id="${e.id}">
     <div class="cs-view">
       <div class="cs-data">${dataBr(e.data)}</div>
       <div class="cs-nota">${notaTexto(e.nota)}</div>
@@ -375,9 +374,10 @@ function slideHtml(e) {
 async function carregarCarrossel() {
   const wrap = document.getElementById('carrosselEscutas');
   const escutas = await L.api(`/api/musica/albuns/${escutasAlbumId}/escutas`);
-  wrap.innerHTML = escutas.map(slideHtml).join('') + `<div class="carrossel-add" id="addEscutaSlide">+</div>`;
+  const vazio = !escutas.length ? '<p class="empty-state">Ainda sem escutas registradas.</p>' : '';
+  wrap.innerHTML = vazio + escutas.map(slideHtml).join('') + `<div class="revisao-add" id="addEscutaSlide">+ ${escutas.length ? 'registrar outra escuta' : 'registrar escuta'}</div>`;
 
-  wrap.querySelectorAll('.carrossel-slide').forEach(slide => {
+  wrap.querySelectorAll('.revisao-item').forEach(slide => {
     const eid = slide.dataset.id;
     const view = slide.querySelector('.cs-view'), edit = slide.querySelector('.cs-edit');
     slide.querySelector('[data-action="editar-escuta"]').addEventListener('click', () => { view.style.display = 'none'; edit.style.display = 'flex'; edit.style.flexDirection = 'column'; edit.style.gap='0'; });
