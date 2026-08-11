@@ -9,6 +9,7 @@ from datetime import date, timedelta
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import pandas as pd
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
@@ -101,6 +102,34 @@ def _grafico_calendario_mes(ano: int, mes: int) -> Image | None:
     return _fig_para_imagem(fig, _LARGURA_GRAFICO)
 
 
+def _grafico_evolucao(dias: int, hoje: date) -> Image | None:
+    """Nota diária (oscilação dia a dia) + média móvel de 7 dias. Pontos na
+    mesma paleta divergente vermelho/azul do calendário, pra dar
+    continuidade visual entre os gráficos do relatório."""
+    df = calc.evolucao_diaria(dias - 1, hoje)
+    if df["nota"].dropna().empty:
+        return None
+
+    fig, ax = plt.subplots(figsize=(6.5, 3), facecolor=tema.BG)
+    ax.set_facecolor(tema.BG)
+    ax.tick_params(colors=tema.INK_MUTED, labelsize=8)
+    for spine in ax.spines.values():
+        spine.set_color(tema.HAIR)
+    ax.set_title("evolução do humor no período", fontsize=10, color=tema.INK)
+
+    ax.plot(df["data"], df["nota"], color=tema.HAIR_BRIGHT, linewidth=0.8, zorder=1)
+    validos = df.dropna(subset=["nota"])
+    cores = [utils.cor_nota(v) for v in validos["nota"]]
+    ax.scatter(validos["data"], validos["nota"], c=cores, s=14, zorder=2, edgecolors=tema.BG, linewidths=0.4)
+    ax.plot(df["data"], df["media_movel_7d"], color=tema.ACCENT_BRIGHT, linewidth=2, zorder=3, label="média móvel 7d")
+
+    ax.set_ylim(0.5, 10.5)
+    ax.set_yticks(range(1, 11, 3))
+    ax.legend(facecolor=tema.PANEL, edgecolor=tema.HAIR, labelcolor=tema.INK_MUTED, fontsize=7.5, loc="upper right", framealpha=0.9)
+    fig.autofmt_xdate(rotation=30)
+    return _fig_para_imagem(fig, _LARGURA_GRAFICO)
+
+
 def _grafico_tags(data_inicio: str, data_fim: str) -> Image | None:
     df = calc.tags_mais_frequentes(data_inicio, data_fim)
     if df.empty:
@@ -138,6 +167,15 @@ def gerar_pdf_relatorio(dias: int = 30) -> bytes:
     if resumo["total_registros"] > 0:
         story.append(tema.eyebrow("gráficos"))
         story.append(Spacer(1, 0.15 * cm))
+
+        grafico_evolucao = _grafico_evolucao(dias, hoje)
+        if grafico_evolucao is not None:
+            story.append(tema.caixa([
+                grafico_evolucao,
+                Paragraph("linha verde = média móvel de 7 dias · pontos: vermelho = nota baixa · azul = nota alta", s["muted"]),
+            ], _LARGURA_UTIL))
+            story.append(Spacer(1, 0.55 * cm))
+
         graficos = []
         for ano_mes, mes_mes in _meses_periodo(data_inicio, data_fim):
             grafico_calendario = _grafico_calendario_mes(ano_mes, mes_mes)

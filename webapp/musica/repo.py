@@ -183,7 +183,8 @@ def intervalo_datas_escutas() -> tuple[str, str] | None:
 def intervalo_datas_historico() -> tuple[str, str] | None:
     conn = get_connection()
     row = conn.execute(
-        "SELECT MIN(substr(tocado_em, 1, 10)) AS minima, MAX(substr(tocado_em, 1, 10)) AS maxima "
+        "SELECT MIN(substr(datetime(tocado_em, '-3 hours'), 1, 10)) AS minima, "
+        "MAX(substr(datetime(tocado_em, '-3 hours'), 1, 10)) AS maxima "
         "FROM spotify_historico"
     ).fetchone()
     if row is None or row[0] is None:

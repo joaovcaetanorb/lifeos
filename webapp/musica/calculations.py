@@ -162,7 +162,7 @@ def top_albuns_historico(data_inicio: str, data_fim: str, limite: int) -> pd.Dat
     if historico.empty:
         return pd.DataFrame(columns=colunas)
 
-    dia = historico["tocado_em"].str.slice(0, 10)
+    dia = _dia_brt(historico["tocado_em"])
     periodo = historico[(dia >= data_inicio) & (dia <= data_fim)]
     if periodo.empty:
         return pd.DataFrame(columns=colunas)
@@ -196,7 +196,7 @@ def _historico_periodo(data_inicio: str, data_fim: str) -> pd.DataFrame:
     historico = models.listar_historico(limit=100000)
     if historico.empty:
         return historico
-    dia = historico["tocado_em"].str.slice(0, 10)
+    dia = _dia_brt(historico["tocado_em"])
     return historico[(dia >= data_inicio) & (dia <= data_fim)]
 
 
@@ -205,6 +205,13 @@ def _horario_brt(tocado_em: pd.Series) -> pd.Series:
     zoneinfo/timezone dinâmico sem confirmar que o resultado bate."""
     utc = pd.to_datetime(tocado_em, format="ISO8601", utc=True)
     return utc - pd.Timedelta(hours=3)
+
+
+def _dia_brt(tocado_em: pd.Series) -> pd.Series:
+    """Data (YYYY-MM-DD) no fuso de Brasília — tocado_em vem em UTC direto
+    do Spotify (played_at), então fatiar a string crua faz uma escuta de
+    madrugada (ainda "ontem" em BRT) cair no dia seguinte errado."""
+    return _horario_brt(tocado_em).dt.strftime("%Y-%m-%d")
 
 
 def top_artistas_historico(data_inicio: str, data_fim: str, limite: int = 8) -> pd.DataFrame:

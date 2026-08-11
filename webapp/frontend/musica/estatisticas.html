@@ -522,6 +522,16 @@ async function carregar() {
   document.getElementById('modulesDiario').style.display = state.fonte === 'diario' ? 'grid' : 'none';
   document.getElementById('modulesSpotify').style.display = state.fonte === 'spotify' ? 'grid' : 'none';
   document.getElementById('secaoRelatorio').style.display = state.fonte === 'spotify' ? 'block' : 'none';
+  // troca de fonte (Diário/Spotify) reaproveita as mesmas 4 células de KPI —
+  // sem isso, um fetch mais lento (ou que falha) deixa o rótulo/valor da
+  // aba anterior visível embaixo do toggle já trocado (ex.: "Álbuns novos"
+  // do Diário aparecendo enquanto "Segundo o Spotify" está selecionado).
+  for (let i = 0; i < 4; i++) {
+    document.getElementById(`k${i}-label`).textContent = '···';
+    const el = document.getElementById(`k${i}-value`);
+    el.textContent = '—';
+    el.dataset.raw = 0;
+  }
   try {
     if (state.fonte === 'diario') await carregarDiario(); else await carregarSpotify();
   } catch (e) {
