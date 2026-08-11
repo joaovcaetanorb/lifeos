@@ -1,0 +1,77 @@
+/* Design tokens da identidade "ledger/terminal" do LifeOS — mesma paleta e
+   tipografia usadas no Streamlit (ver modules/*/ui.py), extraídas aqui pra
+   serem compartilhadas por todos os módulos do frontend novo (fora do
+   Streamlit). Fontes servidas como arquivo estático de verdade (não mais
+   base64 embutido — esse truque só existia por causa do CSP do preview em
+   Artifact; um servidor próprio não tem essa restrição). */
+
+@font-face { font-family:'JBM'; font-weight:400; font-style:normal; font-display:swap; src:url('/static/fonts/jbm-400.woff2') format('woff2'); }
+@font-face { font-family:'JBM'; font-weight:500; font-style:normal; font-display:swap; src:url('/static/fonts/jbm-500.woff2') format('woff2'); }
+@font-face { font-family:'JBM'; font-weight:700; font-style:normal; font-display:swap; src:url('/static/fonts/jbm-700.woff2') format('woff2'); }
+@font-face { font-family:'CP';  font-weight:400; font-style:normal; font-display:swap; src:url('/static/fonts/cp-400.ttf') format('truetype'); }
+@font-face { font-family:'CP';  font-weight:700; font-style:normal; font-display:swap; src:url('/static/fonts/cp-700.ttf') format('truetype'); }
+
+:root{
+  color-scheme: dark;
+  --bg:#0B0D09;
+  --panel:#14170F;
+  --panel-raised:#191C13;
+  --hair:#262920;
+  --hair-bright:#3a4030;
+  --ink:#E9E7DC;
+  --ink-muted:#8B8A82;
+  --ink-dim:#57564f;
+  --accent:#2E9E63;
+  --accent-bright:#4ADE94;
+  --accent-soft:rgba(46,158,99,.14);
+  --accent-glow:rgba(46,158,99,.5);
+  --neutral:#c3c2b7;
+  --danger:#C25578;
+  --font-data:'JBM', ui-monospace, 'JetBrains Mono', 'Courier New', monospace;
+  --font-label:'CP', ui-monospace, 'Courier Prime', monospace;
+  --radius:3px;
+}
+
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; background:var(--bg); color:var(--ink); }
+body{
+  font-family:var(--font-data);
+  font-size:14px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  position:relative;
+  overflow-x:hidden;
+}
+::selection{ background:var(--accent-soft); color:var(--accent-bright); }
+::-webkit-scrollbar{ width:10px; height:10px; }
+::-webkit-scrollbar-track{ background:var(--bg); }
+::-webkit-scrollbar-thumb{ background:var(--hair); }
+::-webkit-scrollbar-thumb:hover{ background:var(--accent); }
+a{ color:inherit; }
+button, input, textarea, select{ font-family:inherit; font-size:inherit; }
+:focus-visible{ outline:2px solid var(--accent-bright); outline-offset:2px; }
+
+.wrap{ max-width:1180px; margin:0 auto; padding:2.5rem 1.5rem 5rem; position:relative; z-index:1; }
+
+.eyebrow{
+  font-family:var(--font-label); text-transform:uppercase; letter-spacing:.14em; font-size:.74rem;
+  color:var(--ink-muted); margin-bottom:.35rem; display:flex; align-items:center; gap:.5rem;
+}
+h1.title{
+  font-family:var(--font-data); font-weight:700; font-size:clamp(1.7rem,4vw,2.5rem);
+  margin:0; letter-spacing:-.01em; text-wrap:balance;
+}
+h1.title .cursor{ display:inline-block; width:.5em; height:.9em; background:var(--accent); margin-left:.15em; transform:translateY(.12em); }
+@media (prefers-reduced-motion: no-preference){ h1.title .cursor{ animation:blink 1.05s steps(1) infinite; } }
+@keyframes blink{ 0%,49%{ opacity:1; } 50%,100%{ opacity:0; } }
+.hero p{ color:var(--ink-muted); max-width:58ch; margin:.6rem 0 0; }
+
+/* navegação entre páginas do módulo */
+.modnav{ display:flex; gap:.4rem; flex-wrap:wrap; margin:1.2rem 0 1.6rem; }
+.modnav a{
+  text-decoration:none; font-family:var(--font-label); font-size:.72rem; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--ink-muted); border:1px solid var(--hair); padding:.4rem .8rem; border-radius:2px;
+  transition:border-color .18s ease, color .18s ease;
+}
+.modnav a:hover{ border-color:var(--hair-bright); color:var(--ink); }
+.modnav a.active{ border-color:var(--accent); color:var(--accent-bright); background:var(--accent-soft); }

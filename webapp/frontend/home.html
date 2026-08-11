@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lifeOS — fora do Streamlit</title>
+<link rel="stylesheet" href="/static/tokens.css" />
+<link rel="stylesheet" href="/static/effects.css" />
+<style>
+.mod-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:1rem; margin-top:1.6rem; }
+.mod-card{ display:block; text-decoration:none; background:var(--panel); border:1px solid var(--hair); border-radius:var(--radius);
+  padding:1.2rem 1.3rem 1.4rem; transition:border-color .18s ease, transform .18s ease, box-shadow .18s ease; position:relative; overflow:hidden; }
+.mod-card::before{ content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--accent); opacity:0; transition:opacity .18s ease; }
+.mod-card:not(.disabled):hover{ border-color:var(--hair-bright); transform:translateY(-2px); box-shadow:0 16px 36px -18px rgba(0,0,0,.6); }
+.mod-card:not(.disabled):hover::before{ opacity:.7; }
+.mod-card.disabled{ opacity:.4; cursor:default; }
+.mod-icon{ font-size:1.6rem; }
+.mod-nome{ font-weight:700; font-size:1.05rem; margin-top:.6rem; }
+.mod-desc{ color:var(--ink-muted); font-size:.82rem; margin-top:.3rem; line-height:1.5; }
+.mod-tag{ display:inline-block; margin-top:.7rem; font-family:var(--font-label); font-size:.62rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim); border:1px solid var(--hair); padding:.15rem .45rem; border-radius:2px; }
+.mod-tag.on{ color:var(--accent-bright); border-color:var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div><div class="vignette"></div><div class="grain"></div><div class="glow-blob" id="glowBlob"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="id"><span class="led-dot"></span> LIFEOS · FORA DO STREAMLIT</div>
+    <div class="id"><span class="clock" id="clock">--:--:--</span></div>
+  </div>
+
+  <div class="hero boot-flicker">
+    <div class="eyebrow">backend próprio · frontend próprio</div>
+    <h1 class="title">$ lifeos<span class="cursor"></span></h1>
+    <p>Módulos do LifeOS sendo migrados um de cada vez pra fora do Streamlit — mesmo banco de verdade, backend FastAPI, frontend em HTML/SVG puro.</p>
+  </div>
+
+  <div class="mod-grid" id="modGrid"></div>
+
+  <footer><span>backend FastAPI próprio · sem Streamlit</span><span id="genTime"></span></footer>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+(function(){
+"use strict";
+const L = LifeOS;
+
+const MODULOS = [
+  { icone:'🎵', nome:'Música', desc:'Diário de escutas, estatísticas, Spotify, colagem e relatório Stories.', href:'/musica/estatisticas.html', pronto:true },
+  { icone:'📚', nome:'Livros', desc:'Estante, diário de leitura e estatísticas.', href:'/livros/estante.html', pronto:true },
+  { icone:'✅', nome:'Hábitos', desc:'Check-in diário, streak, calendário de cumprimento e relatório em PDF.', href:'/habitos/habitos.html', pronto:true },
+  { icone:'🎯', nome:'Projetos', desc:'Metas e projetos com orçamento e checklist.', pronto:false },
+  { icone:'🙂', nome:'Humor', desc:'Registro diário de humor.', pronto:false },
+  { icone:'🧭', nome:'Dashboard Geral', desc:'Visão consolidada de todas as áreas.', pronto:false },
+  { icone:'📈', nome:'Analytics', desc:'Tendências entre módulos.', pronto:false },
+  { icone:'💰', nome:'Financeiro', desc:'Controle financeiro pessoal — por último, é o mais complexo.', pronto:false },
+];
+
+document.getElementById('modGrid').innerHTML = MODULOS.map(m => {
+  const tag = m.pronto ? '<span class="mod-tag on">disponível</span>' : '<span class="mod-tag">em breve</span>';
+  const conteudo = `
+    <div class="mod-icon">${m.icone}</div>
+    <div class="mod-nome">${m.nome}</div>
+    <div class="mod-desc">${m.desc}</div>
+    ${tag}
+  `;
+  return m.pronto
+    ? `<a class="mod-card" href="${m.href}">${conteudo}</a>`
+    : `<div class="mod-card disabled">${conteudo}</div>`;
+}).join('');
+
+L.initReveal();
+L.initClock();
+L.initGlow();
+document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
+})();
+</script>
+</body>
+</html>

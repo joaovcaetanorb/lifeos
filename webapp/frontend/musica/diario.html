@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Diário · Música · lifeOS</title>
+<link rel="stylesheet" href="/static/tokens.css" />
+<link rel="stylesheet" href="/static/effects.css" />
+<style>
+.escuta-card{ display:flex; gap:1rem; padding:1rem 0; border-bottom:1px solid var(--hair); }
+.escuta-card:last-child{ border-bottom:none; }
+.escuta-cover{ width:84px; height:84px; flex:none; object-fit:cover; background:var(--panel-raised); border:1px solid var(--hair); }
+.escuta-body{ flex:1; min-width:0; }
+.escuta-title{ font-weight:700; }
+.escuta-sub{ color:var(--ink-muted); font-size:.82rem; margin-top:.15rem; }
+.escuta-nota{ color:var(--accent-bright); font-weight:700; margin-top:.3rem; }
+.escuta-review{ margin-top:.4rem; font-size:.86rem; color:var(--ink); }
+.escuta-actions{ margin-top:.5rem; display:flex; gap:.5rem; }
+.escuta-actions button{ background:none; border:1px solid var(--hair); color:var(--ink-dim); font-size:.7rem; padding:.25rem .55rem; border-radius:2px; cursor:pointer; }
+.escuta-actions button:hover{ border-color:var(--accent); color:var(--accent-bright); }
+.edit-panel{ margin-top:.7rem; padding-top:.7rem; border-top:1px dashed var(--hair); display:none; }
+.edit-panel.open{ display:block; }
+.novo-toggle{ display:flex; gap:.5rem; margin-bottom:.9rem; }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div><div class="vignette"></div><div class="grain"></div><div class="glow-blob" id="glowBlob"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="id"><span class="led-dot"></span> LIFEOS · MÓDULO MÚSICA</div>
+    <div class="id"><span class="clock" id="clock">--:--:--</span></div>
+  </div>
+
+  <div class="hero boot-flicker">
+    <div class="eyebrow">diário — dados reais</div>
+    <h1 class="title">$ diario<span class="cursor"></span></h1>
+    <p>Registre uma escuta nova e veja a linha do tempo de tudo que você já ouviu — grava direto no banco.</p>
+  </div>
+
+  <nav class="modnav">
+    <a href="/musica/estatisticas.html">estatísticas</a>
+    <a href="/musica/diario.html" class="active">diário</a>
+    <a href="/musica/albuns.html">álbuns</a>
+    <a href="/musica/colagem.html">colagem</a>
+    <a href="/musica/spotify.html">spotify</a>
+  </nav>
+
+  <section class="module" data-reveal>
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">nova entrada</div><h3>Registrar escuta</h3></div></div>
+
+    <div class="novo-toggle">
+      <div class="segmented" id="modoAlbumSwitch">
+        <span class="thumb"></span>
+        <button data-val="existente" class="active">Álbum existente</button>
+        <button data-val="novo">Novo álbum</button>
+      </div>
+    </div>
+
+    <form id="formEscuta">
+      <div id="blocoExistente">
+        <div class="field"><label>Álbum</label><select id="selAlbum"></select></div>
+      </div>
+      <div id="blocoNovo" style="display:none;">
+        <div class="field">
+          <label>Buscar no Spotify (preenche os campos abaixo automaticamente)</label>
+          <div style="display:flex;gap:.5rem;">
+            <input type="text" id="spotifyBusca" placeholder="nome do álbum ou artista..." style="flex:1;" />
+            <button type="button" class="btn" id="btnSpotifyBuscar">buscar</button>
+          </div>
+        </div>
+        <div id="spotifyResultados" style="display:none;margin-top:.6rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:.5rem;"></div>
+        <div id="spotifyEscolhido" style="display:none;margin-top:.6rem;padding:.6rem .8rem;border:1px solid var(--accent);background:var(--accent-soft);border-radius:2px;font-size:.82rem;display:flex;align-items:center;gap:.6rem;">
+          <img id="spotifyEscolhidoCapa" style="width:36px;height:36px;object-fit:cover;flex:none;" />
+          <span id="spotifyEscolhidoTexto" style="flex:1;"></span>
+          <button type="button" class="btn" id="btnSpotifyLimpar" style="padding:.2rem .5rem;">trocar</button>
+        </div>
+
+        <div class="field-row" style="margin-top:.8rem;">
+          <div class="field"><label>Artista *</label><input type="text" id="novoArtista" /></div>
+          <div class="field"><label>Álbum *</label><input type="text" id="novoAlbum" /></div>
+        </div>
+        <div class="field-row" style="margin-top:.8rem;">
+          <div class="field"><label>Ano de lançamento</label><input type="number" id="novoAno" min="1900" max="2100" /></div>
+          <div class="field"><label>Gênero</label><input type="text" id="novoGenero" /></div>
+        </div>
+        <div class="field" style="margin-top:.8rem;"><label>Capa manual (opcional — se buscou no Spotify acima, não precisa)</label><input type="file" id="novoCapa" accept="image/*" /></div>
+      </div>
+
+      <div class="field-row" style="margin-top:1rem;">
+        <div class="field"><label>Data</label><input type="date" id="escutaData" /></div>
+        <div class="field"><label>Nota</label>
+          <select id="escutaNota">
+            <option value="">sem nota</option>
+            <option>0.5</option><option>1</option><option>1.5</option><option>2</option><option>2.5</option>
+            <option selected>3</option><option>3.5</option><option>4</option><option>4.5</option><option>5</option>
+          </select>
+        </div>
+      </div>
+      <div class="field" style="margin-top:.8rem;">
+        <label>Faixa favorita</label>
+        <input type="text" id="escutaFaixaTexto" placeholder="digite o nome, ou escolha um álbum/busca do Spotify pra marcar da tracklist" />
+        <div id="escutaFaixaChecklist" style="display:none;flex-direction:column;gap:.4rem;max-height:260px;overflow-y:auto;margin-top:.3rem;padding:.7rem .8rem;border:1px solid var(--hair);border-radius:2px;background:var(--panel-raised);"></div>
+      </div>
+      <div class="field" style="margin-top:.8rem;"><label>Review</label><textarea id="escutaReview"></textarea></div>
+
+      <div class="btn-row"><button type="submit" class="btn btn-primary">registrar escuta</button></div>
+    </form>
+  </section>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">linha do tempo</div><h3>Tudo que você já ouviu</h3></div></div>
+    <div id="timeline"><p class="empty-state">Carregando…</p></div>
+  </section>
+
+  <footer><span>backend FastAPI próprio · escreve no banco de verdade</span><span id="genTime"></span></footer>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+(function(){
+"use strict";
+const L = LifeOS;
+let modoAlbum = 'existente';
+let albunsCache = [];
+
+function notaTexto(n){ return (n === null || n === undefined) ? 'sem nota' : `★ ${n}`; }
+function dataBr(iso){ if(!iso) return ''; const [a,m,d]=iso.split('-'); return `${d}/${m}/${a}`; }
+
+async function carregarAlbuns() {
+  albunsCache = await L.api('/api/musica/albuns');
+  const sel = document.getElementById('selAlbum');
+  sel.innerHTML = albunsCache.map(a => `<option value="${a.id}">${a.nome} — ${a.artista_nome}</option>`).join('') || '<option value="">nenhum álbum cadastrado ainda</option>';
+  if (modoAlbum === 'existente') {
+    const album = albunsCache.find(a => String(a.id) === sel.value);
+    atualizarFaixaFavorita(album ? album.spotify_id : null);
+  }
+}
+
+async function carregarTimeline() {
+  const el = document.getElementById('timeline');
+  const escutas = await L.api('/api/musica/diario');
+  if (!escutas.length) { el.innerHTML = '<p class="empty-state">Nenhuma escuta registrada ainda.</p>'; return; }
+  el.innerHTML = escutas.map(e => `
+    <div class="escuta-card" data-id="${e.id}">
+      ${e.capa_url ? `<img class="escuta-cover" src="${e.capa_url}" alt="" />` : `<div class="escuta-cover card-cover placeholder">♪</div>`}
+      <div class="escuta-body">
+        <div class="escuta-title">${e.album_nome} — ${e.artista_nome}</div>
+        <div class="escuta-sub">${dataBr(e.data)}${e.faixa_favorita ? ' · faixa favorita: ' + e.faixa_favorita : ''}</div>
+        <div class="escuta-nota">${notaTexto(e.nota)}</div>
+        ${e.review ? `<div class="escuta-review">${e.review.replace(/</g,'&lt;')}</div>` : ''}
+        <div class="escuta-actions">
+          <button data-action="editar">editar</button>
+          <button data-action="excluir">excluir</button>
+        </div>
+        <div class="edit-panel">
+          <div class="field-row">
+            <div class="field"><label>Data</label><input type="date" class="ed-data" value="${e.data}" /></div>
+            <div class="field"><label>Nota</label>
+              <select class="ed-nota">
+                <option value="" ${e.nota==null?'selected':''}>sem nota</option>
+                ${[0.5,1,1.5,2,2.5,3,3.5,4,4.5,5].map(n=>`<option value="${n}" ${e.nota===n?'selected':''}>${n}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="field" style="margin-top:.6rem;"><label>Faixa favorita</label><input type="text" class="ed-faixa" value="${(e.faixa_favorita||'').replace(/"/g,'&quot;')}" /></div>
+          <div class="field" style="margin-top:.6rem;"><label>Review</label><textarea class="ed-review">${e.review||''}</textarea></div>
+          <div class="btn-row"><button class="btn btn-primary" data-action="salvar">salvar</button></div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  el.querySelectorAll('.escuta-card').forEach(card => {
+    const id = card.dataset.id;
+    const panel = card.querySelector('.edit-panel');
+    card.querySelector('[data-action="editar"]').addEventListener('click', () => panel.classList.toggle('open'));
+    card.querySelector('[data-action="excluir"]').addEventListener('click', async () => {
+      if (!confirm('Excluir essa escuta?')) return;
+      await L.api(`/api/musica/escutas/${id}`, { method: 'DELETE' });
+      L.toast('Escuta excluída.');
+      carregarTimeline();
+    });
+    card.querySelector('[data-action="salvar"]').addEventListener('click', async () => {
+      const notaVal = panel.querySelector('.ed-nota').value;
+      await L.api(`/api/musica/escutas/${id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: panel.querySelector('.ed-data').value,
+          nota: notaVal === '' ? null : parseFloat(notaVal),
+          faixa_favorita: panel.querySelector('.ed-faixa').value,
+          review: panel.querySelector('.ed-review').value,
+        }),
+      });
+      L.toast('Escuta atualizada.');
+      carregarTimeline();
+    });
+  });
+}
+
+let spotifyEscolha = null;
+
+async function buscarSpotify() {
+  const q = document.getElementById('spotifyBusca').value.trim();
+  if (!q) return;
+  const grid = document.getElementById('spotifyResultados');
+  grid.style.display = 'grid';
+  grid.innerHTML = '<p class="empty-state">buscando...</p>';
+  try {
+    const resultados = await L.api(`/api/musica/spotify/search-albums?q=${encodeURIComponent(q)}`);
+    if (!resultados.length) { grid.innerHTML = '<p class="empty-state">Nada encontrado.</p>'; return; }
+    grid.innerHTML = resultados.map((r, i) => `
+      <div class="spotify-result" data-i="${i}" style="cursor:pointer;text-align:center;">
+        <img src="${r.capa_url}" alt="" style="width:100%;aspect-ratio:1;object-fit:cover;border:1px solid var(--hair);" />
+        <div style="font-size:.68rem;margin-top:.25rem;line-height:1.3;color:var(--ink-muted);">${r.nome}<br>${r.artista}</div>
+      </div>
+    `).join('');
+    grid.querySelectorAll('.spotify-result').forEach(el => {
+      el.addEventListener('click', () => escolherSpotify(resultados[+el.dataset.i]));
+    });
+  } catch (e) {
+    grid.innerHTML = `<p class="empty-state">${e.message}</p>`;
+  }
+}
+
+async function escolherSpotify(r) {
+  spotifyEscolha = r;
+  document.getElementById('novoArtista').value = r.artista;
+  document.getElementById('novoAlbum').value = r.nome;
+  if (r.ano) document.getElementById('novoAno').value = r.ano;
+  document.getElementById('spotifyResultados').style.display = 'none';
+  const chip = document.getElementById('spotifyEscolhido');
+  chip.style.display = 'flex';
+  document.getElementById('spotifyEscolhidoCapa').src = r.capa_url;
+  document.getElementById('spotifyEscolhidoTexto').textContent = `${r.nome} — ${r.artista}`;
+  if (r.artista_spotify_id) {
+    try {
+      const g = await L.api(`/api/musica/spotify/genero?artista_spotify_id=${r.artista_spotify_id}`);
+      if (g.genero) document.getElementById('novoGenero').value = g.genero;
+    } catch (e) { /* gênero é só um bônus, ignora erro */ }
+  }
+  atualizarFaixaFavorita(r.spotify_id);
+}
+
+document.getElementById('btnSpotifyBuscar').addEventListener('click', buscarSpotify);
+document.getElementById('spotifyBusca').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); buscarSpotify(); } });
+document.getElementById('btnSpotifyLimpar').addEventListener('click', () => {
+  spotifyEscolha = null;
+  document.getElementById('spotifyEscolhido').style.display = 'none';
+  atualizarFaixaFavorita(null);
+});
+
+/* tracklist com checkbox — mesmo recurso do formulário no Streamlit: se o
+   álbum (existente ou recém-escolhido no Spotify) tem spotify_id, busca as
+   faixas de verdade e deixa marcar quais são as favoritas; senão, texto livre. */
+async function atualizarFaixaFavorita(spotifyId) {
+  const texto = document.getElementById('escutaFaixaTexto');
+  const lista = document.getElementById('escutaFaixaChecklist');
+  if (!spotifyId) {
+    texto.style.display = 'block';
+    lista.style.display = 'none';
+    lista.innerHTML = '';
+    return;
+  }
+  lista.style.display = 'flex';
+  lista.innerHTML = '<p class="empty-state" style="padding:0;">carregando faixas...</p>';
+  texto.style.display = 'none';
+  try {
+    const faixas = await L.api(`/api/musica/spotify/albuns/${spotifyId}/faixas`);
+    if (!faixas.length) { texto.style.display = 'block'; lista.style.display = 'none'; return; }
+    lista.innerHTML = faixas.map(f => `
+      <label style="display:flex;align-items:center;gap:.55rem;font-size:.86rem;cursor:pointer;">
+        <input type="checkbox" class="faixa-check" value="${f.replace(/"/g, '&quot;')}" /> ${f}
+      </label>
+    `).join('');
+  } catch (e) {
+    texto.style.display = 'block';
+    lista.style.display = 'none';
+  }
+}
+
+L.initSegmented('modoAlbumSwitch', val => {
+  modoAlbum = val;
+  document.getElementById('blocoExistente').style.display = val === 'existente' ? 'block' : 'none';
+  document.getElementById('blocoNovo').style.display = val === 'novo' ? 'block' : 'none';
+  if (val === 'existente') {
+    const sel = document.getElementById('selAlbum');
+    const album = albunsCache.find(a => String(a.id) === sel.value);
+    atualizarFaixaFavorita(album ? album.spotify_id : null);
+  } else {
+    atualizarFaixaFavorita(spotifyEscolha ? spotifyEscolha.spotify_id : null);
+  }
+});
+document.getElementById('selAlbum').addEventListener('change', (e) => {
+  const album = albunsCache.find(a => String(a.id) === e.target.value);
+  atualizarFaixaFavorita(album ? album.spotify_id : null);
+});
+
+document.getElementById('escutaData').value = new Date().toISOString().slice(0, 10);
+
+document.getElementById('formEscuta').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const btn = ev.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    let albumId;
+    if (modoAlbum === 'existente') {
+      albumId = document.getElementById('selAlbum').value;
+      if (!albumId) throw new Error('Cadastre um álbum primeiro (ou escolha "Novo álbum").');
+    } else {
+      const artista = document.getElementById('novoArtista').value.trim();
+      const album = document.getElementById('novoAlbum').value.trim();
+      if (!artista || !album) throw new Error('Artista e álbum são obrigatórios.');
+      const fd = new FormData();
+      fd.append('artista_nome', artista);
+      fd.append('album_nome', album);
+      const ano = document.getElementById('novoAno').value;
+      if (ano) fd.append('ano_lancamento', ano);
+      fd.append('genero', document.getElementById('novoGenero').value.trim());
+      if (spotifyEscolha) {
+        fd.append('spotify_id', spotifyEscolha.spotify_id || '');
+        fd.append('spotify_url', spotifyEscolha.spotify_url || '');
+        fd.append('artista_spotify_id', spotifyEscolha.artista_spotify_id || '');
+        fd.append('capa_url_spotify', spotifyEscolha.capa_url || '');
+      }
+      const capaFile = document.getElementById('novoCapa').files[0];
+      if (capaFile) fd.append('capa', capaFile);
+      const albumCriado = await L.api('/api/musica/albuns', { method: 'POST', body: fd });
+      albumId = albumCriado.id;
+    }
+
+    const notaVal = document.getElementById('escutaNota').value;
+    const checklist = document.getElementById('escutaFaixaChecklist');
+    const faixaFavorita = checklist.style.display === 'flex'
+      ? [...checklist.querySelectorAll('.faixa-check:checked')].map(c => c.value).join(', ')
+      : document.getElementById('escutaFaixaTexto').value;
+
+    await L.api('/api/musica/escutas', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        album_id: parseInt(albumId, 10),
+        data: document.getElementById('escutaData').value,
+        nota: notaVal === '' ? null : parseFloat(notaVal),
+        faixa_favorita: faixaFavorita,
+        review: document.getElementById('escutaReview').value,
+      }),
+    });
+
+    L.toast('Escuta registrada.');
+    ev.target.reset();
+    document.getElementById('escutaData').value = new Date().toISOString().slice(0, 10);
+    spotifyEscolha = null;
+    document.getElementById('spotifyEscolhido').style.display = 'none';
+    atualizarFaixaFavorita(null);
+    await carregarAlbuns();
+    await carregarTimeline();
+  } catch (e) {
+    L.toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+L.initReveal();
+L.initClock();
+L.initModuleSwitcher('musica');
+L.initGlow();
+document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
+carregarAlbuns();
+carregarTimeline();
+})();
+</script>
+</body>
+</html>

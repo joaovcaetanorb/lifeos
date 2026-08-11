@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Diário · Livros · lifeOS</title>
+<link rel="stylesheet" href="/static/tokens.css" />
+<link rel="stylesheet" href="/static/effects.css" />
+<style>
+.leitura-card{ display:flex; gap:1rem; padding:1rem 0; border-bottom:1px solid var(--hair); }
+.leitura-card:last-child{ border-bottom:none; }
+.leitura-cover{ width:84px; height:84px; flex:none; object-fit:cover; background:var(--panel-raised); border:1px solid var(--hair); }
+.leitura-body{ flex:1; min-width:0; }
+.leitura-title{ font-weight:700; }
+.leitura-sub{ color:var(--ink-muted); font-size:.82rem; margin-top:.15rem; }
+.leitura-nota{ color:var(--accent-bright); font-weight:700; margin-top:.3rem; }
+.leitura-review{ margin-top:.4rem; font-size:.86rem; color:var(--ink); }
+.leitura-actions{ margin-top:.5rem; display:flex; gap:.5rem; }
+.leitura-actions button{ background:none; border:1px solid var(--hair); color:var(--ink-dim); font-size:.7rem; padding:.25rem .55rem; border-radius:2px; cursor:pointer; }
+.leitura-actions button:hover{ border-color:var(--accent); color:var(--accent-bright); }
+.edit-panel{ margin-top:.7rem; padding-top:.7rem; border-top:1px dashed var(--hair); display:none; }
+.edit-panel.open{ display:block; }
+.novo-toggle{ display:flex; gap:.5rem; margin-bottom:.9rem; }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div><div class="vignette"></div><div class="grain"></div><div class="glow-blob" id="glowBlob"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="id"><span class="led-dot"></span> LIFEOS · MÓDULO LIVROS</div>
+    <div class="id"><span class="clock" id="clock">--:--:--</span></div>
+  </div>
+
+  <div class="hero boot-flicker">
+    <div class="eyebrow">diário — dados reais</div>
+    <h1 class="title">$ diario<span class="cursor"></span></h1>
+    <p>Registre uma leitura nova e veja a linha do tempo de tudo que você já leu — grava direto no banco.</p>
+  </div>
+
+  <nav class="modnav">
+    <a href="/livros/estatisticas.html">estatísticas</a>
+    <a href="/livros/diario.html" class="active">diário</a>
+    <a href="/livros/estante.html">estante</a>
+  </nav>
+
+  <section class="module" data-reveal>
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">nova entrada</div><h3>Registrar leitura</h3></div></div>
+
+    <div class="novo-toggle">
+      <div class="segmented" id="modoLivroSwitch">
+        <span class="thumb"></span>
+        <button data-val="existente" class="active">Livro existente</button>
+        <button data-val="novo">Novo livro</button>
+      </div>
+    </div>
+
+    <form id="formLeitura">
+      <div id="blocoExistente">
+        <div class="field"><label>Livro</label><select id="selLivro"></select></div>
+      </div>
+      <div id="blocoNovo" style="display:none;">
+        <div class="field-row">
+          <div class="field"><label>Autor *</label><input type="text" id="novoAutor" /></div>
+          <div class="field"><label>Livro *</label><input type="text" id="novoLivro" /></div>
+        </div>
+        <div class="field-row" style="margin-top:.8rem;">
+          <div class="field"><label>Ano de publicação</label><input type="number" id="novoAno" min="0" max="2100" /></div>
+          <div class="field"><label>Gênero</label><input type="text" id="novoGenero" /></div>
+        </div>
+        <div class="field" style="margin-top:.8rem;"><label>Capa (opcional)</label><input type="file" id="novoCapa" accept="image/*" /></div>
+      </div>
+
+      <div class="field-row" style="margin-top:1rem;">
+        <div class="field"><label>Data</label><input type="date" id="leituraData" /></div>
+        <div class="field"><label>Status</label>
+          <select id="leituraStatus"><option>Lendo</option><option>Concluído</option><option>Abandonado</option></select>
+        </div>
+      </div>
+      <div class="field-row" style="margin-top:.8rem;">
+        <div class="field"><label>Nota</label>
+          <select id="leituraNota">
+            <option value="">sem nota</option>
+            <option>0.5</option><option>1</option><option>1.5</option><option>2</option><option>2.5</option>
+            <option selected>4</option><option>3</option><option>3.5</option><option>4.5</option><option>5</option>
+          </select>
+        </div>
+        <div class="field"></div>
+      </div>
+      <div class="field" style="margin-top:.8rem;"><label>Review</label><textarea id="leituraReview"></textarea></div>
+
+      <div class="btn-row"><button type="submit" class="btn btn-primary">registrar leitura</button></div>
+    </form>
+  </section>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">linha do tempo</div><h3>Tudo que você já leu</h3></div></div>
+    <div id="timeline"><p class="empty-state">Carregando…</p></div>
+  </section>
+
+  <footer><span>backend FastAPI próprio · escreve no banco de verdade</span><span id="genTime"></span></footer>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+(function(){
+"use strict";
+const L = LifeOS;
+let modoLivro = 'existente';
+
+function notaTexto(n){ return (n === null || n === undefined) ? 'sem nota' : `★ ${n}`; }
+function dataBr(iso){ if(!iso) return ''; const [a,m,d]=iso.split('-'); return `${d}/${m}/${a}`; }
+
+async function carregarLivros() {
+  const livros = await L.api('/api/livros/livros');
+  const sel = document.getElementById('selLivro');
+  sel.innerHTML = livros.map(l => `<option value="${l.id}">${l.autor_nome} — ${l.nome}</option>`).join('') || '<option value="">nenhum livro cadastrado ainda</option>';
+}
+
+async function carregarTimeline() {
+  const el = document.getElementById('timeline');
+  const leituras = await L.api('/api/livros/diario');
+  if (!leituras.length) { el.innerHTML = '<p class="empty-state">Nenhuma leitura registrada ainda.</p>'; return; }
+  el.innerHTML = leituras.map(e => `
+    <div class="leitura-card" data-id="${e.id}">
+      ${e.capa_url ? `<img class="leitura-cover" src="${e.capa_url}" alt="" />` : `<div class="leitura-cover card-cover placeholder">📖</div>`}
+      <div class="leitura-body">
+        <div class="leitura-title">${e.livro_nome} — ${e.autor_nome}</div>
+        <div class="leitura-sub">${dataBr(e.data)} · ${e.status}</div>
+        <div class="leitura-nota">${notaTexto(e.nota)}</div>
+        ${e.review ? `<div class="leitura-review">${e.review.replace(/</g,'&lt;')}</div>` : ''}
+        <div class="leitura-actions">
+          <button data-action="editar">editar</button>
+          <button data-action="excluir">excluir</button>
+        </div>
+        <div class="edit-panel">
+          <div class="field-row">
+            <div class="field"><label>Data</label><input type="date" class="ed-data" value="${e.data}" /></div>
+            <div class="field"><label>Status</label>
+              <select class="ed-status">
+                ${['Lendo','Concluído','Abandonado'].map(s=>`<option ${e.status===s?'selected':''}>${s}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="field" style="margin-top:.6rem;"><label>Nota</label>
+            <select class="ed-nota">
+              <option value="" ${e.nota==null?'selected':''}>sem nota</option>
+              ${[0.5,1,1.5,2,2.5,3,3.5,4,4.5,5].map(n=>`<option value="${n}" ${e.nota===n?'selected':''}>${n}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field" style="margin-top:.6rem;"><label>Review</label><textarea class="ed-review">${e.review||''}</textarea></div>
+          <div class="btn-row"><button class="btn btn-primary" data-action="salvar">salvar</button></div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  el.querySelectorAll('.leitura-card').forEach(card => {
+    const id = card.dataset.id;
+    const panel = card.querySelector('.edit-panel');
+    card.querySelector('[data-action="editar"]').addEventListener('click', () => panel.classList.toggle('open'));
+    card.querySelector('[data-action="excluir"]').addEventListener('click', async () => {
+      if (!confirm('Excluir essa leitura?')) return;
+      await L.api(`/api/livros/leituras/${id}`, { method: 'DELETE' });
+      L.toast('Leitura excluída.');
+      carregarTimeline();
+    });
+    card.querySelector('[data-action="salvar"]').addEventListener('click', async () => {
+      const notaVal = panel.querySelector('.ed-nota').value;
+      await L.api(`/api/livros/leituras/${id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: panel.querySelector('.ed-data').value,
+          status: panel.querySelector('.ed-status').value,
+          nota: notaVal === '' ? null : parseFloat(notaVal),
+          review: panel.querySelector('.ed-review').value,
+        }),
+      });
+      L.toast('Leitura atualizada.');
+      carregarTimeline();
+    });
+  });
+}
+
+L.initSegmented('modoLivroSwitch', val => {
+  modoLivro = val;
+  document.getElementById('blocoExistente').style.display = val === 'existente' ? 'block' : 'none';
+  document.getElementById('blocoNovo').style.display = val === 'novo' ? 'block' : 'none';
+});
+
+document.getElementById('leituraData').value = new Date().toISOString().slice(0, 10);
+
+document.getElementById('formLeitura').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const btn = ev.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    let livroId;
+    if (modoLivro === 'existente') {
+      livroId = document.getElementById('selLivro').value;
+      if (!livroId) throw new Error('Cadastre um livro primeiro (ou escolha "Novo livro").');
+    } else {
+      const autor = document.getElementById('novoAutor').value.trim();
+      const livro = document.getElementById('novoLivro').value.trim();
+      if (!autor || !livro) throw new Error('Autor e livro são obrigatórios.');
+      const fd = new FormData();
+      fd.append('autor_nome', autor);
+      fd.append('livro_nome', livro);
+      const ano = document.getElementById('novoAno').value;
+      if (ano) fd.append('ano_publicacao', ano);
+      fd.append('genero', document.getElementById('novoGenero').value.trim());
+      const capaFile = document.getElementById('novoCapa').files[0];
+      if (capaFile) fd.append('capa', capaFile);
+      const livroCriado = await L.api('/api/livros/livros', { method: 'POST', body: fd });
+      livroId = livroCriado.id;
+    }
+
+    const notaVal = document.getElementById('leituraNota').value;
+    await L.api('/api/livros/leituras', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        livro_id: parseInt(livroId, 10),
+        data: document.getElementById('leituraData').value,
+        status: document.getElementById('leituraStatus').value,
+        nota: notaVal === '' ? null : parseFloat(notaVal),
+        review: document.getElementById('leituraReview').value,
+      }),
+    });
+
+    L.toast('Leitura registrada.');
+    ev.target.reset();
+    document.getElementById('leituraData').value = new Date().toISOString().slice(0, 10);
+    await carregarLivros();
+    await carregarTimeline();
+  } catch (e) {
+    L.toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+L.initReveal();
+L.initClock();
+L.initModuleSwitcher('livros');
+L.initGlow();
+document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
+carregarLivros();
+carregarTimeline();
+})();
+</script>
+</body>
+</html>

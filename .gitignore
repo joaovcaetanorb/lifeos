@@ -3,3 +3,11 @@ __pycache__/
 .streamlit/secrets.toml
 *.db*
 .cache
+webapp/.env
+webapp/musica/data/
+webapp/livros/data/
+webapp/habitos/data/
+webapp/.venv/
+webapp/run_pid.txt
+webapp/run_stdout.log
+webapp/run_stderr.log

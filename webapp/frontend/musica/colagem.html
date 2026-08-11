@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Colagem · Música · lifeOS</title>
+<link rel="stylesheet" href="/static/tokens.css" />
+<link rel="stylesheet" href="/static/effects.css" />
+<style>
+.preview-wrap{ display:flex; justify-content:center; margin-top:1.2rem; }
+.preview-wrap img{ max-width:100%; border:1px solid var(--hair-bright); border-radius:2px; box-shadow:0 16px 40px -20px rgba(0,0,0,.8); }
+.preview-wrap img.stories{ max-height:640px; }
+.preview-wrap img.post{ max-width:460px; }
+select.plain{ background:var(--panel-raised); border:1px solid var(--hair); color:var(--ink); padding:.5rem .7rem; border-radius:2px; }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div><div class="vignette"></div><div class="grain"></div><div class="glow-blob" id="glowBlob"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="id"><span class="led-dot"></span> LIFEOS · MÓDULO MÚSICA</div>
+    <div class="id"><span class="clock" id="clock">--:--:--</span></div>
+  </div>
+
+  <div class="hero boot-flicker">
+    <div class="eyebrow">colagem — dados reais</div>
+    <h1 class="title">$ colagem<span class="cursor"></span></h1>
+    <p>Mosaico com as capas mais escutadas no período, pronto pra postar — post quadrado ou stories vertical.</p>
+  </div>
+
+  <nav class="modnav">
+    <a href="/musica/estatisticas.html">estatísticas</a>
+    <a href="/musica/diario.html">diário</a>
+    <a href="/musica/albuns.html">álbuns</a>
+    <a href="/musica/colagem.html" class="active">colagem</a>
+    <a href="/musica/spotify.html">spotify</a>
+  </nav>
+
+  <section class="module" data-reveal>
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">configuração</div><h3>Montar mosaico</h3></div></div>
+
+    <div class="segmented" id="fonteSwitch" style="margin-bottom:1rem;">
+      <span class="thumb"></span>
+      <button data-val="diario" class="active">Diário (avaliado)</button>
+      <button data-val="spotify">Histórico Spotify (tocado de verdade)</button>
+    </div>
+
+    <div class="pills" id="periodoPills" style="margin-bottom:1rem;">
+      <button class="pill" data-val="mes">este mês</button>
+      <button class="pill active" data-val="ano">este ano</button>
+      <button class="pill" data-val="tudo">todos os tempos</button>
+      <button class="pill" data-val="personalizado">personalizado</button>
+    </div>
+
+    <div class="field-row" id="periodoPersonalizado" style="display:none;max-width:420px;">
+      <div class="field"><label>De</label><input type="date" id="dataDe" /></div>
+      <div class="field"><label>Até</label><input type="date" id="dataAte" /></div>
+    </div>
+
+    <div class="field-row" style="margin-top:1rem;">
+      <div class="field"><label>Tamanho da grade</label>
+        <select class="plain" id="selGrade"><option value="3">3×3</option><option value="4">4×4</option><option value="5">5×5</option></select>
+      </div>
+      <div class="field"><label>Formato</label>
+        <select class="plain" id="selFormato"><option value="post">Post (quadrado)</option><option value="stories">Stories (vertical)</option></select>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnGerar">gerar colagem</button>
+      <a class="btn" id="linkBaixar" href="#" download style="display:none;text-decoration:none;">baixar colagem (PNG)</a>
+    </div>
+
+    <div class="preview-wrap"><img id="preview" style="display:none;" /></div>
+  </section>
+
+  <footer><span>backend FastAPI próprio · mosaico gerado com Pillow a partir das capas reais</span><span id="genTime"></span></footer>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+(function(){
+"use strict";
+const L = LifeOS;
+const state = { fonte: 'diario', periodo: 'ano' };
+
+function periodoIso(periodo) {
+  const hoje = new Date();
+  const iso = d => d.toISOString().slice(0, 10);
+  if (periodo === 'mes') { const i = new Date(hoje.getFullYear(), hoje.getMonth(), 1); return { inicio: iso(i), fim: iso(hoje) }; }
+  if (periodo === 'ano') { const i = new Date(hoje.getFullYear(), 0, 1); return { inicio: iso(i), fim: iso(hoje) }; }
+  if (periodo === 'personalizado') {
+    const de = document.getElementById('dataDe').value, ate = document.getElementById('dataAte').value;
+    return (de && ate) ? { inicio: de, fim: ate } : { inicio: '0000-01-01', fim: '9999-12-31' };
+  }
+  return { inicio: '0000-01-01', fim: '9999-12-31' };
+}
+
+document.getElementById('btnGerar').addEventListener('click', async () => {
+  const btn = document.getElementById('btnGerar');
+  btn.disabled = true; btn.textContent = 'gerando...';
+  document.getElementById('linkBaixar').style.display = 'none';
+  try {
+    const { inicio, fim } = periodoIso(state.periodo);
+    const lado_grade = parseInt(document.getElementById('selGrade').value, 10);
+    const formato = document.getElementById('selFormato').value;
+    const res = await fetch('/api/musica/colagem', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fonte: state.fonte, inicio, fim, lado_grade, formato }),
+    });
+    if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || `erro ${res.status}`); }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const img = document.getElementById('preview');
+    img.src = url; img.className = formato; img.style.display = 'block';
+    const link = document.getElementById('linkBaixar');
+    link.href = url; link.download = `colagem_${inicio}_a_${fim}_${lado_grade}x${lado_grade}_${formato}.png`; link.style.display = 'inline-block';
+    L.toast('Colagem gerada.');
+  } catch (e) {
+    L.toast(`Não consegui gerar a colagem: ${e.message}`, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'gerar colagem';
+  }
+});
+
+L.initSegmented('fonteSwitch', val => { state.fonte = val; });
+L.initPills('periodoPills', val => {
+  state.periodo = val;
+  document.getElementById('periodoPersonalizado').style.display = val === 'personalizado' ? 'grid' : 'none';
+});
+L.initReveal();
+L.initClock();
+L.initModuleSwitcher('musica');
+L.initGlow();
+document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
+})();
+</script>
+</body>
+</html>

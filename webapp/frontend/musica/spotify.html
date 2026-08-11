@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Spotify · Música · lifeOS</title>
+<link rel="stylesheet" href="/static/tokens.css" />
+<link rel="stylesheet" href="/static/effects.css" />
+<style>
+.status-card{ display:flex; align-items:center; gap:1rem; flex-wrap:wrap; }
+.status-dot{ width:10px; height:10px; border-radius:50%; flex:none; }
+.status-dot.on{ background:var(--accent-bright); box-shadow:0 0 8px 1px var(--accent-glow); }
+.status-dot.off{ background:var(--danger); }
+.spotify-connect{ display:inline-flex; align-items:center; gap:.5rem; background:#1DB954; color:#08110c; font-weight:700; padding:.6rem 1.3rem; border-radius:999px; text-decoration:none; font-family:var(--font-data); font-size:.86rem; }
+.hist-row{ display:flex; gap:.9rem; align-items:center; padding:.6rem 0; border-bottom:1px solid var(--hair); }
+.hist-row:last-child{ border-bottom:none; }
+.hist-cover{ width:48px; height:48px; flex:none; object-fit:cover; background:var(--panel-raised); border:1px solid var(--hair); }
+.hist-title{ font-weight:600; font-size:.86rem; } .hist-sub{ color:var(--ink-muted); font-size:.76rem; }
+.top-list{ display:flex; flex-direction:column; gap:.5rem; }
+.top-item{ display:flex; align-items:center; gap:.6rem; font-size:.84rem; }
+.top-item img{ width:36px; height:36px; object-fit:cover; border:1px solid var(--hair); flex:none; }
+.top-item .n{ color:var(--ink-dim); width:1.3em; text-align:right; flex:none; }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div><div class="vignette"></div><div class="grain"></div><div class="glow-blob" id="glowBlob"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="id"><span class="led-dot"></span> LIFEOS · MÓDULO MÚSICA</div>
+    <div class="id"><span class="clock" id="clock">--:--:--</span></div>
+  </div>
+
+  <div class="hero boot-flicker">
+    <div class="eyebrow">spotify — conta conectada</div>
+    <h1 class="title">$ spotify<span class="cursor"></span></h1>
+    <p>Login de verdade (OAuth) pra puxar histórico real e top artistas/faixas — separado do Diário.</p>
+  </div>
+
+  <nav class="modnav">
+    <a href="/musica/estatisticas.html">estatísticas</a>
+    <a href="/musica/diario.html">diário</a>
+    <a href="/musica/albuns.html">álbuns</a>
+    <a href="/musica/colagem.html">colagem</a>
+    <a href="/musica/spotify.html" class="active">spotify</a>
+  </nav>
+
+  <section class="module" data-reveal>
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">conta</div><h3>Status da conexão</h3></div></div>
+    <div class="status-card" id="statusCard"><p class="empty-state">Carregando…</p></div>
+  </section>
+
+  <section class="module" data-reveal id="secaoHistorico" style="margin-top:1rem;display:none;">
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">histórico</div><h3>Últimas faixas tocadas</h3></div>
+      <button class="btn" id="btnSync">sincronizar agora</button>
+    </div>
+    <div id="historicoList"><p class="empty-state">Carregando…</p></div>
+  </section>
+
+  <section class="module" data-reveal id="secaoTop" style="margin-top:1rem;display:none;">
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">segundo o spotify</div><h3>Top artistas e faixas</h3></div>
+    </div>
+    <div class="pills" id="periodoTopPills" style="margin-bottom:1rem;">
+      <button class="pill" data-val="short_term">4 semanas</button>
+      <button class="pill active" data-val="medium_term">6 meses</button>
+      <button class="pill" data-val="long_term">geral</button>
+    </div>
+    <div class="field-row">
+      <div><div class="eyebrow" style="margin:0 0 .6rem;">artistas</div><div class="top-list" id="topArtistasList"></div></div>
+      <div><div class="eyebrow" style="margin:0 0 .6rem;">faixas</div><div class="top-list" id="topFaixasList"></div></div>
+    </div>
+  </section>
+
+  <footer><span>backend FastAPI próprio · OAuth real com o Spotify</span><span id="genTime"></span></footer>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+(function(){
+"use strict";
+const L = LifeOS;
+const params = new URLSearchParams(location.search);
+let topPeriodo = 'medium_term';
+
+function brt(iso) {
+  if (!iso || iso.length < 16) return '';
+  const d = new Date(iso);
+  return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+async function carregarStatus() {
+  const card = document.getElementById('statusCard');
+  const s = await L.api('/api/musica/spotify/status');
+  if (params.get('conectado')) L.toast('Conta Spotify conectada.');
+  if (params.get('erro')) L.toast('Não consegui completar a conexão com o Spotify.', true);
+
+  if (s.conectado) {
+    card.innerHTML = `
+      <span class="status-dot on"></span>
+      <div><b>Conectado</b><div class="empty-state" style="padding:0;">Histórico e top artistas/faixas disponíveis abaixo.</div></div>
+      <button class="btn btn-danger" id="btnDisconnect" style="margin-left:auto;">desconectar</button>
+    `;
+    document.getElementById('btnDisconnect').addEventListener('click', async () => {
+      if (!confirm('Desconectar a conta Spotify?')) return;
+      await L.api('/api/musica/spotify/disconnect', { method: 'POST' });
+      L.toast('Conta desconectada.');
+      carregarStatus();
+    });
+    document.getElementById('secaoHistorico').style.display = 'block';
+    document.getElementById('secaoTop').style.display = 'block';
+    carregarHistorico();
+    carregarTop();
+  } else {
+    card.innerHTML = `
+      <span class="status-dot off"></span>
+      <div><b>Não conectada</b><div class="empty-state" style="padding:0;">Conecte pra puxar histórico real de faixas tocadas e top artistas/faixas.</div></div>
+      <a class="spotify-connect" href="/api/musica/spotify/login" style="margin-left:auto;">♫ Entrar com Spotify</a>
+    `;
+    document.getElementById('secaoHistorico').style.display = 'none';
+    document.getElementById('secaoTop').style.display = 'none';
+  }
+}
+
+async function carregarHistorico() {
+  const list = document.getElementById('historicoList');
+  const hist = await L.api('/api/musica/spotify/historico?limit=30');
+  if (!hist.length) { list.innerHTML = '<p class="empty-state">Nenhuma faixa sincronizada ainda.</p>'; return; }
+  list.innerHTML = hist.map(f => `
+    <div class="hist-row">
+      ${f.capa_url ? `<img class="hist-cover" src="${f.capa_url}" alt="" />` : `<div class="hist-cover card-cover placeholder">♪</div>`}
+      <div><div class="hist-title">${f.faixa_nome} — ${f.artista_nome}</div><div class="hist-sub">${f.album_nome} · ${brt(f.tocado_em)}</div></div>
+    </div>
+  `).join('');
+}
+
+async function carregarTop() {
+  const [artistas, faixas] = await Promise.all([
+    L.api(`/api/musica/spotify/top?periodo=${topPeriodo}&tipo=artistas`),
+    L.api(`/api/musica/spotify/top?periodo=${topPeriodo}&tipo=faixas`),
+  ]);
+  const la = document.getElementById('topArtistasList'), lf = document.getElementById('topFaixasList');
+  la.innerHTML = artistas.length ? artistas.map((a, i) => `<div class="top-item"><span class="n">${i+1}.</span>${a.capa_url ? `<img src="${a.capa_url}" alt="" />` : ''}<span>${a.nome}</span></div>`).join('') : '<p class="empty-state">Nada por aqui ainda.</p>';
+  lf.innerHTML = faixas.length ? faixas.map((f, i) => `<div class="top-item"><span class="n">${i+1}.</span>${f.capa_url ? `<img src="${f.capa_url}" alt="" />` : ''}<span>${f.nome} — ${f.artista}</span></div>`).join('') : '<p class="empty-state">Nada por aqui ainda.</p>';
+}
+
+document.getElementById('btnSync').addEventListener('click', async () => {
+  const btn = document.getElementById('btnSync');
+  btn.disabled = true; btn.textContent = 'sincronizando...';
+  try {
+    const { novas } = await L.api('/api/musica/spotify/sync', { method: 'POST' });
+    L.toast(novas ? `${novas} faixa(s) nova(s) sincronizada(s).` : 'Nada novo desde a última vez.');
+    carregarHistorico();
+  } catch (e) {
+    L.toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'sincronizar agora';
+  }
+});
+
+L.initPills('periodoTopPills', val => { topPeriodo = val; carregarTop(); });
+L.initReveal();
+L.initClock();
+L.initModuleSwitcher('musica');
+L.initGlow();
+document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
+carregarStatus();
+})();
+</script>
+</body>
+</html>
