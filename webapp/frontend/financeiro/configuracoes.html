@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Configurações · Financeiro · lifeOS</title>
+<link rel="stylesheet" href="/static/tokens.css" />
+<link rel="stylesheet" href="/static/effects.css" />
+<style>
+.conta-fixa-card{ background:var(--panel-raised); border:1px solid var(--hair); border-radius:2px; padding:.7rem .9rem; display:flex; gap:.8rem; align-items:center; margin-bottom:.6rem; }
+.conta-fixa-main{ flex:1; min-width:0; }
+.conta-fixa-nome{ font-weight:700; }
+.conta-fixa-sub{ color:var(--ink-muted); font-size:.78rem; margin-top:.1rem; }
+.conta-fixa-sub.inativa{ color:var(--ink-dim); }
+.conta-fixa-actions{ display:flex; gap:.4rem; flex:none; }
+.conta-fixa-actions button{ background:none; border:1px solid var(--hair); color:var(--ink-dim); font-size:.7rem; padding:.3rem .6rem; border-radius:2px; cursor:pointer; }
+.conta-fixa-actions button:hover{ border-color:var(--accent); color:var(--accent-bright); }
+
+.modal-overlay{ position:fixed; inset:0; z-index:70; display:flex; align-items:center; justify-content:center; padding:1.2rem;
+  background:rgba(5,6,4,.6); backdrop-filter:blur(4px); opacity:0; pointer-events:none; transition:opacity .2s ease; }
+.modal-overlay.open{ opacity:1; pointer-events:auto; }
+.modal-box{ background:var(--panel); border:1px solid var(--hair-bright); border-radius:var(--radius); padding:1.3rem 1.4rem 1.5rem;
+  width:min(420px, 100%); box-shadow:0 24px 60px -20px rgba(0,0,0,.8); transform:scale(.96) translateY(10px); transition:transform .2s cubic-bezier(.16,.8,.3,1); }
+.modal-overlay.open .modal-box{ transform:scale(1) translateY(0); }
+.modal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
+.modal-head h3{ margin:0; font-size:1rem; font-weight:700; }
+.modal-close{ background:none; border:1px solid var(--hair); color:var(--ink-muted); width:26px; height:26px; border-radius:2px; cursor:pointer; line-height:1; }
+.modal-close:hover{ border-color:var(--accent); color:var(--accent-bright); }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div><div class="vignette"></div><div class="grain"></div><div class="glow-blob" id="glowBlob"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="id"><span class="led-dot"></span> LIFEOS · MÓDULO FINANCEIRO</div>
+    <div class="id"><span class="clock" id="clock">--:--:--</span></div>
+  </div>
+
+  <div class="hero boot-flicker">
+    <div class="eyebrow">configurações</div>
+    <h1 class="title">$ config<span class="cursor"></span></h1>
+    <p>Salário, vale-alimentação e contas fixas — a base pra todo o resto ser calculado.</p>
+  </div>
+
+  <nav class="modnav">
+    <a href="/financeiro/gastos.html">gastos</a>
+    <a href="/financeiro/receitas.html">renda extra</a>
+    <a href="/financeiro/cofre.html">cofre</a>
+    <a href="/financeiro/analises.html">análises</a>
+    <a href="/financeiro/configuracoes.html" class="active">configurações</a>
+  </nav>
+
+  <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);">
+    <div class="kpi"><div class="k-label">dinheiro restante (mês)</div><div class="k-value" id="kpiDinheiro">—</div></div>
+    <div class="kpi"><div class="k-label">vale-alimentação restante</div><div class="k-value" id="kpiVA">—</div></div>
+    <div class="kpi"><div class="k-label">cofre</div><div class="k-value" id="kpiCofre">—</div></div>
+  </div>
+
+  <section class="module" data-reveal>
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">base mensal</div><h3>Salário e vale-alimentação</h3></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Salário (R$)</label><input type="number" id="cfgSalario" min="0" step="0.01" /></div>
+      <div class="field"><label>Vale-alimentação (R$)</label><input type="number" id="cfgVA" min="0" step="0.01" /></div>
+    </div>
+    <div class="btn-row"><button class="btn btn-primary" id="btnSalvarConfig">salvar configuração</button></div>
+  </section>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">descontam todo mês</div><h3>Contas fixas</h3></div>
+      <button class="btn" id="btnNovaContaFixa">+ nova conta fixa</button>
+    </div>
+    <p style="color:var(--ink-muted);font-size:.86rem;margin:0 0 .8rem;">Descontadas automaticamente do saldo em dinheiro todo mês — não precisa lançar como gasto.</p>
+    <div id="contasFixasLista"><p class="empty-state">Carregando…</p></div>
+  </section>
+
+  <footer><span>backend FastAPI próprio · escreve no banco de verdade</span><span id="genTime"></span></footer>
+</div>
+
+<div class="modal-overlay" id="modalContaFixa">
+  <div class="modal-box">
+    <div class="modal-head"><h3 id="modalContaFixaTitulo">nova conta fixa</h3><button type="button" class="modal-close" id="modalContaFixaFechar">×</button></div>
+    <div class="field"><label>Descrição</label><input type="text" id="mcDescricao" placeholder="Ex.: Aluguel" /></div>
+    <div class="field" style="margin-top:.6rem;"><label>Valor (R$)</label><input type="number" id="mcValor" min="0" step="0.01" placeholder="0,00" /></div>
+    <div class="field" id="mcAtivoWrap" style="margin-top:.6rem;display:none;">
+      <label style="display:flex;align-items:center;gap:.5rem;flex-direction:row;text-transform:none;letter-spacing:0;font-family:var(--font-data);color:var(--ink);"><input type="checkbox" id="mcAtivo" /> ativa</label>
+    </div>
+    <div class="btn-row">
+      <button type="button" class="btn btn-primary" id="btnSalvarContaFixa">salvar</button>
+      <button type="button" class="btn" id="btnCancelarContaFixa">cancelar</button>
+    </div>
+    <div id="mcExcluirWrap" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px dashed var(--hair);">
+      <button type="button" class="btn btn-danger" id="btnExcluirContaFixa" style="width:100%;">excluir conta fixa</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+(function(){
+"use strict";
+const L = LifeOS;
+let modalContaFixaId = null;
+let contasFixasCache = [];
+
+function moeda(v) { return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+
+async function carregarResumo() {
+  const r = await L.api('/api/financeiro/resumo');
+  document.getElementById('kpiDinheiro').textContent = moeda(r.dinheiro.saldo);
+  document.getElementById('kpiVA').textContent = moeda(r.vale_alimentacao.saldo);
+  document.getElementById('kpiCofre').textContent = moeda(r.cofre);
+}
+
+async function carregarConfig() {
+  const cfg = await L.api('/api/financeiro/config');
+  document.getElementById('cfgSalario').value = cfg.salario;
+  document.getElementById('cfgVA').value = cfg.vale_alimentacao;
+}
+
+document.getElementById('btnSalvarConfig').addEventListener('click', async () => {
+  const salario = parseFloat(document.getElementById('cfgSalario').value) || 0;
+  const vale_alimentacao = parseFloat(document.getElementById('cfgVA').value) || 0;
+  try {
+    await L.api('/api/financeiro/config', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ salario, vale_alimentacao }),
+    });
+    L.toast('Configuração salva.');
+    carregarResumo();
+  } catch (e) { L.toast(e.message, true); }
+});
+
+async function carregarContasFixas() {
+  contasFixasCache = await L.api('/api/financeiro/contas-fixas');
+  const lista = document.getElementById('contasFixasLista');
+  if (!contasFixasCache.length) { lista.innerHTML = '<p class="empty-state">Nenhuma conta fixa cadastrada ainda.</p>'; return; }
+  lista.innerHTML = contasFixasCache.map(c => `
+    <div class="conta-fixa-card" data-id="${c.id}">
+      <div class="conta-fixa-main">
+        <div class="conta-fixa-nome">${c.descricao}</div>
+        <div class="conta-fixa-sub ${c.ativo ? '' : 'inativa'}">${moeda(c.valor)} · ${c.ativo ? 'ativa' : 'inativa'}</div>
+      </div>
+      <div class="conta-fixa-actions"><button data-action="editar">editar</button></div>
+    </div>
+  `).join('');
+  lista.querySelectorAll('[data-action="editar"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.closest('.conta-fixa-card').dataset.id;
+      abrirModalContaFixa(contasFixasCache.find(c => c.id == id));
+    });
+  });
+}
+
+function abrirModalContaFixa(c) {
+  modalContaFixaId = c ? c.id : null;
+  document.getElementById('modalContaFixaTitulo').textContent = c ? 'editar conta fixa' : 'nova conta fixa';
+  document.getElementById('mcDescricao').value = c ? c.descricao : '';
+  document.getElementById('mcValor').value = c ? c.valor : '';
+  document.getElementById('mcAtivoWrap').style.display = c ? 'block' : 'none';
+  document.getElementById('mcAtivo').checked = c ? !!c.ativo : true;
+  document.getElementById('mcExcluirWrap').style.display = c ? 'block' : 'none';
+  document.getElementById('modalContaFixa').classList.add('open');
+  document.getElementById('mcDescricao').focus();
+}
+function fecharModalContaFixa() { document.getElementById('modalContaFixa').classList.remove('open'); modalContaFixaId = null; }
+document.getElementById('btnNovaContaFixa').addEventListener('click', () => abrirModalContaFixa(null));
+document.getElementById('modalContaFixaFechar').addEventListener('click', fecharModalContaFixa);
+document.getElementById('btnCancelarContaFixa').addEventListener('click', fecharModalContaFixa);
+document.getElementById('modalContaFixa').addEventListener('click', e => { if (e.target.id === 'modalContaFixa') fecharModalContaFixa(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModalContaFixa(); });
+
+document.getElementById('btnSalvarContaFixa').addEventListener('click', async () => {
+  const descricao = document.getElementById('mcDescricao').value.trim();
+  const valor = parseFloat(document.getElementById('mcValor').value);
+  if (!descricao) { L.toast('Informe uma descrição.', true); return; }
+  if (!(valor > 0)) { L.toast('Informe um valor maior que zero.', true); return; }
+  try {
+    if (modalContaFixaId) {
+      await L.api(`/api/financeiro/contas-fixas/${modalContaFixaId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descricao, valor, ativo: document.getElementById('mcAtivo').checked }),
+      });
+      L.toast('Conta fixa atualizada.');
+    } else {
+      await L.api('/api/financeiro/contas-fixas', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descricao, valor }),
+      });
+      L.toast('Conta fixa criada.');
+    }
+    fecharModalContaFixa();
+    carregarContasFixas(); carregarResumo();
+  } catch (e) { L.toast(e.message, true); }
+});
+document.getElementById('btnExcluirContaFixa').addEventListener('click', async () => {
+  if (!modalContaFixaId || !confirm('Excluir essa conta fixa?')) return;
+  await L.api(`/api/financeiro/contas-fixas/${modalContaFixaId}`, { method: 'DELETE' });
+  L.toast('Conta fixa excluída.');
+  fecharModalContaFixa();
+  carregarContasFixas(); carregarResumo();
+});
+
+L.initReveal();
+L.initClock();
+L.initGlow();
+L.initModuleSwitcher('financeiro');
+document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
+carregarResumo();
+carregarConfig();
+carregarContasFixas();
+})();
+</script>
+</body>
+</html>

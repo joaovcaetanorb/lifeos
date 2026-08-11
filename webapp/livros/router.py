@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from . import calculations as calc
 from . import covers
+from . import google_books
 from . import repo as models
 
 router = APIRouter(prefix="/api/livros", tags=["livros"])
@@ -135,15 +136,6 @@ def listar_leituras_livro(livro_id: int):
     return _df_records(models.listar_leituras(livro_id))
 
 
-@router.get("/melhores-avaliados")
-def melhores_avaliados(limite: int = 5):
-    df = calc.top_livros_avaliados(limite)
-    registros = _df_records(df)
-    for r in registros:
-        r["capa_url"] = _capa_url(r.get("capa_path"))
-    return registros
-
-
 @router.post("/livros", status_code=201)
 async def criar_livro(
     autor_nome: str = Form(...),
@@ -188,6 +180,30 @@ async def atualizar_livro(
         caminho = covers.salvar_capa_upload(livro_id, capa, conteudo)
 
     models.atualizar_livro(livro_id, nome.strip(), ano, genero, capa_path=caminho)
+    return _livro_out(models.obter_livro(livro_id))
+
+
+@router.get("/buscar-capa")
+def buscar_capa(q: str = ""):
+    return google_books.buscar_capas(q)
+
+
+class CapaGoogleIn(BaseModel):
+    capa_url: str
+
+
+@router.post("/livros/{livro_id}/capa-from-google")
+def capa_from_google(livro_id: int, body: CapaGoogleIn):
+    livro = models.obter_livro(livro_id)
+    if livro is None:
+        raise HTTPException(404, "Livro não encontrado.")
+    conteudo = covers.baixar_capa(body.capa_url)
+    if conteudo is None:
+        raise HTTPException(502, "Não foi possível baixar essa capa agora.")
+    caminho = covers.salvar_capa_de_bytes(livro_id, conteudo)
+    models.atualizar_livro(
+        livro_id, livro["nome"], _ano_valido(livro["ano_publicacao"]), livro["genero"], capa_path=caminho,
+    )
     return _livro_out(models.obter_livro(livro_id))
 
 

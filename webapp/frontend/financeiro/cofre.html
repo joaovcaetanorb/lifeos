@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cofre · Financeiro · lifeOS</title>
+<link rel="stylesheet" href="/static/tokens.css" />
+<link rel="stylesheet" href="/static/effects.css" />
+<style>
+.row-actions{ text-align:right; }
+.row-actions button{ background:none; border:1px solid var(--hair); color:var(--ink-dim); font-size:.7rem; padding:.3rem .6rem; border-radius:2px; cursor:pointer; }
+.row-actions button:hover{ border-color:var(--danger); color:var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div><div class="vignette"></div><div class="grain"></div><div class="glow-blob" id="glowBlob"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="id"><span class="led-dot"></span> LIFEOS · MÓDULO FINANCEIRO</div>
+    <div class="id"><span class="clock" id="clock">--:--:--</span></div>
+  </div>
+
+  <div class="hero boot-flicker">
+    <div class="eyebrow">guardar dinheiro</div>
+    <h1 class="title">$ cofre<span class="cursor"></span></h1>
+    <p>Aportes e retiradas — o saldo é sempre a soma de tudo que já entrou e saiu.</p>
+  </div>
+
+  <nav class="modnav">
+    <a href="/financeiro/gastos.html">gastos</a>
+    <a href="/financeiro/receitas.html">renda extra</a>
+    <a href="/financeiro/cofre.html" class="active">cofre</a>
+    <a href="/financeiro/analises.html">análises</a>
+    <a href="/financeiro/configuracoes.html">configurações</a>
+  </nav>
+
+  <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);">
+    <div class="kpi"><div class="k-label">dinheiro restante (mês)</div><div class="k-value" id="kpiDinheiro">—</div></div>
+    <div class="kpi"><div class="k-label">vale-alimentação restante</div><div class="k-value" id="kpiVA">—</div></div>
+    <div class="kpi"><div class="k-label">cofre</div><div class="k-value" id="kpiCofre">—</div></div>
+  </div>
+
+  <section class="module" data-reveal>
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">lançar</div><h3>Novo movimento</h3></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Tipo</label><select id="cTipo"><option value="Aporte">Aporte</option><option value="Retirada">Retirada</option></select></div>
+      <div class="field"><label>Data</label><input type="date" id="cData" /></div>
+    </div>
+    <div class="field-row" style="margin-top:.9rem;">
+      <div class="field"><label>Valor (R$)</label><input type="number" id="cValor" min="0" step="0.01" placeholder="0,00" /></div>
+      <div class="field"><label>Observação (opcional)</label><input type="text" id="cObservacao" placeholder="Ex.: 13º salário" /></div>
+    </div>
+    <div class="btn-row"><button class="btn btn-primary" id="btnSalvarMovimento">registrar</button></div>
+  </section>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">histórico</div><h3>Movimentos do cofre</h3></div>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>data</th><th>tipo</th><th>observação</th><th>valor</th><th></th></tr></thead>
+      <tbody id="cofreTbody"></tbody>
+    </table>
+    <p class="empty-state" id="cofreVazio" style="display:none;">Nenhum movimento no cofre ainda.</p>
+  </section>
+
+  <footer><span>backend FastAPI próprio · escreve no banco de verdade</span><span id="genTime"></span></footer>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+(function(){
+"use strict";
+const L = LifeOS;
+
+function moeda(v) { return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+function hoje() { return new Date().toISOString().slice(0, 10); }
+document.getElementById('cData').value = hoje();
+
+async function carregarResumo() {
+  const r = await L.api('/api/financeiro/resumo');
+  document.getElementById('kpiDinheiro').textContent = moeda(r.dinheiro.saldo);
+  document.getElementById('kpiVA').textContent = moeda(r.vale_alimentacao.saldo);
+  document.getElementById('kpiCofre').textContent = moeda(r.cofre);
+}
+
+async function carregarCofre() {
+  const movimentos = await L.api('/api/financeiro/cofre/movimentos');
+  const tbody = document.getElementById('cofreTbody');
+  document.getElementById('cofreVazio').style.display = movimentos.length ? 'none' : 'block';
+  tbody.innerHTML = movimentos.map(m => `
+    <tr data-id="${m.id}">
+      <td>${m.data.split('-').reverse().join('/')}</td>
+      <td>${m.tipo}</td>
+      <td>${m.observacao || ''}</td>
+      <td>${moeda(m.valor)}</td>
+      <td class="row-actions"><button data-action="excluir">excluir</button></td>
+    </tr>
+  `).join('');
+  tbody.querySelectorAll('[data-action="excluir"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.closest('tr').dataset.id;
+      if (!confirm('Excluir esse movimento?')) return;
+      await L.api(`/api/financeiro/cofre/movimentos/${id}`, { method: 'DELETE' });
+      L.toast('Movimento excluído.');
+      carregarCofre(); carregarResumo();
+    });
+  });
+}
+
+document.getElementById('btnSalvarMovimento').addEventListener('click', async () => {
+  const valor = parseFloat(document.getElementById('cValor').value);
+  if (!(valor > 0)) { L.toast('Informe um valor maior que zero.', true); return; }
+  try {
+    await L.api('/api/financeiro/cofre/movimentos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: document.getElementById('cData').value,
+        valor,
+        tipo: document.getElementById('cTipo').value,
+        observacao: document.getElementById('cObservacao').value.trim(),
+      }),
+    });
+    L.toast('Movimento registrado.');
+    document.getElementById('cValor').value = '';
+    document.getElementById('cObservacao').value = '';
+    carregarCofre(); carregarResumo();
+  } catch (e) { L.toast(e.message, true); }
+});
+
+L.initReveal();
+L.initClock();
+L.initGlow();
+L.initModuleSwitcher('financeiro');
+document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
+carregarResumo();
+carregarCofre();
+})();
+</script>
+</body>
+</html>

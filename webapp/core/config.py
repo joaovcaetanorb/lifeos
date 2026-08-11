@@ -24,10 +24,17 @@ class Settings:
     turso_habitos_token: str | None = os.environ.get("TURSO_HABITOS_TOKEN") or None
     turso_humor_url: str | None = os.environ.get("TURSO_HUMOR_URL") or None
     turso_humor_token: str | None = os.environ.get("TURSO_HUMOR_TOKEN") or None
+    turso_projetos_url: str | None = os.environ.get("TURSO_PROJETOS_URL") or None
+    turso_projetos_token: str | None = os.environ.get("TURSO_PROJETOS_TOKEN") or None
+    turso_financeiro_url: str | None = os.environ.get("TURSO_FINANCEIRO_URL") or None
+    turso_financeiro_token: str | None = os.environ.get("TURSO_FINANCEIRO_TOKEN") or None
+    turso_momentos_url: str | None = os.environ.get("TURSO_MOMENTOS_URL") or None
+    turso_momentos_token: str | None = os.environ.get("TURSO_MOMENTOS_TOKEN") or None
     spotify_client_id: str | None = os.environ.get("SPOTIFY_CLIENT_ID") or None
     spotify_client_secret: str | None = os.environ.get("SPOTIFY_CLIENT_SECRET") or None
     spotify_redirect_uri: str | None = os.environ.get("SPOTIFY_REDIRECT_URI") or None
     groq_api_key: str | None = os.environ.get("GROQ_API_KEY") or None
+    google_books_api_key: str | None = os.environ.get("GOOGLE_BOOKS_API_KEY") or None
 
 
 settings = Settings()

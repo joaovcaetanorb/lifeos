@@ -9,7 +9,7 @@
 <style>
 .leitura-card{ display:flex; gap:1rem; padding:1rem 0; border-bottom:1px solid var(--hair); }
 .leitura-card:last-child{ border-bottom:none; }
-.leitura-cover{ width:84px; height:84px; flex:none; object-fit:cover; background:var(--panel-raised); border:1px solid var(--hair); }
+.leitura-cover{ width:84px; aspect-ratio:2/3; flex:none; object-fit:cover; background:var(--panel-raised); border:1px solid var(--hair); }
 .leitura-body{ flex:1; min-width:0; }
 .leitura-title{ font-weight:700; }
 .leitura-sub{ color:var(--ink-muted); font-size:.82rem; margin-top:.15rem; }
@@ -69,7 +69,17 @@
           <div class="field"><label>Ano de publicação</label><input type="number" id="novoAno" min="0" max="2100" /></div>
           <div class="field"><label>Gênero</label><input type="text" id="novoGenero" /></div>
         </div>
-        <div class="field" style="margin-top:.8rem;"><label>Capa (opcional)</label><input type="file" id="novoCapa" accept="image/*" /></div>
+        <div class="field" style="margin-top:.8rem;">
+          <label>Capa</label>
+          <div style="display:flex;gap:.8rem;align-items:flex-start;">
+            <img id="novoCapaPreview" class="card-cover" style="width:72px;height:72px;flex:none;display:none;" />
+            <div style="flex:1;display:flex;flex-direction:column;gap:.5rem;min-width:0;">
+              <button type="button" class="btn" id="btnBuscarCapaNovo">buscar capa no Google Books</button>
+            </div>
+          </div>
+          <div id="novoCapaResultados" style="display:none;margin-top:.6rem;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:.4rem;"></div>
+          <div class="field" style="margin-top:.6rem;"><label style="font-size:.62rem;">ou envie um arquivo manualmente</label><input type="file" id="novoCapa" accept="image/*" /></div>
+        </div>
       </div>
 
       <div class="field-row" style="margin-top:1rem;">
@@ -189,6 +199,51 @@ L.initSegmented('modoLivroSwitch', val => {
   document.getElementById('blocoNovo').style.display = val === 'novo' ? 'block' : 'none';
 });
 
+let novoCapaUrlSelecionada = null;
+
+function limparCapaNovo() {
+  novoCapaUrlSelecionada = null;
+  document.getElementById('novoCapaPreview').style.display = 'none';
+  document.getElementById('novoCapaResultados').style.display = 'none';
+  document.getElementById('novoCapaResultados').innerHTML = '';
+}
+
+async function buscarCapaNovo() {
+  const autor = document.getElementById('novoAutor').value.trim();
+  const livro = document.getElementById('novoLivro').value.trim();
+  if (!autor || !livro) { L.toast('Preencha autor e livro antes de buscar a capa.', true); return; }
+  const grid = document.getElementById('novoCapaResultados');
+  grid.style.display = 'grid';
+  grid.innerHTML = '<p class="empty-state">buscando...</p>';
+  try {
+    const resultados = await L.api(`/api/livros/buscar-capa?q=${encodeURIComponent(`${livro} ${autor}`)}`);
+    if (!resultados.length) { grid.innerHTML = '<p class="empty-state">Nada encontrado.</p>'; return; }
+    grid.innerHTML = resultados.map((r, i) => `
+      <img data-i="${i}" src="${r.capa_url}" title="${r.titulo} — ${r.autor}" style="width:100%;aspect-ratio:1;object-fit:cover;border:1px solid var(--hair);cursor:pointer;" />
+    `).join('');
+    grid.querySelectorAll('img').forEach(img => {
+      img.addEventListener('click', () => {
+        const r = resultados[+img.dataset.i];
+        novoCapaUrlSelecionada = r.capa_url;
+        document.getElementById('novoCapa').value = '';
+        const preview = document.getElementById('novoCapaPreview');
+        preview.src = r.capa_url; preview.style.display = 'block';
+        grid.style.display = 'none';
+        L.toast('Capa selecionada.');
+      });
+    });
+  } catch (e) {
+    grid.innerHTML = `<p class="empty-state">${e.message}</p>`;
+  }
+}
+document.getElementById('btnBuscarCapaNovo').addEventListener('click', buscarCapaNovo);
+document.getElementById('novoCapa').addEventListener('change', () => {
+  if (document.getElementById('novoCapa').files[0]) {
+    novoCapaUrlSelecionada = null;
+    document.getElementById('novoCapaPreview').style.display = 'none';
+  }
+});
+
 document.getElementById('leituraData').value = new Date().toISOString().slice(0, 10);
 
 document.getElementById('formLeitura').addEventListener('submit', async (ev) => {
@@ -214,6 +269,12 @@ document.getElementById('formLeitura').addEventListener('submit', async (ev) => 
       if (capaFile) fd.append('capa', capaFile);
       const livroCriado = await L.api('/api/livros/livros', { method: 'POST', body: fd });
       livroId = livroCriado.id;
+      if (!capaFile && novoCapaUrlSelecionada) {
+        await L.api(`/api/livros/${livroId}/capa-from-google`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ capa_url: novoCapaUrlSelecionada }),
+        });
+      }
     }
 
     const notaVal = document.getElementById('leituraNota').value;
@@ -231,6 +292,7 @@ document.getElementById('formLeitura').addEventListener('submit', async (ev) => 
     L.toast('Leitura registrada.');
     ev.target.reset();
     document.getElementById('leituraData').value = new Date().toISOString().slice(0, 10);
+    limparCapaNovo();
     await carregarLivros();
     await carregarTimeline();
   } catch (e) {

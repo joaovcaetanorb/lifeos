@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Projetos · lifeOS</title>
+<link rel="stylesheet" href="/static/tokens.css" />
+<link rel="stylesheet" href="/static/effects.css" />
+<style>
+.projeto-card{ background:var(--panel-raised); border:1px solid var(--hair); border-radius:var(--radius); padding:1rem 1.1rem; display:flex; gap:1rem; margin-bottom:.8rem; }
+.projeto-card:hover{ border-color:var(--hair-bright); }
+.projeto-foto-wrap{ flex:none; }
+.projeto-foto-wrap .card-cover{ width:96px; height:96px; }
+.projeto-body{ flex:1; min-width:0; }
+.projeto-head{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; flex-wrap:wrap; }
+.projeto-nome{ font-weight:700; font-size:1.02rem; }
+.projeto-status{ font-family:var(--font-label); font-size:.62rem; letter-spacing:.06em; text-transform:uppercase; padding:.15rem .5rem; border-radius:2px; border:1px solid var(--hair-bright); color:var(--ink-muted); white-space:nowrap; }
+.projeto-status.status-ativo{ color:var(--accent-bright); border-color:var(--accent); }
+.projeto-desc{ color:var(--ink-muted); font-size:.86rem; margin-top:.3rem; }
+.bar-row{ margin-top:.55rem; }
+.bar-row.muted{ color:var(--ink-dim); font-size:.78rem; }
+.bar-label{ font-size:.76rem; color:var(--ink-muted); display:block; margin-bottom:.25rem; }
+.bar-track{ height:6px; background:var(--hair); border-radius:3px; overflow:hidden; }
+.bar-track i{ display:block; height:100%; background:linear-gradient(90deg, var(--accent), var(--accent-bright)); width:0%; }
+@media (prefers-reduced-motion: no-preference){ .bar-track i{ transition:width .8s cubic-bezier(.16,.8,.3,1); } }
+
+.modal-overlay{ position:fixed; inset:0; z-index:70; display:flex; align-items:center; justify-content:center; padding:1.2rem;
+  background:rgba(5,6,4,.6); backdrop-filter:blur(4px); opacity:0; pointer-events:none; transition:opacity .2s ease; }
+.modal-overlay.open{ opacity:1; pointer-events:auto; }
+.modal-overlay.nested{ z-index:80; }
+.modal-box{ background:var(--panel); border:1px solid var(--hair-bright); border-radius:var(--radius); padding:1.3rem 1.4rem 1.5rem;
+  width:min(460px, 100%); max-height:88vh; overflow-y:auto; box-shadow:0 24px 60px -20px rgba(0,0,0,.8); transform:scale(.96) translateY(10px); transition:transform .2s cubic-bezier(.16,.8,.3,1); }
+.modal-overlay.open .modal-box{ transform:scale(1) translateY(0); }
+.modal-box.wide{ width:min(760px, 94vw); }
+.modal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
+.modal-head h3{ margin:0; font-size:1rem; font-weight:700; }
+.modal-close{ background:none; border:1px solid var(--hair); color:var(--ink-muted); width:26px; height:26px; border-radius:2px; cursor:pointer; line-height:1; }
+.modal-close:hover{ border-color:var(--accent); color:var(--accent-bright); }
+
+.check-row{ display:flex; align-items:center; gap:.6rem; padding:.5rem 0; border-bottom:1px solid var(--hair); }
+.check-row:last-child{ border-bottom:none; }
+.chk-box{ width:26px; height:26px; flex:none; border:1px solid var(--hair-bright); border-radius:2px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:.9rem; color:transparent; background:var(--panel); }
+.chk-box.on{ background:var(--accent); border-color:var(--accent); color:#08110c; }
+.check-label{ flex:1; min-width:0; font-size:.88rem; }
+.check-label.vencido{ color:#e0665a; }
+.check-row button[data-action="detalhe"]{ background:none; border:1px solid var(--hair); color:var(--ink-dim); font-size:.72rem; padding:.25rem .55rem; border-radius:2px; cursor:pointer; flex:none; }
+.check-row button[data-action="detalhe"]:hover{ border-color:var(--accent); color:var(--accent-bright); }
+
+.tbl-aportes{ width:100%; border-collapse:collapse; font-size:.84rem; }
+.tbl-aportes th{ text-align:left; font-family:var(--font-label); font-size:.62rem; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim); padding:.3rem .4rem; border-bottom:1px solid var(--hair-bright); }
+.tbl-aportes td{ padding:.4rem; border-bottom:1px solid var(--hair); }
+.tbl-aportes button{ background:none; border:1px solid var(--hair); color:var(--ink-dim); font-size:.7rem; padding:.2rem .5rem; border-radius:2px; cursor:pointer; }
+.tbl-aportes button:hover{ border-color:var(--accent); color:var(--accent-bright); }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div><div class="vignette"></div><div class="grain"></div><div class="glow-blob" id="glowBlob"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="id"><span class="led-dot"></span> LIFEOS · MÓDULO PROJETOS</div>
+    <div class="id"><span class="clock" id="clock">--:--:--</span></div>
+  </div>
+
+  <div class="hero boot-flicker">
+    <div class="eyebrow">metas — dados reais</div>
+    <h1 class="title">$ projetos<span class="cursor"></span></h1>
+    <p id="resumoTxt">Carregando…</p>
+  </div>
+
+  <section class="module" data-reveal>
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">novo</div><h3>+ novo projeto</h3></div>
+      <button class="btn" id="btnToggleNovo">expandir</button>
+    </div>
+    <div id="formNovoWrap" style="display:none;margin-top:.9rem;">
+      <div class="field"><label>Nome</label><input type="text" id="novoNome" /></div>
+      <div class="field" style="margin-top:.6rem;"><label>Descrição (opcional)</label><input type="text" id="novoDescricao" /></div>
+      <div class="field" style="margin-top:.6rem;"><label>Orçamento (R$)</label><input type="number" id="novoOrcamento" min="0" step="50" value="0" /></div>
+      <div class="field" style="margin-top:.6rem;"><label>Observações (opcional)</label><textarea id="novoObservacoes"></textarea></div>
+      <div class="field" style="margin-top:.6rem;"><label>Foto (opcional)</label><input type="file" id="novoFoto" accept="image/*" /></div>
+      <div class="btn-row" style="margin-top:.9rem;"><button class="btn btn-primary" id="btnCriarProjeto">criar projeto</button></div>
+    </div>
+  </section>
+
+  <div class="pills" id="statusPills" style="margin:1rem 0 .9rem;">
+    <button class="pill active" data-val="">todos</button>
+    <button class="pill" data-val="Ativo">ativo</button>
+    <button class="pill" data-val="Pausado">pausado</button>
+    <button class="pill" data-val="Concluído">concluído</button>
+  </div>
+
+  <section class="module" data-reveal>
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">metas</div><h3>Seus projetos</h3></div></div>
+    <div id="lista"><p class="empty-state">Carregando…</p></div>
+  </section>
+
+  <footer><span>backend FastAPI próprio · escreve no banco de verdade</span><span id="genTime"></span></footer>
+</div>
+
+<div class="modal-overlay" id="modalGerenciar">
+  <div class="modal-box wide">
+    <div class="modal-head"><h3 id="gerNomeProjeto">projeto</h3><button type="button" class="modal-close" id="gerFechar">×</button></div>
+
+    <div class="segmented" id="gerSwitch">
+      <span class="thumb"></span>
+      <button data-val="checklist" class="active">checklist</button>
+      <button data-val="aportes">aportes</button>
+      <button data-val="editar">editar / excluir</button>
+    </div>
+
+    <div id="painelChecklist" style="margin-top:1rem;">
+      <div id="checklistLista"></div>
+      <div class="field-row" style="margin-top:.8rem;">
+        <input type="text" id="novoItemChecklist" placeholder="novo item... ex.: comprar passagem" style="flex:1;" />
+        <button type="button" class="btn" id="btnAddItem">adicionar</button>
+      </div>
+    </div>
+
+    <div id="painelAportes" style="display:none;margin-top:1rem;">
+      <div class="field-row">
+        <div class="field"><label>Data</label><input type="date" id="aporteData" /></div>
+        <div class="field"><label>Valor (R$)</label><input type="number" id="aporteValor" min="0" step="10" /></div>
+      </div>
+      <div class="field" style="margin-top:.6rem;"><label>Observação (opcional)</label><input type="text" id="aporteObs" /></div>
+      <div class="btn-row" style="margin-top:.6rem;"><button type="button" class="btn btn-primary" id="btnAddAporte">registrar aporte</button></div>
+      <div id="aportesLista" style="margin-top:1rem;"></div>
+    </div>
+
+    <div id="painelEditar" style="display:none;margin-top:1rem;">
+      <div class="field"><label>Nome</label><input type="text" id="edProjNome" /></div>
+      <div class="field" style="margin-top:.6rem;"><label>Descrição</label><input type="text" id="edProjDescricao" /></div>
+      <div class="field" style="margin-top:.6rem;"><label>Orçamento (R$)</label><input type="number" id="edProjOrcamento" min="0" step="50" /></div>
+      <div class="field" style="margin-top:.6rem;"><label>Status</label>
+        <select id="edProjStatus"><option>Ativo</option><option>Pausado</option><option>Concluído</option></select>
+      </div>
+      <div class="field" style="margin-top:.6rem;"><label>Observações</label><textarea id="edProjObservacoes"></textarea></div>
+      <div class="field" style="margin-top:.6rem;"><label>Substituir foto (opcional)</label><input type="file" id="edProjFoto" accept="image/*" /></div>
+      <div class="btn-row" style="margin-top:.9rem;">
+        <button type="button" class="btn btn-primary" id="btnSalvarProjeto">salvar alterações</button>
+      </div>
+      <div style="margin-top:1.1rem;border-top:1px solid var(--hair);padding-top:.9rem;">
+        <label style="display:flex;gap:.4rem;align-items:center;font-size:.82rem;color:var(--ink-muted);">
+          <input type="checkbox" id="confirmarExclusaoProjeto" /> confirmar exclusão deste projeto
+        </label>
+        <button type="button" class="btn" id="btnExcluirProjeto" style="margin-top:.6rem;" disabled>excluir projeto</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay nested" id="modalItemDetalhe">
+  <div class="modal-box">
+    <div class="modal-head"><h3>detalhes do item</h3><button type="button" class="modal-close" id="itemFechar">×</button></div>
+    <img id="itemFotoPreview" style="width:100%;max-height:180px;object-fit:cover;border:1px solid var(--hair);display:none;margin-bottom:.9rem;" />
+    <div class="field"><label>Notas</label><textarea id="itemNotas"></textarea></div>
+    <label style="display:flex;gap:.4rem;align-items:center;font-size:.82rem;color:var(--ink-muted);margin-top:.7rem;">
+      <input type="checkbox" id="itemSemPrazo" /> sem prazo definido
+    </label>
+    <div class="field" style="margin-top:.4rem;" id="itemPrazoWrap"><label>Prazo</label><input type="date" id="itemPrazo" /></div>
+    <div class="field" style="margin-top:.6rem;"><label>Link</label><input type="text" id="itemLink" placeholder="https://..." /></div>
+    <div class="field" style="margin-top:.6rem;"><label>Foto (opcional)</label><input type="file" id="itemFoto" accept="image/*" /></div>
+    <div class="btn-row" style="margin-top:.9rem;">
+      <button type="button" class="btn btn-primary" id="btnSalvarItem">salvar</button>
+      <button type="button" class="btn" id="btnExcluirItem">excluir item</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+(function(){
+"use strict";
+const L = LifeOS;
+
+let filtroStatus = '';
+let projetoAtualId = null;
+let itemAtualId = null;
+let painelAtual = 'checklist';
+
+function fmtMoeda(v) {
+  v = v || 0;
+  return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function dataBr(iso) { if (!iso) return ''; const [a, m, d] = iso.split('-'); return `${d}/${m}/${a}`; }
+function slugStatus(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function placeholderFoto() { return 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" fill="#191C13"/></svg>`); }
+
+/* ------------------------------------------------------------------- */
+async function carregarResumo() {
+  const r = await L.api('/api/projetos/resumo');
+  document.getElementById('resumoTxt').textContent =
+    `${r.projetos_ativos} projeto(s) ativo(s) · ${fmtMoeda(r.total_investido)} investidos no total`;
+}
+
+function projetoCardHtml(p) {
+  const barFin = p.progresso_financeiro != null
+    ? `<div class="bar-row"><span class="bar-label">financeiro: ${fmtMoeda(p.valor_acumulado)} / ${fmtMoeda(p.orcamento)} (${p.progresso_financeiro.toFixed(0)}%)</span><div class="bar-track"><i style="width:${p.progresso_financeiro}%"></i></div></div>`
+    : `<div class="bar-row muted">acumulado: ${fmtMoeda(p.valor_acumulado)} (sem orçamento definido)</div>`;
+  const barChk = p.progresso_checklist != null
+    ? `<div class="bar-row"><span class="bar-label">checklist: ${p.progresso_checklist.toFixed(0)}%</span><div class="bar-track"><i style="width:${p.progresso_checklist}%"></i></div></div>`
+    : `<div class="bar-row muted">checklist: sem itens ainda</div>`;
+  return `
+  <div class="projeto-card" data-id="${p.id}">
+    <div class="projeto-foto-wrap">
+      ${p.foto_url ? `<img class="card-cover" src="${p.foto_url}" alt="" />` : `<div class="card-cover placeholder">🎯</div>`}
+    </div>
+    <div class="projeto-body">
+      <div class="projeto-head">
+        <div class="projeto-nome">${p.nome}</div>
+        <span class="projeto-status status-${slugStatus(p.status)}">${p.status}</span>
+      </div>
+      ${p.descricao ? `<div class="projeto-desc">${p.descricao}</div>` : ''}
+      ${barFin}
+      ${barChk}
+      <div class="btn-row" style="margin-top:.8rem;">
+        <button type="button" class="btn" data-action="gerenciar">gerenciar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function carregarLista() {
+  const el = document.getElementById('lista');
+  const params = filtroStatus ? `?status=${encodeURIComponent(filtroStatus)}` : '';
+  const projetos = await L.api(`/api/projetos/projetos${params}`);
+  if (!projetos.length) { el.innerHTML = '<p class="empty-state">Nenhum projeto cadastrado ainda.</p>'; return; }
+  el.innerHTML = projetos.map(projetoCardHtml).join('');
+  el.querySelectorAll('[data-action="gerenciar"]').forEach(btn => {
+    btn.addEventListener('click', () => abrirGerenciar(parseInt(btn.closest('.projeto-card').dataset.id, 10)));
+  });
+}
+
+async function carregar() {
+  await Promise.all([carregarResumo(), carregarLista()]);
+}
+
+/* ------------------------------------------------------------------- */
+/* modal gerenciar (checklist / aportes / editar)                       */
+/* ------------------------------------------------------------------- */
+
+function itemChecklistHtml(item) {
+  const extras = [];
+  if (item.prazo) extras.push(`${item.vencido ? 'atrasado' : 'até'} ${dataBr(item.prazo)}`);
+  if (item.link) extras.push('🔗');
+  if (item.foto_url) extras.push('🖼');
+  if (item.notas) extras.push('📝');
+  const rotulo = extras.length ? `${item.descricao}&nbsp;&nbsp;(${extras.join(' · ')})` : item.descricao;
+  return `
+  <div class="check-row" data-id="${item.id}">
+    <button type="button" class="chk-box ${item.concluido ? 'on' : ''}" data-action="toggle">${item.concluido ? '✓' : ''}</button>
+    <div class="check-label ${item.vencido ? 'vencido' : ''}">${rotulo}</div>
+    <button type="button" data-action="detalhe">✎</button>
+  </div>`;
+}
+
+async function carregarChecklist() {
+  const el = document.getElementById('checklistLista');
+  el.innerHTML = '<p class="empty-state">Carregando…</p>';
+  const itens = await L.api(`/api/projetos/projetos/${projetoAtualId}/checklist`);
+  el.innerHTML = itens.length ? itens.map(itemChecklistHtml).join('') : '<p class="empty-state">Nenhum item ainda.</p>';
+  el.querySelectorAll('.check-row').forEach(row => {
+    const itemId = parseInt(row.dataset.id, 10);
+    row.querySelector('[data-action="toggle"]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const ligado = !btn.classList.contains('on');
+      try {
+        await L.api(`/api/projetos/checklist/${itemId}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ concluido: ligado }),
+        });
+        await carregarChecklist();
+        await carregarLista();
+      } catch (err) { L.toast(err.message, true); }
+    });
+    row.querySelector('[data-action="detalhe"]').addEventListener('click', () => abrirDetalheItem(itens.find(i => i.id === itemId)));
+  });
+}
+
+document.getElementById('btnAddItem').addEventListener('click', async () => {
+  const input = document.getElementById('novoItemChecklist');
+  const descricao = input.value.trim();
+  if (!descricao) return;
+  try {
+    await L.api(`/api/projetos/projetos/${projetoAtualId}/checklist`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ descricao }),
+    });
+    input.value = '';
+    await carregarChecklist();
+    await carregarLista();
+  } catch (err) { L.toast(err.message, true); }
+});
+
+function aporteRowHtml(a) {
+  return `<tr data-id="${a.id}"><td>${dataBr(a.data)}</td><td>${fmtMoeda(a.valor)}</td><td>${a.observacao || ''}</td>
+    <td><button type="button" data-action="excluir-aporte">excluir</button></td></tr>`;
+}
+
+async function carregarAportes() {
+  const el = document.getElementById('aportesLista');
+  el.innerHTML = '<p class="empty-state">Carregando…</p>';
+  const aportes = await L.api(`/api/projetos/projetos/${projetoAtualId}/aportes`);
+  if (!aportes.length) { el.innerHTML = '<p class="empty-state">Nenhum aporte registrado ainda.</p>'; return; }
+  el.innerHTML = `<table class="tbl-aportes"><thead><tr><th>Data</th><th>Valor</th><th>Observação</th><th></th></tr></thead>
+    <tbody>${aportes.map(aporteRowHtml).join('')}</tbody></table>`;
+  el.querySelectorAll('[data-action="excluir-aporte"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const aporteId = parseInt(btn.closest('tr').dataset.id, 10);
+      try {
+        await L.api(`/api/projetos/aportes/${aporteId}`, { method: 'DELETE' });
+        L.toast('Aporte excluído.');
+        await carregarAportes();
+        await carregarLista();
+      } catch (err) { L.toast(err.message, true); }
+    });
+  });
+}
+
+document.getElementById('btnAddAporte').addEventListener('click', async () => {
+  const data = document.getElementById('aporteData').value;
+  const valor = parseFloat(document.getElementById('aporteValor').value);
+  const observacao = document.getElementById('aporteObs').value.trim();
+  if (!valor || valor <= 0) { L.toast('Informe um valor maior que zero.', true); return; }
+  try {
+    await L.api(`/api/projetos/projetos/${projetoAtualId}/aportes`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data, valor, observacao }),
+    });
+    L.toast(`Aporte de ${fmtMoeda(valor)} registrado.`);
+    document.getElementById('aporteValor').value = '';
+    document.getElementById('aporteObs').value = '';
+    await carregarAportes();
+    await carregarLista();
+  } catch (err) { L.toast(err.message, true); }
+});
+
+function preencherEditar(p) {
+  document.getElementById('edProjNome').value = p.nome;
+  document.getElementById('edProjDescricao').value = p.descricao || '';
+  document.getElementById('edProjOrcamento').value = p.orcamento;
+  document.getElementById('edProjStatus').value = p.status;
+  document.getElementById('edProjObservacoes').value = p.observacoes || '';
+  document.getElementById('edProjFoto').value = '';
+  document.getElementById('confirmarExclusaoProjeto').checked = false;
+  document.getElementById('btnExcluirProjeto').disabled = true;
+}
+
+document.getElementById('confirmarExclusaoProjeto').addEventListener('change', (e) => {
+  document.getElementById('btnExcluirProjeto').disabled = !e.target.checked;
+});
+
+document.getElementById('btnSalvarProjeto').addEventListener('click', async () => {
+  const fd = new FormData();
+  fd.append('nome', document.getElementById('edProjNome').value);
+  fd.append('descricao', document.getElementById('edProjDescricao').value);
+  fd.append('orcamento', document.getElementById('edProjOrcamento').value || '0');
+  fd.append('observacoes', document.getElementById('edProjObservacoes').value);
+  fd.append('status', document.getElementById('edProjStatus').value);
+  const foto = document.getElementById('edProjFoto').files[0];
+  if (foto) fd.append('foto', foto);
+  try {
+    await L.api(`/api/projetos/projetos/${projetoAtualId}`, { method: 'PATCH', body: fd });
+    L.toast('Projeto atualizado.');
+    document.getElementById('gerNomeProjeto').textContent = document.getElementById('edProjNome').value;
+    await carregarLista();
+  } catch (err) { L.toast(err.message, true); }
+});
+
+document.getElementById('btnExcluirProjeto').addEventListener('click', async () => {
+  try {
+    await L.api(`/api/projetos/projetos/${projetoAtualId}`, { method: 'DELETE' });
+    L.toast('Projeto excluído.');
+    fecharGerenciar();
+    await carregar();
+  } catch (err) { L.toast(err.message, true); }
+});
+
+function mudarPainel(val) {
+  painelAtual = val;
+  document.getElementById('painelChecklist').style.display = val === 'checklist' ? 'block' : 'none';
+  document.getElementById('painelAportes').style.display = val === 'aportes' ? 'block' : 'none';
+  document.getElementById('painelEditar').style.display = val === 'editar' ? 'block' : 'none';
+}
+L.initSegmented('gerSwitch', mudarPainel);
+
+async function abrirGerenciar(projetoId) {
+  projetoAtualId = projetoId;
+  const p = await L.api(`/api/projetos/projetos/${projetoId}`);
+  document.getElementById('gerNomeProjeto').textContent = p.nome;
+  preencherEditar(p);
+  document.getElementById('aporteData').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('modalGerenciar').classList.add('open');
+  mudarPainel('checklist');
+  await Promise.all([carregarChecklist(), carregarAportes()]);
+}
+function fecharGerenciar() {
+  document.getElementById('modalGerenciar').classList.remove('open');
+  projetoAtualId = null;
+}
+document.getElementById('gerFechar').addEventListener('click', fecharGerenciar);
+document.getElementById('modalGerenciar').addEventListener('click', e => { if (e.target.id === 'modalGerenciar') fecharGerenciar(); });
+
+/* ------------------------------------------------------------------- */
+/* modal detalhe do item de checklist                                   */
+/* ------------------------------------------------------------------- */
+
+function abrirDetalheItem(item) {
+  itemAtualId = item.id;
+  document.getElementById('itemNotas').value = item.notas || '';
+  document.getElementById('itemSemPrazo').checked = !item.prazo;
+  document.getElementById('itemPrazo').value = item.prazo || '';
+  document.getElementById('itemPrazoWrap').style.display = item.prazo ? 'block' : 'none';
+  document.getElementById('itemLink').value = item.link || '';
+  document.getElementById('itemFoto').value = '';
+  const preview = document.getElementById('itemFotoPreview');
+  if (item.foto_url) { preview.src = item.foto_url; preview.style.display = 'block'; } else { preview.style.display = 'none'; }
+  document.getElementById('modalItemDetalhe').classList.add('open');
+}
+function fecharDetalheItem() {
+  document.getElementById('modalItemDetalhe').classList.remove('open');
+  itemAtualId = null;
+}
+document.getElementById('itemFechar').addEventListener('click', fecharDetalheItem);
+document.getElementById('modalItemDetalhe').addEventListener('click', e => { if (e.target.id === 'modalItemDetalhe') fecharDetalheItem(); });
+document.getElementById('itemSemPrazo').addEventListener('change', (e) => {
+  document.getElementById('itemPrazoWrap').style.display = e.target.checked ? 'none' : 'block';
+});
+
+document.getElementById('btnSalvarItem').addEventListener('click', async () => {
+  const fd = new FormData();
+  fd.append('notas', document.getElementById('itemNotas').value);
+  const semPrazo = document.getElementById('itemSemPrazo').checked;
+  fd.append('prazo', semPrazo ? '' : document.getElementById('itemPrazo').value);
+  fd.append('link', document.getElementById('itemLink').value);
+  const foto = document.getElementById('itemFoto').files[0];
+  if (foto) fd.append('foto', foto);
+  try {
+    await L.api(`/api/projetos/checklist/${itemAtualId}/detalhes`, { method: 'PATCH', body: fd });
+    L.toast('Item atualizado.');
+    fecharDetalheItem();
+    await carregarChecklist();
+  } catch (err) { L.toast(err.message, true); }
+});
+
+document.getElementById('btnExcluirItem').addEventListener('click', async () => {
+  try {
+    await L.api(`/api/projetos/checklist/${itemAtualId}`, { method: 'DELETE' });
+    L.toast('Item excluído.');
+    fecharDetalheItem();
+    await carregarChecklist();
+    await carregarLista();
+  } catch (err) { L.toast(err.message, true); }
+});
+
+/* ------------------------------------------------------------------- */
+/* novo projeto / filtro de status                                      */
+/* ------------------------------------------------------------------- */
+
+document.getElementById('btnToggleNovo').addEventListener('click', () => {
+  const wrap = document.getElementById('formNovoWrap');
+  const aberto = wrap.style.display !== 'none';
+  wrap.style.display = aberto ? 'none' : 'block';
+  document.getElementById('btnToggleNovo').textContent = aberto ? 'expandir' : 'recolher';
+});
+
+document.getElementById('btnCriarProjeto').addEventListener('click', async () => {
+  const nome = document.getElementById('novoNome').value.trim();
+  if (!nome) { L.toast('Informe um nome para o projeto.', true); return; }
+  const fd = new FormData();
+  fd.append('nome', nome);
+  fd.append('descricao', document.getElementById('novoDescricao').value.trim());
+  fd.append('orcamento', document.getElementById('novoOrcamento').value || '0');
+  fd.append('observacoes', document.getElementById('novoObservacoes').value.trim());
+  const foto = document.getElementById('novoFoto').files[0];
+  if (foto) fd.append('foto', foto);
+  try {
+    await L.api('/api/projetos/projetos', { method: 'POST', body: fd });
+    L.toast(`Projeto '${nome}' criado.`);
+    document.getElementById('novoNome').value = '';
+    document.getElementById('novoDescricao').value = '';
+    document.getElementById('novoOrcamento').value = '0';
+    document.getElementById('novoObservacoes').value = '';
+    document.getElementById('novoFoto').value = '';
+    document.getElementById('formNovoWrap').style.display = 'none';
+    document.getElementById('btnToggleNovo').textContent = 'expandir';
+    await carregar();
+  } catch (err) { L.toast(err.message, true); }
+});
+
+L.initPills('statusPills', val => { filtroStatus = val; carregarLista(); });
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  fecharDetalheItem();
+  fecharGerenciar();
+});
+
+L.initReveal();
+L.initClock();
+L.initModuleSwitcher('projetos');
+L.initGlow();
+document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
+carregar();
+})();
+</script>
+</body>
+</html>

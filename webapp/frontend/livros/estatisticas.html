@@ -266,8 +266,17 @@ L.initPills('periodoPills', val => {
   document.getElementById('periodoPersonalizado').style.display = val === 'personalizado' ? 'grid' : 'none';
   if (val !== 'personalizado' || (document.getElementById('dataDe').value && document.getElementById('dataAte').value)) carregar();
 });
+let _debouncePersonalizado = null;
 ['dataDe', 'dataAte'].forEach(id => document.getElementById(id).addEventListener('change', () => {
-  if (state.periodo === 'personalizado' && document.getElementById('dataDe').value && document.getElementById('dataAte').value) carregar();
+  // input[type=date] dispara 'change' a cada segmento (dia/mês/ano) digitado
+  // pelo teclado, não só ao terminar — sem debounce, digitar "2026" no ano
+  // dispara uma chamada por dígito intermediário (fim=0002, 0020, 0202...) e
+  // a resposta que chegar por último (não a mais recente disparada) vence,
+  // podendo sobrescrever o resultado certo com um intervalo inválido.
+  clearTimeout(_debouncePersonalizado);
+  _debouncePersonalizado = setTimeout(() => {
+    if (state.periodo === 'personalizado' && document.getElementById('dataDe').value && document.getElementById('dataAte').value) carregar();
+  }, 500);
 }));
 
 L.initTableToggles();

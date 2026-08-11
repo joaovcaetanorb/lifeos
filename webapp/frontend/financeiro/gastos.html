@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gastos · Financeiro · lifeOS</title>
+<link rel="stylesheet" href="/static/tokens.css" />
+<link rel="stylesheet" href="/static/effects.css" />
+<style>
+.row-actions{ text-align:right; }
+.row-actions button{ background:none; border:1px solid var(--hair); color:var(--ink-dim); font-size:.7rem; padding:.3rem .6rem; border-radius:2px; cursor:pointer; }
+.row-actions button:hover{ border-color:var(--danger); color:var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div><div class="vignette"></div><div class="grain"></div><div class="glow-blob" id="glowBlob"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="id"><span class="led-dot"></span> LIFEOS · MÓDULO FINANCEIRO</div>
+    <div class="id"><span class="clock" id="clock">--:--:--</span></div>
+  </div>
+
+  <div class="hero boot-flicker">
+    <div class="eyebrow">uso diário</div>
+    <h1 class="title">$ gastos<span class="cursor"></span></h1>
+    <p>Lance o gasto na hora — se for no vale-alimentação, desconta do vale; o resto desconta do dinheiro do mês.</p>
+  </div>
+
+  <nav class="modnav">
+    <a href="/financeiro/gastos.html" class="active">gastos</a>
+    <a href="/financeiro/receitas.html">renda extra</a>
+    <a href="/financeiro/cofre.html">cofre</a>
+    <a href="/financeiro/analises.html">análises</a>
+    <a href="/financeiro/configuracoes.html">configurações</a>
+  </nav>
+
+  <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);">
+    <div class="kpi"><div class="k-label">dinheiro restante (mês)</div><div class="k-value" id="kpiDinheiro">—</div></div>
+    <div class="kpi"><div class="k-label">vale-alimentação restante</div><div class="k-value" id="kpiVA">—</div></div>
+    <div class="kpi"><div class="k-label">cofre</div><div class="k-value" id="kpiCofre">—</div></div>
+  </div>
+
+  <section class="module" data-reveal>
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">lançar</div><h3>Novo gasto</h3></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Data</label><input type="date" id="gData" /></div>
+      <div class="field"><label>Descrição</label><input type="text" id="gDescricao" placeholder="Ex.: Almoço" /></div>
+    </div>
+    <div class="field-row" style="margin-top:.9rem;">
+      <div class="field"><label>Valor (R$)</label><input type="number" id="gValor" min="0" step="0.01" placeholder="0,00" /></div>
+      <div class="field"><label>Categoria</label><select id="gCategoria"></select></div>
+    </div>
+    <div class="field-row" style="margin-top:.9rem;max-width:calc(50% - .45rem);">
+      <div class="field"><label>Forma de pagamento</label><select id="gFormaPagamento"></select></div>
+    </div>
+    <div class="btn-row"><button class="btn btn-primary" id="btnSalvarGasto">lançar gasto</button></div>
+  </section>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">histórico</div><h3>Gastos do mês</h3></div>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>data</th><th>descrição</th><th>categoria</th><th>forma</th><th>valor</th><th></th></tr></thead>
+      <tbody id="gastosTbody"></tbody>
+    </table>
+    <p class="empty-state" id="gastosVazio" style="display:none;">Nenhum gasto lançado neste mês ainda.</p>
+  </section>
+
+  <footer><span>backend FastAPI próprio · escreve no banco de verdade</span><span id="genTime"></span></footer>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+(function(){
+"use strict";
+const L = LifeOS;
+const CATEGORIAS_GASTO = ["Alimentação","Transporte","Lazer","Compras pessoais","Saúde","Casa","Assinaturas","Outros"];
+const FORMAS_PAGAMENTO = ["Dinheiro","Vale-alimentação","Cartão de crédito"];
+
+function moeda(v) { return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+function hoje() { return new Date().toISOString().slice(0, 10); }
+
+document.getElementById('gCategoria').innerHTML = CATEGORIAS_GASTO.map(c => `<option value="${c}">${c}</option>`).join('');
+document.getElementById('gFormaPagamento').innerHTML = FORMAS_PAGAMENTO.map(f => `<option value="${f}">${f}</option>`).join('');
+document.getElementById('gData').value = hoje();
+
+async function carregarResumo() {
+  const r = await L.api('/api/financeiro/resumo');
+  document.getElementById('kpiDinheiro').textContent = moeda(r.dinheiro.saldo);
+  document.getElementById('kpiVA').textContent = moeda(r.vale_alimentacao.saldo);
+  document.getElementById('kpiCofre').textContent = moeda(r.cofre);
+}
+
+async function carregarGastos() {
+  const gastos = await L.api('/api/financeiro/gastos');
+  const tbody = document.getElementById('gastosTbody');
+  document.getElementById('gastosVazio').style.display = gastos.length ? 'none' : 'block';
+  tbody.innerHTML = gastos.map(g => `
+    <tr data-id="${g.id}">
+      <td>${g.data.split('-').reverse().join('/')}</td>
+      <td>${g.descricao}</td>
+      <td>${g.categoria}</td>
+      <td>${g.forma_pagamento}</td>
+      <td>${moeda(g.valor)}</td>
+      <td class="row-actions"><button data-action="excluir">excluir</button></td>
+    </tr>
+  `).join('');
+  tbody.querySelectorAll('[data-action="excluir"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.closest('tr').dataset.id;
+      if (!confirm('Excluir esse gasto?')) return;
+      await L.api(`/api/financeiro/gastos/${id}`, { method: 'DELETE' });
+      L.toast('Gasto excluído.');
+      carregarGastos(); carregarResumo();
+    });
+  });
+}
+
+document.getElementById('btnSalvarGasto').addEventListener('click', async () => {
+  const descricao = document.getElementById('gDescricao').value.trim();
+  const valor = parseFloat(document.getElementById('gValor').value);
+  if (!descricao) { L.toast('Informe uma descrição.', true); return; }
+  if (!(valor > 0)) { L.toast('Informe um valor maior que zero.', true); return; }
+  try {
+    await L.api('/api/financeiro/gastos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: document.getElementById('gData').value,
+        descricao, valor,
+        categoria: document.getElementById('gCategoria').value,
+        forma_pagamento: document.getElementById('gFormaPagamento').value,
+      }),
+    });
+    L.toast('Gasto lançado.');
+    document.getElementById('gDescricao').value = '';
+    document.getElementById('gValor').value = '';
+    carregarGastos(); carregarResumo();
+  } catch (e) { L.toast(e.message, true); }
+});
+
+L.initReveal();
+L.initClock();
+L.initGlow();
+L.initModuleSwitcher('financeiro');
+document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
+carregarResumo();
+carregarGastos();
+})();
+</script>
+</body>
+</html>

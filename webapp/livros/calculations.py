@@ -39,24 +39,6 @@ def status_por_livro() -> dict[int, str]:
     return dict(zip(mais_recente["livro_id"], mais_recente["status"]))
 
 
-def top_livros_avaliados(limite: int = 5) -> pd.DataFrame:
-    leituras = models.listar_leituras_com_livro()
-    if leituras.empty:
-        return pd.DataFrame(columns=["livro_id", "livro_nome", "autor_nome", "capa_path", "nota_media"])
-
-    avaliadas = leituras.dropna(subset=["nota"])
-    if avaliadas.empty:
-        return pd.DataFrame(columns=["livro_id", "livro_nome", "autor_nome", "capa_path", "nota_media"])
-
-    medias = (
-        avaliadas.groupby(["livro_id", "livro_nome", "autor_nome", "capa_path"])["nota"]
-        .mean()
-        .reset_index(name="nota_media")
-        .sort_values("nota_media", ascending=False)
-    )
-    return medias.head(limite)
-
-
 def resumo_geral() -> dict:
     livros = models.listar_livros()
     leituras = models.listar_leituras_com_livro()

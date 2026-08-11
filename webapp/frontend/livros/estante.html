@@ -11,6 +11,7 @@
 .livro-card{ background:var(--panel-raised); border:1px solid var(--hair); border-radius:var(--radius); overflow:hidden; transition:border-color .18s ease; display:flex; flex-direction:column; height:100%; }
 .livro-card:hover{ border-color:var(--hair-bright); }
 .livro-cover-wrap{ position:relative; flex:none; }
+.livro-cover-wrap .card-cover{ aspect-ratio:2/3; }
 .livro-fav{ position:absolute; top:.4rem; right:.4rem; width:26px; height:26px; display:flex; align-items:center; justify-content:center;
   background:rgba(11,13,9,.7); border:1px solid var(--hair-bright); border-radius:2px; cursor:pointer; font-size:1rem; line-height:1; color:var(--ink-dim); backdrop-filter:blur(2px); }
 .livro-fav.on{ color:var(--accent-bright); border-color:var(--accent); }
@@ -27,13 +28,6 @@
 .filtros{ display:flex; gap:1rem; align-items:center; flex-wrap:wrap; margin-bottom:.9rem; }
 .filtros input[type="text"]{ flex:1; min-width:200px; }
 .filtros label{ display:flex; align-items:center; gap:.4rem; font-size:.82rem; color:var(--ink-muted); white-space:nowrap; }
-
-.destaque-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:1rem; margin-top:1rem; }
-.destaque-item{ text-align:center; }
-.destaque-item .cap{ width:100%; aspect-ratio:3/4; object-fit:cover; border:1px solid var(--hair); background:var(--panel-raised); }
-.destaque-item .nome{ font-size:.78rem; font-weight:700; margin-top:.4rem; }
-.destaque-item .autor{ font-size:.72rem; color:var(--ink-muted); }
-.destaque-item .nota{ font-size:.76rem; color:var(--accent-bright); font-weight:700; margin-top:.15rem; }
 
 .modal-overlay{ position:fixed; inset:0; z-index:70; display:flex; align-items:center; justify-content:center; padding:1.2rem;
   background:rgba(5,6,4,.6); backdrop-filter:blur(4px); opacity:0; pointer-events:none; transition:opacity .2s ease; }
@@ -81,11 +75,6 @@
     <a href="/livros/estante.html" class="active">estante</a>
   </nav>
 
-  <section class="module" data-reveal id="secaoDestaque" style="display:none;margin-bottom:1rem;">
-    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">destaque</div><h3>Melhores avaliados</h3></div></div>
-    <div class="destaque-grid" id="destaqueGrid"></div>
-  </section>
-
   <section class="module" data-reveal>
     <div class="pills" id="statusPills" style="margin-bottom:.9rem;">
       <button class="pill active" data-val="Todos">todos</button>
@@ -97,6 +86,7 @@
     <div class="filtros">
       <input type="text" id="busca" placeholder="buscar por livro ou autor..." />
       <label><input type="checkbox" id="soFavoritos" /> só favoritos</label>
+      <label><input type="checkbox" id="melhoresAvaliados" /> melhores avaliados</label>
     </div>
     <div id="grid" class="livro-grid"><p class="empty-state">Carregando…</p></div>
   </section>
@@ -114,10 +104,14 @@
     </div>
     <div class="field" style="margin-top:.8rem;">
       <label>Capa</label>
-      <div style="display:flex;gap:.8rem;align-items:center;">
+      <div style="display:flex;gap:.8rem;align-items:flex-start;">
         <img id="edCapaPreview" class="card-cover" style="width:72px;height:72px;flex:none;" />
-        <input type="file" id="edCapa" accept="image/*" style="flex:1;" />
+        <div style="flex:1;display:flex;flex-direction:column;gap:.5rem;min-width:0;">
+          <button type="button" class="btn" id="btnBuscarCapa">buscar capa no Google Books</button>
+        </div>
       </div>
+      <div id="edCapaResultados" style="display:none;margin-top:.6rem;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:.4rem;"></div>
+      <div class="field" style="margin-top:.6rem;"><label style="font-size:.62rem;">ou envie um arquivo manualmente</label><input type="file" id="edCapa" accept="image/*" /></div>
     </div>
     <div class="btn-row">
       <button type="button" class="btn btn-primary" id="btnSalvarEdicao">salvar</button>
@@ -164,6 +158,7 @@ let timer = null;
 let filtroStatus = 'Todos';
 let livrosCache = {};
 let modalLivroId = null;
+let modalLivroAutor = '';
 let leiturasLivroId = null;
 
 function notaTexto(n) { return (n === null || n === undefined) ? 'sem nota' : `★ ${n}`; }
@@ -192,30 +187,19 @@ function cardHtml(l) {
   </div>`;
 }
 
-async function carregarDestaques() {
-  const top = await L.api('/api/livros/melhores-avaliados?limite=5');
-  const sec = document.getElementById('secaoDestaque');
-  if (!top.length) { sec.style.display = 'none'; return; }
-  sec.style.display = 'block';
-  document.getElementById('destaqueGrid').innerHTML = top.map(l => `
-    <div class="destaque-item">
-      ${l.capa_url ? `<img class="cap" src="${l.capa_url}" alt="" />` : `<div class="cap card-cover placeholder">📖</div>`}
-      <div class="nome">${l.livro_nome}</div>
-      <div class="autor">${l.autor_nome}</div>
-      <div class="nota">${notaTexto(l.nota_media)}</div>
-    </div>
-  `).join('');
-}
-
 async function carregar() {
   const grid = document.getElementById('grid');
   const q = document.getElementById('busca').value;
   const fav = document.getElementById('soFavoritos').checked;
+  const melhoresAvaliados = document.getElementById('melhoresAvaliados').checked;
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (fav) params.set('favoritos', 'true');
   if (filtroStatus !== 'Todos') params.set('status', filtroStatus);
-  const livros = await L.api(`/api/livros/livros?${params.toString()}`);
+  let livros = await L.api(`/api/livros/livros?${params.toString()}`);
+  if (melhoresAvaliados) {
+    livros = livros.filter(l => l.nota_media != null).sort((a, b) => b.nota_media - a.nota_media);
+  }
   if (!livros.length) { grid.innerHTML = '<p class="empty-state">Nenhum livro encontrado.</p>'; return; }
   livrosCache = {}; livros.forEach(l => { livrosCache[l.id] = l; });
   grid.innerHTML = livros.map(cardHtml).join('');
@@ -251,11 +235,14 @@ async function carregar() {
 
 function abrirModal(l) {
   modalLivroId = l.id;
+  modalLivroAutor = l.autor_nome || '';
   document.getElementById('edNome').value = l.nome;
   document.getElementById('edAno').value = l.ano_publicacao || '';
   document.getElementById('edGenero').value = l.genero || '';
   document.getElementById('edCapa').value = '';
   document.getElementById('edCapaPreview').src = l.capa_url || placeholderCapa();
+  document.getElementById('edCapaResultados').style.display = 'none';
+  document.getElementById('edCapaResultados').innerHTML = '';
   document.getElementById('modalEditar').classList.add('open');
   document.getElementById('edNome').focus();
 }
@@ -263,6 +250,41 @@ function fecharModal() { document.getElementById('modalEditar').classList.remove
 document.getElementById('modalFechar').addEventListener('click', fecharModal);
 document.getElementById('btnCancelarEdicao').addEventListener('click', fecharModal);
 document.getElementById('modalEditar').addEventListener('click', e => { if (e.target.id === 'modalEditar') fecharModal(); });
+
+async function aplicarCapaGoogle(capaUrl) {
+  if (!modalLivroId || !capaUrl) return;
+  try {
+    const atualizado = await L.api(`/api/livros/livros/${modalLivroId}/capa-from-google`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ capa_url: capaUrl }),
+    });
+    document.getElementById('edCapaPreview').src = atualizado.capa_url;
+    document.getElementById('edCapaResultados').style.display = 'none';
+    L.toast('Capa atualizada.');
+    carregar();
+  } catch (e) {
+    L.toast(e.message, true);
+  }
+}
+
+document.getElementById('btnBuscarCapa').addEventListener('click', async () => {
+  const nome = document.getElementById('edNome').value.trim();
+  if (!nome) return;
+  const grid = document.getElementById('edCapaResultados');
+  grid.style.display = 'grid';
+  grid.innerHTML = '<p class="empty-state">buscando...</p>';
+  try {
+    const resultados = await L.api(`/api/livros/buscar-capa?q=${encodeURIComponent(`${nome} ${modalLivroAutor}`)}`);
+    if (!resultados.length) { grid.innerHTML = '<p class="empty-state">Nada encontrado.</p>'; return; }
+    grid.innerHTML = resultados.map((r, i) => `
+      <img data-i="${i}" src="${r.capa_url}" title="${r.titulo} — ${r.autor}" style="width:100%;aspect-ratio:1;object-fit:cover;border:1px solid var(--hair);cursor:pointer;" />
+    `).join('');
+    grid.querySelectorAll('img').forEach(img => {
+      img.addEventListener('click', () => aplicarCapaGoogle(resultados[+img.dataset.i].capa_url));
+    });
+  } catch (e) {
+    grid.innerHTML = `<p class="empty-state">${e.message}</p>`;
+  }
+});
 document.getElementById('btnSalvarEdicao').addEventListener('click', async () => {
   if (!modalLivroId) return;
   const fd = new FormData();
@@ -397,13 +419,13 @@ document.addEventListener('keydown', e => {
 L.initPills('statusPills', val => { filtroStatus = val; carregar(); });
 document.getElementById('busca').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(carregar, 300); });
 document.getElementById('soFavoritos').addEventListener('change', carregar);
+document.getElementById('melhoresAvaliados').addEventListener('change', carregar);
 
 L.initReveal();
 L.initClock();
 L.initModuleSwitcher('livros');
 L.initGlow();
 document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
-carregarDestaques();
 carregar();
 })();
 </script>
