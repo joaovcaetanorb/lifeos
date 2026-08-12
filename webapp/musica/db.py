@@ -153,6 +153,10 @@ def _migrar_schema(conn) -> None:
     colunas_albuns = {r[1] for r in conn.execute("PRAGMA table_info(albuns)").fetchall()}
     if "favorito" not in colunas_albuns:
         conn.execute("ALTER TABLE albuns ADD COLUMN favorito INTEGER NOT NULL DEFAULT 0")
+    if "capa_dados" not in colunas_albuns:
+        conn.execute("ALTER TABLE albuns ADD COLUMN capa_dados BLOB")
+    if "capa_mime" not in colunas_albuns:
+        conn.execute("ALTER TABLE albuns ADD COLUMN capa_mime TEXT")
 
     colunas_historico = {r[1] for r in conn.execute("PRAGMA table_info(spotify_historico)").fetchall()}
     if "duration_ms" not in colunas_historico:

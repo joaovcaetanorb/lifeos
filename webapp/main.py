@@ -20,23 +20,21 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from analytics.router import router as analytics_router
 from financeiro.db import inicializar_banco as inicializar_banco_financeiro
 from financeiro.router import router as financeiro_router
 from habitos.db import inicializar_banco as inicializar_banco_habitos
 from habitos.router import router as habitos_router
 from humor.db import inicializar_banco as inicializar_banco_humor
 from humor.router import router as humor_router
-from livros.db import UPLOADS_DIR as LIVROS_UPLOADS_DIR
 from livros.db import inicializar_banco as inicializar_banco_livros
 from livros.router import router as livros_router
 from momentos.db import inicializar_banco as inicializar_banco_momentos
 from momentos.router import router as momentos_router
-from musica.db import UPLOADS_DIR as MUSICA_UPLOADS_DIR
 from musica.db import inicializar_banco as inicializar_banco_musica
 from musica.export_router import router as musica_export_router
 from musica.router import router as musica_router
 from musica.spotify_router import router as musica_spotify_router
-from projetos.db import UPLOADS_DIR as PROJETOS_UPLOADS_DIR
 from projetos.db import inicializar_banco as inicializar_banco_projetos
 from projetos.router import router as projetos_router
 from timeline.router import router as timeline_router
@@ -44,10 +42,8 @@ from timeline.router import router as timeline_router
 _WEBAPP_DIR = Path(__file__).resolve().parent
 _FRONTEND_DIR = _WEBAPP_DIR / "frontend"
 
-MUSICA_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-LIVROS_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-PROJETOS_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 (_FRONTEND_DIR / "shared").mkdir(parents=True, exist_ok=True)
+(_FRONTEND_DIR / "analytics").mkdir(parents=True, exist_ok=True)
 (_FRONTEND_DIR / "musica").mkdir(parents=True, exist_ok=True)
 (_FRONTEND_DIR / "livros").mkdir(parents=True, exist_ok=True)
 (_FRONTEND_DIR / "habitos").mkdir(parents=True, exist_ok=True)
@@ -91,10 +87,8 @@ app.include_router(projetos_router)
 app.include_router(financeiro_router)
 app.include_router(momentos_router)
 app.include_router(timeline_router)
+app.include_router(analytics_router)
 
-app.mount("/static/musica-covers", StaticFiles(directory=str(MUSICA_UPLOADS_DIR)), name="musica-covers")
-app.mount("/static/livros-covers", StaticFiles(directory=str(LIVROS_UPLOADS_DIR)), name="livros-covers")
-app.mount("/static/projetos-uploads", StaticFiles(directory=str(PROJETOS_UPLOADS_DIR)), name="projetos-uploads")
 app.mount("/static", StaticFiles(directory=str(_FRONTEND_DIR / "shared")), name="shared-static")
 app.mount("/musica", StaticFiles(directory=str(_FRONTEND_DIR / "musica"), html=True), name="musica-frontend")
 app.mount("/livros", StaticFiles(directory=str(_FRONTEND_DIR / "livros"), html=True), name="livros-frontend")
@@ -103,6 +97,7 @@ app.mount("/humor", StaticFiles(directory=str(_FRONTEND_DIR / "humor"), html=Tru
 app.mount("/projetos", StaticFiles(directory=str(_FRONTEND_DIR / "projetos"), html=True), name="projetos-frontend")
 app.mount("/financeiro", StaticFiles(directory=str(_FRONTEND_DIR / "financeiro"), html=True), name="financeiro-frontend")
 app.mount("/timeline", StaticFiles(directory=str(_FRONTEND_DIR / "timeline"), html=True), name="timeline-frontend")
+app.mount("/analytics", StaticFiles(directory=str(_FRONTEND_DIR / "analytics"), html=True), name="analytics-frontend")
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -8,6 +8,7 @@ from typing import Optional
 
 import pandas as pd
 from fastapi import APIRouter, Form, HTTPException, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from . import calculations as calc
@@ -50,17 +51,14 @@ def _ano_valido(valor) -> int | None:
     return int(valor)
 
 
-def _capa_url(capa_path: str | None) -> str | None:
-    caminho = covers.caminho_capa_absoluto(capa_path or "")
-    if caminho is None:
-        return None
-    return f"/static/livros-covers/{caminho.name}"
+def _capa_url(livro_id: int, capa_mime: str | None) -> str | None:
+    return f"/api/livros/livros/{livro_id}/capa" if capa_mime else None
 
 
 def _livro_out(livro: dict, status: Optional[str] = None, stats: Optional[dict] = None) -> dict:
     livro = dict(livro)
     livro["ano_publicacao"] = _ano_valido(livro.get("ano_publicacao"))
-    livro["capa_url"] = _capa_url(livro.get("capa_path"))
+    livro["capa_url"] = _capa_url(livro["id"], livro.get("capa_mime"))
     livro["favorito"] = bool(livro.get("favorito"))
     livro["status_atual"] = status or "Não iniciado"
     stats = stats or {}
@@ -153,9 +151,12 @@ async def criar_livro(
 
     if capa is not None and capa.filename:
         conteudo = await capa.read()
-        caminho = covers.salvar_capa_upload(livro_id, capa, conteudo)
+        mime = covers.mime_de_arquivo(capa, conteudo)
         atual = models.obter_livro(livro_id)
-        models.atualizar_livro(livro_id, atual["nome"], _ano_valido(atual["ano_publicacao"]), atual["genero"], capa_path=caminho)
+        models.atualizar_livro(
+            livro_id, atual["nome"], _ano_valido(atual["ano_publicacao"]), atual["genero"],
+            capa_dados=conteudo, capa_mime=mime,
+        )
 
     return _livro_out(models.obter_livro(livro_id))
 
@@ -174,12 +175,12 @@ async def atualizar_livro(
         raise HTTPException(400, "Nome do livro é obrigatório.")
 
     ano = int(ano_publicacao) if ano_publicacao else None
-    caminho = None
+    capa_dados, capa_mime = None, None
     if capa is not None and capa.filename:
-        conteudo = await capa.read()
-        caminho = covers.salvar_capa_upload(livro_id, capa, conteudo)
+        capa_dados = await capa.read()
+        capa_mime = covers.mime_de_arquivo(capa, capa_dados)
 
-    models.atualizar_livro(livro_id, nome.strip(), ano, genero, capa_path=caminho)
+    models.atualizar_livro(livro_id, nome.strip(), ano, genero, capa_dados=capa_dados, capa_mime=capa_mime)
     return _livro_out(models.obter_livro(livro_id))
 
 
@@ -200,11 +201,20 @@ def capa_from_google(livro_id: int, body: CapaGoogleIn):
     conteudo = covers.baixar_capa(body.capa_url)
     if conteudo is None:
         raise HTTPException(502, "Não foi possível baixar essa capa agora.")
-    caminho = covers.salvar_capa_de_bytes(livro_id, conteudo)
     models.atualizar_livro(
-        livro_id, livro["nome"], _ano_valido(livro["ano_publicacao"]), livro["genero"], capa_path=caminho,
+        livro_id, livro["nome"], _ano_valido(livro["ano_publicacao"]), livro["genero"],
+        capa_dados=conteudo, capa_mime="image/jpeg",
     )
     return _livro_out(models.obter_livro(livro_id))
+
+
+@router.get("/livros/{livro_id}/capa")
+def obter_capa_livro(livro_id: int):
+    capa = models.obter_capa_livro(livro_id)
+    if capa is None:
+        raise HTTPException(404, "Esse livro não tem capa.")
+    dados, mime = capa
+    return Response(content=dados, media_type=mime, headers={"Cache-Control": "public, max-age=86400"})
 
 
 class FavoritoIn(BaseModel):
@@ -272,7 +282,7 @@ def excluir_leitura(leitura_id: int):
 def diario():
     registros = _df_records(models.listar_leituras_com_livro())
     for r in registros:
-        r["capa_url"] = _capa_url(r.get("capa_path"))
+        r["capa_url"] = _capa_url(r["livro_id"], r.get("capa_mime"))
     return registros
 
 

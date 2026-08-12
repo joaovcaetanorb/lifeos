@@ -67,7 +67,7 @@ def eventos_humor(data_inicio: str, data_fim: str) -> list[dict]:
             texto += f" ({', '.join(tags)})"
         eventos.append({
             "data": r["data"], "hora": r["hora"] or "", "modulo": "humor", "icone": "🙂",
-            "texto": texto, "href": "/humor/humor.html",
+            "texto": texto, "href": "/humor/humor.html", "valor": int(r["nota"]),
         })
     return eventos
 
@@ -190,6 +190,15 @@ def timeline(data_inicio: str, data_fim: str) -> list[dict]:
     ]
     eventos.sort(key=lambda e: (e["data"], e["hora"]), reverse=True)
     return eventos
+
+
+def contexto_ia_dia(data_iso: str) -> str:
+    """Texto plano com os eventos de UM dia, ordenados por hora, pro Groq
+    relacionar o que a pessoa fez com o que ela registrou de humor."""
+    eventos = sorted(timeline(data_iso, data_iso), key=lambda e: e["hora"] or "")
+    if not eventos:
+        return "Nenhum evento registrado nesse dia."
+    return "\n".join(f"- {(e['hora'] + ' ') if e['hora'] else ''}{e['texto']}" for e in eventos)
 
 
 def periodo_padrao() -> tuple[str, str]:

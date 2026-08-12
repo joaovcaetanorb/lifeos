@@ -61,11 +61,19 @@ def obter_ou_criar_artista(nome: str, spotify_id: str = "") -> int:
 # Álbuns
 # ---------------------------------------------------------------------------
 
+_COLUNAS_ALBUM = (
+    "albuns.id, albuns.nome, albuns.artista_id, albuns.ano_lancamento, albuns.genero, "
+    "albuns.capa_mime, albuns.spotify_id, albuns.spotify_url, albuns.favorito, albuns.created_at"
+)
+
+
 def listar_albuns() -> pd.DataFrame:
-    """Álbuns com o nome do artista já resolvido (join)."""
+    """Álbuns com o nome do artista já resolvido (join). Não traz
+    `capa_dados` (BLOB) — pesaria carregar a imagem inteira de cada álbum só
+    pra listar; ver obter_capa_album() pra servir a capa sob demanda."""
     conn = get_connection()
     return pd.read_sql_query(
-        """SELECT albuns.*, artistas.nome AS artista_nome
+        f"""SELECT {_COLUNAS_ALBUM}, artistas.nome AS artista_nome
            FROM albuns
            JOIN artistas ON artistas.id = albuns.artista_id
            ORDER BY albuns.created_at DESC, albuns.id DESC""",
@@ -76,7 +84,7 @@ def listar_albuns() -> pd.DataFrame:
 def obter_album(album_id: int) -> dict | None:
     conn = get_connection()
     cursor = conn.execute(
-        """SELECT albuns.*, artistas.nome AS artista_nome
+        f"""SELECT {_COLUNAS_ALBUM}, artistas.nome AS artista_nome
            FROM albuns JOIN artistas ON artistas.id = albuns.artista_id
            WHERE albuns.id = ?""",
         (album_id,),
@@ -84,33 +92,43 @@ def obter_album(album_id: int) -> dict | None:
     return linha_para_dict(cursor, cursor.fetchone())
 
 
+def obter_capa_album(album_id: int) -> tuple[bytes, str] | None:
+    conn = get_connection()
+    cursor = conn.execute("SELECT capa_dados, capa_mime FROM albuns WHERE id = ?", (album_id,))
+    row = cursor.fetchone()
+    if row is None or row[0] is None:
+        return None
+    return row[0], row[1] or "image/jpeg"
+
+
 def inserir_album(nome: str, artista_id: int, ano_lancamento: int | None, genero: str = "",
-                   capa_path: str = "", spotify_id: str = "", spotify_url: str = "") -> int:
+                   capa_dados: bytes | None = None, capa_mime: str | None = None,
+                   spotify_id: str = "", spotify_url: str = "") -> int:
     conn = get_connection()
     cur = conn.execute(
-        """INSERT INTO albuns (nome, artista_id, ano_lancamento, genero, capa_path, spotify_id, spotify_url)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (nome, artista_id, ano_lancamento, genero, capa_path, spotify_id, spotify_url),
+        """INSERT INTO albuns (nome, artista_id, ano_lancamento, genero, capa_dados, capa_mime, spotify_id, spotify_url)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (nome, artista_id, ano_lancamento, genero, capa_dados, capa_mime, spotify_id, spotify_url),
     )
     conn.commit()
     return cur.lastrowid
 
 
 def atualizar_album(album_id: int, nome: str, ano_lancamento: int | None, genero: str,
-                     capa_path: str | None = None) -> None:
-    """capa_path=None mantém a capa atual (não a apaga) — sentinela
-    importante: o endpoint PATCH só deve passar capa_path quando um arquivo
-    novo de verdade veio no request."""
+                     capa_dados: bytes | None = None, capa_mime: str | None = None) -> None:
+    """capa_dados=None mantém a capa atual (não a apaga) — sentinela
+    importante: o endpoint PATCH só deve passar capa_dados quando um
+    arquivo novo de verdade veio no request."""
     conn = get_connection()
-    if capa_path is None:
+    if capa_dados is None:
         conn.execute(
             "UPDATE albuns SET nome = ?, ano_lancamento = ?, genero = ? WHERE id = ?",
             (nome, ano_lancamento, genero, album_id),
         )
     else:
         conn.execute(
-            "UPDATE albuns SET nome = ?, ano_lancamento = ?, genero = ?, capa_path = ? WHERE id = ?",
-            (nome, ano_lancamento, genero, capa_path, album_id),
+            "UPDATE albuns SET nome = ?, ano_lancamento = ?, genero = ?, capa_dados = ?, capa_mime = ? WHERE id = ?",
+            (nome, ano_lancamento, genero, capa_dados, capa_mime, album_id),
         )
     conn.commit()
 
@@ -124,7 +142,8 @@ def favoritar_album(album_id: int, favorito: bool) -> None:
 def buscar_album_por_nome(nome: str, artista_id: int) -> dict | None:
     conn = get_connection()
     cursor = conn.execute(
-        "SELECT * FROM albuns WHERE nome = ? COLLATE NOCASE AND artista_id = ?",
+        "SELECT id, nome, artista_id, ano_lancamento, genero, capa_mime, spotify_id, spotify_url, "
+        "favorito, created_at FROM albuns WHERE nome = ? COLLATE NOCASE AND artista_id = ?",
         (nome, artista_id),
     )
     return linha_para_dict(cursor, cursor.fetchone())
@@ -161,7 +180,7 @@ def listar_escutas_com_album() -> pd.DataFrame:
     """Todas as escutas já com álbum e artista resolvidos (join)."""
     conn = get_connection()
     return pd.read_sql_query(
-        """SELECT escutas.*, albuns.nome AS album_nome, albuns.capa_path,
+        """SELECT escutas.*, albuns.nome AS album_nome, albuns.capa_mime,
                   albuns.spotify_id AS album_spotify_id, albuns.ano_lancamento AS album_ano,
                   albuns.genero AS album_genero, artistas.nome AS artista_nome
            FROM escutas

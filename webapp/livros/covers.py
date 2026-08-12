@@ -1,28 +1,18 @@
-"""Salvar capa de livro em disco — mesma convenção de webapp/musica/covers.py
-(nome de arquivo {livro_id}{extensão}, sobrescreve; capa_path relativo a
-DB_DIR em POSIX)."""
+"""Prepara bytes + mime type de capa de livro pra salvar como BLOB no banco
+(ver webapp/livros/repo.py) — mesma razão de webapp/musica/covers.py: nada
+é gravado em disco, disco local não sobrevive a redeploy."""
 
-from pathlib import Path
+import mimetypes
 
 import requests
 from fastapi import UploadFile
 
-from .db import DB_DIR, UPLOADS_DIR
 
-
-def salvar_capa_upload(livro_id: int, arquivo: UploadFile, conteudo: bytes) -> str:
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    extensao = Path(arquivo.filename or "").suffix or ".jpg"
-    caminho = UPLOADS_DIR / f"{livro_id}{extensao}"
-    caminho.write_bytes(conteudo)
-    return caminho.relative_to(DB_DIR).as_posix()
-
-
-def salvar_capa_de_bytes(livro_id: int, conteudo: bytes) -> str:
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    caminho = UPLOADS_DIR / f"{livro_id}.jpg"
-    caminho.write_bytes(conteudo)
-    return caminho.relative_to(DB_DIR).as_posix()
+def mime_de_arquivo(arquivo: UploadFile, conteudo: bytes) -> str:
+    if arquivo.content_type and arquivo.content_type.startswith("image/"):
+        return arquivo.content_type
+    tipo, _ = mimetypes.guess_type(arquivo.filename or "")
+    return tipo or "image/jpeg"
 
 
 def baixar_capa(url: str) -> bytes | None:
@@ -34,10 +24,3 @@ def baixar_capa(url: str) -> bytes | None:
         return resposta.content
     except Exception:
         return None
-
-
-def caminho_capa_absoluto(capa_path: str) -> Path | None:
-    if not capa_path:
-        return None
-    caminho = DB_DIR / capa_path
-    return caminho if caminho.exists() else None

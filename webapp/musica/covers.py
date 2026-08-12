@@ -1,37 +1,20 @@
-"""Salvar capa de álbum em disco — centraliza o que hoje está duplicado
-verbatim em modules/musica/pages/diario.py e modules/musica/pages/albuns.py
-(_salvar_capa/_salvar_capa_de_bytes).
+"""Prepara bytes + mime type de capa de álbum pra salvar como BLOB no banco
+(ver webapp/musica/repo.py) — nada é gravado em disco. Substitui a versão
+anterior (que escrevia em UPLOADS_DIR): disco local não sobrevive a
+redeploy/restart em host na nuvem, e o Turso já guarda todo o resto dos
+dados do usuário, então a capa vai junto na mesma linha do álbum."""
 
-Mesma convenção de nome de arquivo (`{album_id}{extensão}`, sempre
-sobrescreve — uma capa por álbum, não versionada) e mesmo formato de
-caminho salvo no banco: relativo a DB_DIR, em POSIX (barra normal mesmo no
-Windows) — os covers já existentes, gravados pelo Streamlit, continuam
-funcionando sem migração.
-"""
-
-from pathlib import Path
+import mimetypes
 
 import requests
 from fastapi import UploadFile
 
-from .db import DB_DIR, UPLOADS_DIR
 
-
-def salvar_capa_upload(album_id: int, arquivo: UploadFile, conteudo: bytes) -> str:
-    """`conteudo` já lido de `arquivo` (UploadFile.read() é async — quem
-    chama já resolveu isso antes)."""
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    extensao = Path(arquivo.filename or "").suffix or ".jpg"
-    caminho = UPLOADS_DIR / f"{album_id}{extensao}"
-    caminho.write_bytes(conteudo)
-    return caminho.relative_to(DB_DIR).as_posix()
-
-
-def salvar_capa_de_bytes(album_id: int, conteudo: bytes) -> str:
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    caminho = UPLOADS_DIR / f"{album_id}.jpg"
-    caminho.write_bytes(conteudo)
-    return caminho.relative_to(DB_DIR).as_posix()
+def mime_de_arquivo(arquivo: UploadFile, conteudo: bytes) -> str:
+    if arquivo.content_type and arquivo.content_type.startswith("image/"):
+        return arquivo.content_type
+    tipo, _ = mimetypes.guess_type(arquivo.filename or "")
+    return tipo or "image/jpeg"
 
 
 def baixar_capa(url: str) -> bytes | None:
@@ -45,13 +28,3 @@ def baixar_capa(url: str) -> bytes | None:
         return resposta.content
     except Exception:
         return None
-
-
-def caminho_capa_absoluto(capa_path: str) -> Path | None:
-    """Resolve um capa_path salvo no banco pro arquivo real em disco, ou
-    None se vazio/inexistente — mesma tolerância do original (`st.image`
-    só se `Path.exists()`, sem 404 explícito)."""
-    if not capa_path:
-        return None
-    caminho = DB_DIR / capa_path
-    return caminho if caminho.exists() else None

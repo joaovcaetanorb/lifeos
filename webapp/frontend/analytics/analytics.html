@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Analytics · lifeOS</title>
+<link rel="stylesheet" href="/static/tokens.css" />
+<link rel="stylesheet" href="/static/effects.css" />
+<style>
+.pergunta-pronta{ background:var(--panel); border:1px solid var(--hair); color:var(--ink-muted); padding:.5rem .8rem; border-radius:2px; cursor:pointer; font-size:.8rem; text-align:left; transition:border-color .18s ease, color .18s ease; }
+.pergunta-pronta:hover{ border-color:var(--accent); color:var(--ink); }
+.perguntas-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:.5rem; margin-bottom:1rem; }
+
+.leitura-instantanea{ font-size:.98rem; line-height:1.65; color:var(--ink); opacity:0; transform:translateY(6px); }
+.leitura-instantanea.in{ opacity:1; transform:none; transition:opacity .5s ease, transform .5s ease; }
+.leitura-instantanea b{ color:var(--accent-bright); }
+
+.correlacao-narrativa{ padding:.7rem 0; border-bottom:1px solid var(--hair); font-size:.87rem; line-height:1.6; color:var(--ink); opacity:0; transform:translateX(-8px); }
+.correlacao-narrativa:last-child{ border-bottom:none; }
+.correlacao-narrativa.in{ opacity:1; transform:none; transition:opacity .5s ease, transform .5s ease; }
+.correlacao-narrativa b{ color:var(--accent-bright); }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div><div class="vignette"></div><div class="grain"></div><div class="glow-blob" id="glowBlob"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="id"><span class="led-dot"></span> LIFEOS · MÓDULO ANALYTICS</div>
+    <div class="id"><span class="clock" id="clock">--:--:--</span></div>
+  </div>
+
+  <div class="hero boot-flicker">
+    <div class="eyebrow">tendências, não o momento atual</div>
+    <h1 class="title">$ analytics<span class="cursor"></span></h1>
+    <p>Como você evoluiu — cruzando meses e módulos diferentes, sem ficar preso no hoje. Sem gráfico solto: só o que realmente amarra um módulo no outro.</p>
+  </div>
+
+  <div class="pills" id="periodoPills" style="margin-bottom:.6rem;">
+    <button class="pill" data-val="mes">este mês</button>
+    <button class="pill active" data-val="ano">este ano</button>
+    <button class="pill" data-val="tudo">todos os tempos</button>
+    <button class="pill" data-val="personalizado">personalizado</button>
+  </div>
+  <div class="field-row" id="periodoPersonalizado" style="display:none;max-width:420px;margin:0 0 1.4rem;">
+    <div class="field"><label>De</label><input type="date" id="dataDe" /></div>
+    <div class="field"><label>Até</label><input type="date" id="dataAte" /></div>
+  </div>
+
+  <section class="module" data-reveal>
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">leitura do período</div><h3>O que rolou, junto</h3></div>
+      <button class="btn" id="btnLeituraPeriodo">aprofundar com IA</button>
+    </div>
+    <div class="leitura-instantanea" id="leituraInstantanea">Carregando…</div>
+    <div class="insights" id="insightsLeitura" style="margin-top:.8rem;"></div>
+  </section>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">cruzamentos</div><h3>Isso se relaciona com outros módulos?</h3></div>
+      <button class="btn" id="btnNarrarCorrelacoes">aprofundar com IA</button>
+    </div>
+    <p class="empty-state" style="padding-top:0;">Comparações reais, calculadas a partir dos seus dados — só aparecem quando já há dias suficientes em cada grupo pra significar algo (mínimo 7 dias).</p>
+    <div id="correlacoesGrid"></div>
+    <div class="insights" id="insightsCorrelacoes"></div>
+  </section>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">groq</div><h3>Pergunte aos seus dados</h3></div></div>
+    <div class="perguntas-grid" id="perguntasProntas"></div>
+    <div class="field-row" style="align-items:end;">
+      <div class="field" style="grid-column:1/-1;"><label>Sua pergunta</label><input type="text" id="perguntaLivre" placeholder="Ex.: Como evoluí nos últimos meses?" /></div>
+    </div>
+    <div class="btn-row"><button class="btn btn-primary" id="btnPerguntar">perguntar</button></div>
+    <div class="insights" id="insightsPerguntas" style="margin-top:1rem;"></div>
+  </section>
+
+  <footer><span>backend FastAPI próprio · leitura ao vivo de todos os módulos</span><span id="genTime"></span></footer>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+(function(){
+"use strict";
+const L = LifeOS;
+
+const fmtMoeda = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+const PERGUNTAS_PRONTAS = [
+  "Como evoluí nos últimos meses?",
+  "Meu humor mudou?",
+  "Estou economizando mais?",
+  "Quanto avancei nos meus projetos?",
+  "Quais hábitos eu tenho mais dificuldade?",
+  "Quais gêneros ou artistas eu mais ouvi?",
+];
+document.getElementById('perguntasProntas').innerHTML = PERGUNTAS_PRONTAS.map(p =>
+  `<button type="button" class="pergunta-pronta">${p}</button>`
+).join('');
+document.querySelectorAll('.pergunta-pronta').forEach(btn => {
+  btn.addEventListener('click', () => { document.getElementById('perguntaLivre').value = btn.textContent; perguntar(); });
+});
+
+let periodoAtual = null;
+let state = { periodo: 'ano' };
+
+function periodoIso(periodo) {
+  const hoje = new Date();
+  const fim = hoje.toISOString().slice(0, 10);
+  if (periodo === 'personalizado') {
+    const de = document.getElementById('dataDe').value, ate = document.getElementById('dataAte').value;
+    return (de && ate) ? { inicio: de, fim: ate } : null;
+  }
+  if (periodo === 'mes') {
+    return { inicio: new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10), fim };
+  }
+  if (periodo === 'ano') {
+    return { inicio: new Date(hoje.getFullYear(), 0, 1).toISOString().slice(0, 10), fim };
+  }
+  // "tudo" — 3 anos pra trás (mesmo critério do Analytics antigo do Streamlit)
+  return { inicio: new Date(hoje.getFullYear() - 3, hoje.getMonth(), hoje.getDate()).toISOString().slice(0, 10), fim };
+}
+
+/* ---------------- leitura do período: frase instantânea + IA opcional ---------------- */
+function montarLeituraInstantanea(r) {
+  const el = document.getElementById('leituraInstantanea');
+  const partes = [];
+  if (r.habitos) partes.push(`cumpriu <b>${r.habitos.media_percentual.toFixed(0)}%</b> dos hábitos`);
+  if (r.livros) partes.push(`concluiu <b>${r.livros.livros_concluidos}</b> livro(s)`);
+  if (r.musica) partes.push(`ouviu música <b>${r.musica.escutas}</b> vez(es)`);
+  if (r.humor) partes.push(`teve humor médio de <b>${r.humor.nota_media}/10</b>`);
+  if (r.financeiro) partes.push(`gastou <b>${fmtMoeda(r.financeiro.total)}</b>`);
+  if (!partes.length) {
+    el.innerHTML = 'Ainda não há dados suficientes nesse período — registra em alguns módulos e volta aqui.';
+  } else {
+    const frase = partes.length > 1 ? partes.slice(0, -1).join(', ') + ' e ' + partes[partes.length - 1] : partes[0];
+    el.innerHTML = `Nesse período, você ${frase}.`;
+  }
+  el.classList.add('in');
+}
+
+async function carregarLeitura() {
+  const p = periodoAtual;
+  document.getElementById('insightsLeitura').innerHTML = '';
+  const btn = document.getElementById('btnLeituraPeriodo');
+  btn.disabled = false; btn.textContent = 'aprofundar com IA';
+  const r = await L.api(`/api/analytics/resumo?inicio=${p.inicio}&fim=${p.fim}`);
+  montarLeituraInstantanea(r);
+}
+
+document.getElementById('btnLeituraPeriodo').addEventListener('click', async () => {
+  const btn = document.getElementById('btnLeituraPeriodo');
+  btn.disabled = true; btn.textContent = 'escrevendo...';
+  try {
+    const { texto } = await L.api('/api/analytics/leitura-periodo', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inicio: periodoAtual.inicio, fim: periodoAtual.fim }),
+    });
+    const ins = document.getElementById('insightsLeitura');
+    ins.innerHTML = `<div class="insight-card">${texto}</div>`;
+    requestAnimationFrame(() => ins.querySelector('.insight-card').classList.add('in'));
+    btn.textContent = 'aprofundar de novo';
+  } catch (e) {
+    L.toast(`Não consegui gerar a leitura: ${e.message}`, true);
+    btn.textContent = 'aprofundar com IA';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+/* ---------------- cruzamentos — frase computada em código, IA é opcional ---------------- */
+let correlacoesCache = [];
+
+function formatarValorMetrica(v, metrica) {
+  return metrica.indexOf('R$') !== -1 ? fmtMoeda(v) : v.toFixed(1);
+}
+
+function fraseCorrelacao(c) {
+  const diff = c.media_a - c.media_b;
+  const direcao = diff > 0 ? 'maior' : (diff < 0 ? 'menor' : 'igual');
+  const percentual = c.media_b ? Math.abs(diff / c.media_b * 100) : null;
+  const pctTxt = (percentual !== null && isFinite(percentual)) ? `${percentual.toFixed(0)}% ${direcao}` : direcao;
+  const valorA = formatarValorMetrica(c.media_a, c.metrica);
+  const valorB = formatarValorMetrica(c.media_b, c.metrica);
+  return `<b>${c.titulo}</b>: seu(sua) ${c.metrica} é <b>${pctTxt}</b> em <b>${c.label_a}</b> (${valorA}, n=${c.n_a}) do que em <b>${c.label_b}</b> (${valorB}, n=${c.n_b}).`;
+}
+
+async function carregarCorrelacoes() {
+  const p = periodoAtual;
+  const grid = document.getElementById('correlacoesGrid');
+  document.getElementById('insightsCorrelacoes').innerHTML = '';
+  const btn = document.getElementById('btnNarrarCorrelacoes');
+  btn.disabled = false; btn.textContent = 'aprofundar com IA';
+  const r = await L.api(`/api/analytics/correlacoes?inicio=${p.inicio}&fim=${p.fim}`);
+  correlacoesCache = r.correlacoes;
+  if (!correlacoesCache.length) {
+    grid.innerHTML = '<p class="empty-state">Ainda não há dados suficientes pra cruzar módulos nesse período — continua registrando por mais algumas semanas.</p>';
+    return;
+  }
+  grid.innerHTML = correlacoesCache.map(c => `<div class="correlacao-narrativa" data-reveal>${fraseCorrelacao(c)}</div>`).join('');
+  L.initReveal('.correlacao-narrativa');
+}
+
+document.getElementById('btnNarrarCorrelacoes').addEventListener('click', async () => {
+  const btn = document.getElementById('btnNarrarCorrelacoes');
+  btn.disabled = true; btn.textContent = 'narrando...';
+  try {
+    const { texto } = await L.api('/api/analytics/correlacoes/narrar', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inicio: periodoAtual.inicio, fim: periodoAtual.fim }),
+    });
+    const ins = document.getElementById('insightsCorrelacoes');
+    ins.innerHTML = `<div class="insight-card">${texto}</div>`;
+    requestAnimationFrame(() => ins.querySelector('.insight-card').classList.add('in'));
+    btn.textContent = 'aprofundar de novo';
+  } catch (e) {
+    L.toast(`Não consegui narrar os cruzamentos: ${e.message}`, true);
+    btn.textContent = 'aprofundar com IA';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+/* ---------------- pergunte aos seus dados ---------------- */
+async function perguntar() {
+  const input = document.getElementById('perguntaLivre');
+  const pergunta = input.value.trim();
+  if (!pergunta) { L.toast('Escreve uma pergunta.', true); return; }
+  const btn = document.getElementById('btnPerguntar');
+  btn.disabled = true; btn.textContent = 'perguntando...';
+  try {
+    const { texto } = await L.api('/api/analytics/perguntar', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pergunta, inicio: periodoAtual.inicio, fim: periodoAtual.fim }),
+    });
+    const ins = document.getElementById('insightsPerguntas');
+    ins.insertAdjacentHTML('afterbegin', `<div class="insight-card"><b>${pergunta}</b><br>${texto}</div>`);
+    requestAnimationFrame(() => ins.querySelector('.insight-card').classList.add('in'));
+  } catch (e) {
+    L.toast(`Não consegui responder: ${e.message}`, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'perguntar';
+  }
+}
+document.getElementById('btnPerguntar').addEventListener('click', perguntar);
+document.getElementById('perguntaLivre').addEventListener('keydown', e => { if (e.key === 'Enter') perguntar(); });
+
+/* ---------------- período ---------------- */
+async function recarregarTudo() {
+  try {
+    await Promise.all([carregarLeitura(), carregarCorrelacoes()]);
+  } catch (e) {
+    L.toast('Não consegui carregar o analytics agora.', true);
+  }
+}
+
+L.initPills('periodoPills', val => {
+  state.periodo = val;
+  document.getElementById('periodoPersonalizado').style.display = val === 'personalizado' ? 'grid' : 'none';
+  const p = periodoIso(val);
+  if (p) { periodoAtual = p; recarregarTudo(); }
+});
+let _debouncePersonalizado = null;
+['dataDe', 'dataAte'].forEach(id => document.getElementById(id).addEventListener('change', () => {
+  clearTimeout(_debouncePersonalizado);
+  _debouncePersonalizado = setTimeout(() => {
+    if (state.periodo !== 'personalizado') return;
+    const p = periodoIso('personalizado');
+    if (p) { periodoAtual = p; recarregarTudo(); }
+  }, 500);
+}));
+
+L.initReveal();
+L.initClock();
+L.initGlow();
+L.initModuleSwitcher('analytics');
+document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
+
+periodoAtual = periodoIso('ano');
+recarregarTudo();
+})();
+</script>
+</body>
+</html>

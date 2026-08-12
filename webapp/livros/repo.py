@@ -47,10 +47,18 @@ def obter_ou_criar_autor(nome: str) -> int:
 # Livros
 # ---------------------------------------------------------------------------
 
+_COLUNAS_LIVRO = (
+    "livros.id, livros.nome, livros.autor_id, livros.ano_publicacao, livros.genero, "
+    "livros.capa_mime, livros.favorito, livros.created_at"
+)
+
+
 def listar_livros() -> pd.DataFrame:
+    """Não traz `capa_dados` (BLOB) — ver obter_capa_livro() pra servir a
+    capa sob demanda."""
     conn = get_connection()
     return pd.read_sql_query(
-        """SELECT livros.*, autores.nome AS autor_nome
+        f"""SELECT {_COLUNAS_LIVRO}, autores.nome AS autor_nome
            FROM livros
            JOIN autores ON autores.id = livros.autor_id
            ORDER BY livros.created_at DESC, livros.id DESC""",
@@ -61,12 +69,21 @@ def listar_livros() -> pd.DataFrame:
 def obter_livro(livro_id: int) -> dict | None:
     conn = get_connection()
     cursor = conn.execute(
-        """SELECT livros.*, autores.nome AS autor_nome
+        f"""SELECT {_COLUNAS_LIVRO}, autores.nome AS autor_nome
            FROM livros JOIN autores ON autores.id = livros.autor_id
            WHERE livros.id = ?""",
         (livro_id,),
     )
     return linha_para_dict(cursor, cursor.fetchone())
+
+
+def obter_capa_livro(livro_id: int) -> tuple[bytes, str] | None:
+    conn = get_connection()
+    cursor = conn.execute("SELECT capa_dados, capa_mime FROM livros WHERE id = ?", (livro_id,))
+    row = cursor.fetchone()
+    if row is None or row[0] is None:
+        return None
+    return row[0], row[1] or "image/jpeg"
 
 
 def favoritar_livro(livro_id: int, favorito: bool) -> None:
@@ -78,19 +95,20 @@ def favoritar_livro(livro_id: int, favorito: bool) -> None:
 def buscar_livro_por_nome(nome: str, autor_id: int) -> dict | None:
     conn = get_connection()
     cursor = conn.execute(
-        "SELECT * FROM livros WHERE nome = ? COLLATE NOCASE AND autor_id = ?",
+        f"SELECT {_COLUNAS_LIVRO.replace('livros.', '')} FROM livros "
+        "WHERE nome = ? COLLATE NOCASE AND autor_id = ?",
         (nome, autor_id),
     )
     return linha_para_dict(cursor, cursor.fetchone())
 
 
 def inserir_livro(nome: str, autor_id: int, ano_publicacao: int | None, genero: str = "",
-                   capa_path: str = "") -> int:
+                   capa_dados: bytes | None = None, capa_mime: str | None = None) -> int:
     conn = get_connection()
     cur = conn.execute(
-        """INSERT INTO livros (nome, autor_id, ano_publicacao, genero, capa_path)
-           VALUES (?, ?, ?, ?, ?)""",
-        (nome, autor_id, ano_publicacao, genero, capa_path),
+        """INSERT INTO livros (nome, autor_id, ano_publicacao, genero, capa_dados, capa_mime)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (nome, autor_id, ano_publicacao, genero, capa_dados, capa_mime),
     )
     conn.commit()
     return cur.lastrowid
@@ -104,17 +122,19 @@ def obter_ou_criar_livro(nome: str, autor_id: int, ano_publicacao: int | None, g
 
 
 def atualizar_livro(livro_id: int, nome: str, ano_publicacao: int | None, genero: str,
-                     capa_path: str | None = None) -> None:
+                     capa_dados: bytes | None = None, capa_mime: str | None = None) -> None:
+    """capa_dados=None mantém a capa atual — mesmo sentinela de
+    webapp/musica/repo.py::atualizar_album."""
     conn = get_connection()
-    if capa_path is None:
+    if capa_dados is None:
         conn.execute(
             "UPDATE livros SET nome = ?, ano_publicacao = ?, genero = ? WHERE id = ?",
             (nome, ano_publicacao, genero, livro_id),
         )
     else:
         conn.execute(
-            "UPDATE livros SET nome = ?, ano_publicacao = ?, genero = ?, capa_path = ? WHERE id = ?",
-            (nome, ano_publicacao, genero, capa_path, livro_id),
+            "UPDATE livros SET nome = ?, ano_publicacao = ?, genero = ?, capa_dados = ?, capa_mime = ? WHERE id = ?",
+            (nome, ano_publicacao, genero, capa_dados, capa_mime, livro_id),
         )
     conn.commit()
 
@@ -140,7 +160,7 @@ def listar_leituras(livro_id: int) -> pd.DataFrame:
 def listar_leituras_com_livro() -> pd.DataFrame:
     conn = get_connection()
     return pd.read_sql_query(
-        """SELECT leituras.*, livros.nome AS livro_nome, livros.capa_path,
+        """SELECT leituras.*, livros.nome AS livro_nome, livros.capa_mime,
                   autores.nome AS autor_nome
            FROM leituras
            JOIN livros ON livros.id = leituras.livro_id

@@ -14,9 +14,14 @@ from .db import get_connection, linha_para_dict
 # Projetos
 # ---------------------------------------------------------------------------
 
+_COLUNAS_PROJETO = "id, nome, descricao, orcamento, observacoes, foto_mime, status, created_at"
+
+
 def listar_projetos(status: str | None = None) -> pd.DataFrame:
+    """Não traz `foto_dados` (BLOB) — ver obter_foto_projeto() pra servir a
+    foto sob demanda."""
     conn = get_connection()
-    query = "SELECT * FROM projetos"
+    query = f"SELECT {_COLUNAS_PROJETO} FROM projetos"
     params = []
     if status:
         query += " WHERE status = ?"
@@ -27,26 +32,38 @@ def listar_projetos(status: str | None = None) -> pd.DataFrame:
 
 def obter_projeto(projeto_id: int) -> dict | None:
     conn = get_connection()
-    cursor = conn.execute("SELECT * FROM projetos WHERE id = ?", (projeto_id,))
+    cursor = conn.execute(f"SELECT {_COLUNAS_PROJETO} FROM projetos WHERE id = ?", (projeto_id,))
     return linha_para_dict(cursor, cursor.fetchone())
 
 
+def obter_foto_projeto(projeto_id: int) -> tuple[bytes, str] | None:
+    conn = get_connection()
+    cursor = conn.execute("SELECT foto_dados, foto_mime FROM projetos WHERE id = ?", (projeto_id,))
+    row = cursor.fetchone()
+    if row is None or row[0] is None:
+        return None
+    return row[0], row[1] or "image/jpeg"
+
+
 def inserir_projeto(nome: str, descricao: str, orcamento: float, observacoes: str,
-                     foto_path: str = "") -> int:
+                     foto_dados: bytes | None = None, foto_mime: str | None = None) -> int:
     conn = get_connection()
     cur = conn.execute(
-        """INSERT INTO projetos (nome, descricao, orcamento, observacoes, foto_path)
-           VALUES (?, ?, ?, ?, ?)""",
-        (nome, descricao, orcamento, observacoes, foto_path),
+        """INSERT INTO projetos (nome, descricao, orcamento, observacoes, foto_dados, foto_mime)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (nome, descricao, orcamento, observacoes, foto_dados, foto_mime),
     )
     conn.commit()
     return cur.lastrowid
 
 
 def atualizar_projeto(projeto_id: int, nome: str, descricao: str, orcamento: float,
-                       observacoes: str, status: str, foto_path: str | None = None) -> None:
+                       observacoes: str, status: str,
+                       foto_dados: bytes | None = None, foto_mime: str | None = None) -> None:
+    """foto_dados=None mantém a foto atual (não a apaga) — mesmo sentinela
+    de webapp/musica/repo.py::atualizar_album."""
     conn = get_connection()
-    if foto_path is None:
+    if foto_dados is None:
         conn.execute(
             """UPDATE projetos SET nome = ?, descricao = ?, orcamento = ?,
                observacoes = ?, status = ? WHERE id = ?""",
@@ -55,8 +72,8 @@ def atualizar_projeto(projeto_id: int, nome: str, descricao: str, orcamento: flo
     else:
         conn.execute(
             """UPDATE projetos SET nome = ?, descricao = ?, orcamento = ?,
-               observacoes = ?, status = ?, foto_path = ? WHERE id = ?""",
-            (nome, descricao, orcamento, observacoes, status, foto_path, projeto_id),
+               observacoes = ?, status = ?, foto_dados = ?, foto_mime = ? WHERE id = ?""",
+            (nome, descricao, orcamento, observacoes, status, foto_dados, foto_mime, projeto_id),
         )
     conn.commit()
 
@@ -71,18 +88,32 @@ def excluir_projeto(projeto_id: int) -> None:
 # Checklist
 # ---------------------------------------------------------------------------
 
+_COLUNAS_CHECKLIST = (
+    "id, projeto_id, descricao, notas, prazo, link, foto_mime, concluido, concluido_em, ordem, created_at"
+)
+
+
 def listar_checklist(projeto_id: int) -> pd.DataFrame:
     conn = get_connection()
     return pd.read_sql_query(
-        "SELECT * FROM projeto_checklist WHERE projeto_id = ? ORDER BY ordem ASC, id ASC",
+        f"SELECT {_COLUNAS_CHECKLIST} FROM projeto_checklist WHERE projeto_id = ? ORDER BY ordem ASC, id ASC",
         conn, params=[projeto_id],
     )
 
 
 def obter_item_checklist(item_id: int) -> dict | None:
     conn = get_connection()
-    cursor = conn.execute("SELECT * FROM projeto_checklist WHERE id = ?", (item_id,))
+    cursor = conn.execute(f"SELECT {_COLUNAS_CHECKLIST} FROM projeto_checklist WHERE id = ?", (item_id,))
     return linha_para_dict(cursor, cursor.fetchone())
+
+
+def obter_foto_item_checklist(item_id: int) -> tuple[bytes, str] | None:
+    conn = get_connection()
+    cursor = conn.execute("SELECT foto_dados, foto_mime FROM projeto_checklist WHERE id = ?", (item_id,))
+    row = cursor.fetchone()
+    if row is None or row[0] is None:
+        return None
+    return row[0], row[1] or "image/jpeg"
 
 
 def inserir_item_checklist(projeto_id: int, descricao: str) -> int:
@@ -110,18 +141,19 @@ def marcar_item_checklist(item_id: int, concluido: bool) -> None:
 
 
 def atualizar_detalhes_item_checklist(item_id: int, notas: str, prazo: str, link: str,
-                                       foto_path: str | None = None) -> None:
-    """foto_path=None mantém a foto atual (não a apaga); '' remove a foto."""
+                                       foto_dados: bytes | None = None, foto_mime: str | None = None) -> None:
+    """foto_dados=None mantém a foto atual (não a apaga) — mesmo sentinela
+    de webapp/musica/repo.py::atualizar_album."""
     conn = get_connection()
-    if foto_path is None:
+    if foto_dados is None:
         conn.execute(
             "UPDATE projeto_checklist SET notas = ?, prazo = ?, link = ? WHERE id = ?",
             (notas, prazo, link, item_id),
         )
     else:
         conn.execute(
-            "UPDATE projeto_checklist SET notas = ?, prazo = ?, link = ?, foto_path = ? WHERE id = ?",
-            (notas, prazo, link, foto_path, item_id),
+            "UPDATE projeto_checklist SET notas = ?, prazo = ?, link = ?, foto_dados = ?, foto_mime = ? WHERE id = ?",
+            (notas, prazo, link, foto_dados, foto_mime, item_id),
         )
     conn.commit()
 
@@ -185,7 +217,8 @@ def listar_checklist_concluido(data_inicio: str | None = None, data_fim: str | N
     projeto via join — usado pela Timeline. Filtra por `concluido_em`
     (preenchido em marcar_item_checklist), não por `created_at`."""
     conn = get_connection()
-    query = """SELECT projeto_checklist.*, projetos.nome AS projeto_nome
+    colunas = ", ".join(f"projeto_checklist.{c}" for c in _COLUNAS_CHECKLIST.split(", "))
+    query = f"""SELECT {colunas}, projetos.nome AS projeto_nome
                FROM projeto_checklist
                JOIN projetos ON projetos.id = projeto_checklist.projeto_id
                WHERE projeto_checklist.concluido = 1 AND projeto_checklist.concluido_em != ''"""

@@ -8,19 +8,20 @@ import io
 from PIL import Image
 
 from . import covers
+from . import repo as models
 from . import utils
-from .db import DB_DIR
 
 LADO_POST = 1080
 TAMANHO_STORIES = (1080, 1920)
 
 
 def _abrir_imagem(item: dict) -> Image.Image | None:
-    if item.get("capa_path"):
-        caminho = DB_DIR / item["capa_path"]
-        if caminho.exists():
-            return Image.open(caminho)
-    elif item.get("capa_url"):
+    if item.get("album_id"):
+        capa = models.obter_capa_album(int(item["album_id"]))
+        if capa is not None:
+            conteudo, _mime = capa
+            return Image.open(io.BytesIO(conteudo))
+    if item.get("capa_url"):
         conteudo = covers.baixar_capa(item["capa_url"])
         if conteudo is not None:
             return Image.open(io.BytesIO(conteudo))

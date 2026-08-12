@@ -100,7 +100,7 @@ const LifeOS = (() => {
     { key: 'projetos', label: 'Projetos', href: '/projetos/projetos.html' },
     { key: 'humor', label: 'Humor', href: '/humor/humor.html' },
     { key: 'timeline', label: 'Timeline', href: '/timeline/timeline.html' },
-    { key: 'analytics', label: 'Analytics' },
+    { key: 'analytics', label: 'Analytics', href: '/analytics/analytics.html' },
     { key: 'financeiro', label: 'Financeiro', href: '/financeiro/gastos.html' },
   ];
 
@@ -131,6 +131,15 @@ const LifeOS = (() => {
     trigger.addEventListener('click', e => { e.stopPropagation(); wrap.classList.toggle('open'); });
     document.addEventListener('click', () => wrap.classList.remove('open'));
     document.addEventListener('keydown', e => { if (e.key === 'Escape') wrap.classList.remove('open'); });
+  }
+
+  function initWheelScrollX(el) {
+    if (!el) return;
+    el.addEventListener('wheel', e => {
+      if (e.deltaY === 0) return;
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    }, { passive: false });
   }
 
   function initTableToggles() {
@@ -175,7 +184,7 @@ const LifeOS = (() => {
 
   return {
     reduced, fmt, countUp, catmullRom, showTT, hideTT,
-    initReveal, initClock, initGlow, initSegmented, initPills, initTableToggles, initModuleSwitcher,
+    initReveal, initClock, initGlow, initSegmented, initPills, initTableToggles, initModuleSwitcher, initWheelScrollX,
     toast, api,
   };
 })();

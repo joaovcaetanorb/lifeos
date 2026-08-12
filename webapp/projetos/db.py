@@ -121,6 +121,16 @@ def _migrar_schema(conn) -> None:
     for coluna in ("notas", "prazo", "link", "foto_path", "concluido_em"):
         if coluna not in colunas_checklist:
             conn.execute(f"ALTER TABLE projeto_checklist ADD COLUMN {coluna} TEXT DEFAULT ''")
+    if "foto_dados" not in colunas_checklist:
+        conn.execute("ALTER TABLE projeto_checklist ADD COLUMN foto_dados BLOB")
+    if "foto_mime" not in colunas_checklist:
+        conn.execute("ALTER TABLE projeto_checklist ADD COLUMN foto_mime TEXT")
+
+    colunas_projetos = {r[1] for r in conn.execute("PRAGMA table_info(projetos)").fetchall()}
+    if "foto_dados" not in colunas_projetos:
+        conn.execute("ALTER TABLE projetos ADD COLUMN foto_dados BLOB")
+    if "foto_mime" not in colunas_projetos:
+        conn.execute("ALTER TABLE projetos ADD COLUMN foto_mime TEXT")
 
     conn.commit()
 

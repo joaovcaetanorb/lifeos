@@ -6,6 +6,7 @@ from typing import Optional
 
 import pandas as pd
 from fastapi import APIRouter, Form, HTTPException, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from . import calculations as calc
@@ -31,17 +32,10 @@ def _df_records(df: pd.DataFrame) -> list[dict]:
     return [{k: _limpar_nan(v) for k, v in r.items()} for r in df.to_dict("records")]
 
 
-def _foto_url(foto_path: str | None) -> str | None:
-    caminho = fotos.caminho_foto_absoluto(foto_path or "")
-    if caminho is None:
-        return None
-    return f"/static/projetos-uploads/{caminho.name}"
-
-
 def _projeto_out(projeto: dict) -> dict:
     projeto = dict(projeto)
     pid = int(projeto["id"])
-    projeto["foto_url"] = _foto_url(projeto.get("foto_path"))
+    projeto["foto_url"] = f"/api/projetos/projetos/{pid}/foto" if projeto.get("foto_mime") else None
     projeto["valor_acumulado"] = calc.valor_acumulado(pid)
     projeto["progresso_financeiro"] = calc.progresso_financeiro(pid, projeto["orcamento"])
     projeto["progresso_checklist"] = calc.progresso_checklist(pid)
@@ -51,7 +45,7 @@ def _projeto_out(projeto: dict) -> dict:
 def _item_checklist_out(item: dict) -> dict:
     item = dict(item)
     item["concluido"] = bool(item["concluido"])
-    item["foto_url"] = _foto_url(item.get("foto_path"))
+    item["foto_url"] = f"/api/projetos/checklist/{int(item['id'])}/foto" if item.get("foto_mime") else None
     item["vencido"] = calc.item_vencido(item.get("prazo") or "", item["concluido"])
     return item
 
@@ -100,11 +94,11 @@ async def criar_projeto(
 
     if foto is not None and foto.filename:
         conteudo = await foto.read()
-        caminho = fotos.salvar_foto_projeto(projeto_id, foto, conteudo)
+        mime = fotos.mime_de_arquivo(foto, conteudo)
         atual = models.obter_projeto(projeto_id)
         models.atualizar_projeto(
             projeto_id, atual["nome"], atual["descricao"], atual["orcamento"],
-            atual["observacoes"], atual["status"], foto_path=caminho,
+            atual["observacoes"], atual["status"], foto_dados=conteudo, foto_mime=mime,
         )
 
     return _projeto_out(models.obter_projeto(projeto_id))
@@ -127,13 +121,14 @@ async def atualizar_projeto(
     if status not in ("Ativo", "Pausado", "Concluído"):
         raise HTTPException(400, "status inválido.")
 
-    caminho = None
+    foto_dados, foto_mime = None, None
     if foto is not None and foto.filename:
-        conteudo = await foto.read()
-        caminho = fotos.salvar_foto_projeto(projeto_id, foto, conteudo)
+        foto_dados = await foto.read()
+        foto_mime = fotos.mime_de_arquivo(foto, foto_dados)
 
     models.atualizar_projeto(
-        projeto_id, nome.strip(), descricao.strip(), orcamento, observacoes.strip(), status, foto_path=caminho,
+        projeto_id, nome.strip(), descricao.strip(), orcamento, observacoes.strip(), status,
+        foto_dados=foto_dados, foto_mime=foto_mime,
     )
     return _projeto_out(models.obter_projeto(projeto_id))
 
@@ -143,6 +138,15 @@ def excluir_projeto(projeto_id: int):
     if models.obter_projeto(projeto_id) is None:
         raise HTTPException(404, "Projeto não encontrado.")
     models.excluir_projeto(projeto_id)
+
+
+@router.get("/projetos/{projeto_id}/foto")
+def obter_foto_projeto(projeto_id: int):
+    foto = models.obter_foto_projeto(projeto_id)
+    if foto is None:
+        raise HTTPException(404, "Esse projeto não tem foto.")
+    dados, mime = foto
+    return Response(content=dados, media_type=mime, headers={"Cache-Control": "public, max-age=86400"})
 
 
 # ---------------------------------------------------------------------------
@@ -193,12 +197,14 @@ async def atualizar_detalhes_item_checklist(
     if models.obter_item_checklist(item_id) is None:
         raise HTTPException(404, "Item não encontrado.")
 
-    caminho = None
+    foto_dados, foto_mime = None, None
     if foto is not None and foto.filename:
-        conteudo = await foto.read()
-        caminho = fotos.salvar_foto_item(item_id, foto, conteudo)
+        foto_dados = await foto.read()
+        foto_mime = fotos.mime_de_arquivo(foto, foto_dados)
 
-    models.atualizar_detalhes_item_checklist(item_id, notas.strip(), prazo, link.strip(), foto_path=caminho)
+    models.atualizar_detalhes_item_checklist(
+        item_id, notas.strip(), prazo, link.strip(), foto_dados=foto_dados, foto_mime=foto_mime,
+    )
     return _item_checklist_out(models.obter_item_checklist(item_id))
 
 
@@ -207,6 +213,15 @@ def excluir_item_checklist(item_id: int):
     if models.obter_item_checklist(item_id) is None:
         raise HTTPException(404, "Item não encontrado.")
     models.excluir_item_checklist(item_id)
+
+
+@router.get("/checklist/{item_id}/foto")
+def obter_foto_item_checklist(item_id: int):
+    foto = models.obter_foto_item_checklist(item_id)
+    if foto is None:
+        raise HTTPException(404, "Esse item não tem foto.")
+    dados, mime = foto
+    return Response(content=dados, media_type=mime, headers={"Cache-Control": "public, max-age=86400"})
 
 
 # ---------------------------------------------------------------------------

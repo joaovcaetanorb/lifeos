@@ -13,6 +13,7 @@ from typing import Optional
 
 import pandas as pd
 from fastapi import APIRouter, Form, HTTPException, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from . import calculations as calc
@@ -59,17 +60,14 @@ def _ano_valido(valor) -> int | None:
     return int(valor)
 
 
-def _capa_url(capa_path: str | None) -> str | None:
-    caminho = covers.caminho_capa_absoluto(capa_path or "")
-    if caminho is None:
-        return None
-    return f"/static/musica-covers/{caminho.name}"
+def _capa_url(album_id: int, capa_mime: str | None) -> str | None:
+    return f"/api/musica/albuns/{album_id}/capa" if capa_mime else None
 
 
 def _album_out(album: dict, stats: Optional[dict] = None) -> dict:
     album = dict(album)
     album["ano_lancamento"] = _ano_valido(album.get("ano_lancamento"))
-    album["capa_url"] = _capa_url(album.get("capa_path"))
+    album["capa_url"] = _capa_url(album["id"], album.get("capa_mime"))
     album["favorito"] = bool(album.get("favorito"))
     stats = stats or {}
     album["nota_media"] = stats.get("nota_media")
@@ -170,19 +168,20 @@ async def criar_album(
         album_nome.strip(), artista_id, ano, genero, spotify_id=spotify_id, spotify_url=spotify_url,
     )
 
-    caminho = None
+    capa_dados, capa_mime = None, None
     if capa is not None and capa.filename:
-        conteudo = await capa.read()
-        caminho = covers.salvar_capa_upload(album_id, capa, conteudo)
+        capa_dados = await capa.read()
+        capa_mime = covers.mime_de_arquivo(capa, capa_dados)
     elif capa_url_spotify:
-        conteudo = covers.baixar_capa(capa_url_spotify)
-        if conteudo is not None:
-            caminho = covers.salvar_capa_de_bytes(album_id, conteudo)
+        capa_dados = covers.baixar_capa(capa_url_spotify)
+        if capa_dados is not None:
+            capa_mime = "image/jpeg"
 
-    if caminho is not None:
+    if capa_dados is not None:
         atual = models.obter_album(album_id)
         models.atualizar_album(
-            album_id, atual["nome"], _ano_valido(atual["ano_lancamento"]), atual["genero"], capa_path=caminho,
+            album_id, atual["nome"], _ano_valido(atual["ano_lancamento"]), atual["genero"],
+            capa_dados=capa_dados, capa_mime=capa_mime,
         )
 
     return _album_out(models.obter_album(album_id))
@@ -202,12 +201,12 @@ async def atualizar_album(
         raise HTTPException(400, "Nome do álbum é obrigatório.")
 
     ano = int(ano_lancamento) if ano_lancamento else None
-    caminho = None
+    capa_dados, capa_mime = None, None
     if capa is not None and capa.filename:
-        conteudo = await capa.read()
-        caminho = covers.salvar_capa_upload(album_id, capa, conteudo)
+        capa_dados = await capa.read()
+        capa_mime = covers.mime_de_arquivo(capa, capa_dados)
 
-    models.atualizar_album(album_id, nome.strip(), ano, genero, capa_path=caminho)
+    models.atualizar_album(album_id, nome.strip(), ano, genero, capa_dados=capa_dados, capa_mime=capa_mime)
     return _album_out(models.obter_album(album_id))
 
 
@@ -235,9 +234,9 @@ def capa_from_spotify(album_id: int, body: CapaSpotifyIn):
     conteudo = covers.baixar_capa(body.capa_url)
     if conteudo is None:
         raise HTTPException(502, "Não foi possível baixar essa capa agora.")
-    caminho = covers.salvar_capa_de_bytes(album_id, conteudo)
     models.atualizar_album(
-        album_id, album["nome"], _ano_valido(album["ano_lancamento"]), album["genero"], capa_path=caminho,
+        album_id, album["nome"], _ano_valido(album["ano_lancamento"]), album["genero"],
+        capa_dados=conteudo, capa_mime="image/jpeg",
     )
     return _album_out(models.obter_album(album_id))
 
@@ -247,6 +246,15 @@ def excluir_album(album_id: int):
     if models.obter_album(album_id) is None:
         raise HTTPException(404, "Álbum não encontrado.")
     models.excluir_album(album_id)
+
+
+@router.get("/albuns/{album_id}/capa")
+def obter_capa_album(album_id: int):
+    capa = models.obter_capa_album(album_id)
+    if capa is None:
+        raise HTTPException(404, "Esse álbum não tem capa.")
+    dados, mime = capa
+    return Response(content=dados, media_type=mime, headers={"Cache-Control": "public, max-age=86400"})
 
 
 # ---------------------------------------------------------------------------
@@ -293,7 +301,7 @@ def diario():
     mesma fonte que modules/musica/pages/diario.py usa."""
     registros = _df_records(models.listar_escutas_com_album())
     for r in registros:
-        r["capa_url"] = _capa_url(r.get("capa_path"))
+        r["capa_url"] = _capa_url(r["album_id"], r.get("capa_mime"))
         r["album_ano"] = _ano_valido(r.get("album_ano"))
     return registros
 

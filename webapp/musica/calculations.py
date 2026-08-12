@@ -139,13 +139,13 @@ def nota_media_por_decada(data_inicio: str, data_fim: str) -> pd.DataFrame:
 
 
 def top_albuns_periodo(data_inicio: str, data_fim: str, limite: int) -> pd.DataFrame:
-    colunas = ["album_id", "album_nome", "artista_nome", "capa_path", "total"]
+    colunas = ["album_id", "album_nome", "artista_nome", "total"]
     escutas = _filtrar_periodo(models.listar_escutas_com_album(), data_inicio, data_fim)
     if escutas.empty:
         return pd.DataFrame(columns=colunas)
 
     agrupado = (
-        escutas.groupby(["album_id", "album_nome", "artista_nome", "capa_path"])
+        escutas.groupby(["album_id", "album_nome", "artista_nome"])
         .size()
         .reset_index(name="total")
         .sort_values("total", ascending=False)

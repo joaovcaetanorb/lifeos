@@ -113,6 +113,10 @@ def _migrar_schema(conn) -> None:
     colunas_livros = {r[1] for r in conn.execute("PRAGMA table_info(livros)").fetchall()}
     if "favorito" not in colunas_livros:
         conn.execute("ALTER TABLE livros ADD COLUMN favorito INTEGER NOT NULL DEFAULT 0")
+    if "capa_dados" not in colunas_livros:
+        conn.execute("ALTER TABLE livros ADD COLUMN capa_dados BLOB")
+    if "capa_mime" not in colunas_livros:
+        conn.execute("ALTER TABLE livros ADD COLUMN capa_mime TEXT")
 
     conn.commit()
 
