@@ -134,7 +134,9 @@ L.initSegmented('fonteSwitch', val => { state.fonte = val; });
 L.initPills('periodoPills', val => {
   state.periodo = val;
   document.getElementById('periodoPersonalizado').style.display = val === 'personalizado' ? 'grid' : 'none';
+  L.atualizarLabelPersonalizado('periodoPills');
 });
+['dataDe', 'dataAte'].forEach(id => document.getElementById(id).addEventListener('change', () => L.atualizarLabelPersonalizado('periodoPills')));
 L.initReveal();
 L.initClock();
 L.initModuleSwitcher('musica');

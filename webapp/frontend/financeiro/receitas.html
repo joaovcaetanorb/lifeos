@@ -158,12 +158,14 @@ document.getElementById('btnSalvarReceita').addEventListener('click', async () =
 L.initPills('periodoPills', val => {
   state.periodo = val;
   document.getElementById('periodoPersonalizado').style.display = val === 'personalizado' ? 'grid' : 'none';
+  L.atualizarLabelPersonalizado('periodoPills');
   if (val !== 'personalizado' || (document.getElementById('dataDe').value && document.getElementById('dataAte').value)) carregarReceitas();
 });
 let _debouncePeriodo = null;
 ['dataDe', 'dataAte'].forEach(id => document.getElementById(id).addEventListener('change', () => {
   clearTimeout(_debouncePeriodo);
   _debouncePeriodo = setTimeout(() => {
+    L.atualizarLabelPersonalizado('periodoPills');
     if (state.periodo === 'personalizado' && document.getElementById('dataDe').value && document.getElementById('dataAte').value) carregarReceitas();
   }, 500);
 }));

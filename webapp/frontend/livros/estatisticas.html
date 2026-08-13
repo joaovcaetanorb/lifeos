@@ -269,6 +269,7 @@ async function carregar() {
 L.initPills('periodoPills', val => {
   state.periodo = val;
   document.getElementById('periodoPersonalizado').style.display = val === 'personalizado' ? 'grid' : 'none';
+  L.atualizarLabelPersonalizado('periodoPills');
   if (val !== 'personalizado' || (document.getElementById('dataDe').value && document.getElementById('dataAte').value)) carregar();
 });
 let _debouncePersonalizado = null;
@@ -280,6 +281,7 @@ let _debouncePersonalizado = null;
   // podendo sobrescrever o resultado certo com um intervalo inválido.
   clearTimeout(_debouncePersonalizado);
   _debouncePersonalizado = setTimeout(() => {
+    L.atualizarLabelPersonalizado('periodoPills');
     if (state.periodo === 'personalizado' && document.getElementById('dataDe').value && document.getElementById('dataAte').value) carregar();
   }, 500);
 }));

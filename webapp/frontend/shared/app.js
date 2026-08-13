@@ -117,6 +117,24 @@ const LifeOS = (() => {
     window.addEventListener('resize', () => place(wrap.querySelector('button.active') || btns[0]));
   }
 
+  /* Troca o texto do pill "personalizado" pelo intervalo escolhido
+     (ex.: "03/08 – 10/08") enquanto ele estiver ativo e as duas datas
+     preenchidas; volta pro texto original ("personalizado") assim que
+     ele deixa de ser o período ativo ou as datas ficam incompletas. */
+  function atualizarLabelPersonalizado(pillsId, deId, ateId) {
+    const btn = document.querySelector(`#${pillsId} [data-val="personalizado"]`);
+    if (!btn) return;
+    if (btn.dataset.labelOriginal === undefined) btn.dataset.labelOriginal = btn.textContent;
+    const de = document.getElementById(deId || 'dataDe').value;
+    const ate = document.getElementById(ateId || 'dataAte').value;
+    const curto = iso => { const [, m, d] = iso.split('-'); return `${d}/${m}`; };
+    if (btn.classList.contains('active') && de && ate) {
+      btn.textContent = de === ate ? curto(de) : `${curto(de)} – ${curto(ate)}`;
+    } else {
+      btn.textContent = btn.dataset.labelOriginal;
+    }
+  }
+
   function initPills(containerId, onChange) {
     const pills = [...document.querySelectorAll(`#${containerId} .pill`)];
     pills.forEach(p => p.addEventListener('click', () => {
@@ -218,7 +236,7 @@ const LifeOS = (() => {
 
   return {
     reduced, fmt, countUp, catmullRom, showTT, hideTT, isoLocal, periodoRapido,
-    initReveal, initClock, initGlow, initSegmented, initPills, initTableToggles, initModuleSwitcher, initWheelScrollX,
+    initReveal, initClock, initGlow, initSegmented, initPills, atualizarLabelPersonalizado, initTableToggles, initModuleSwitcher, initWheelScrollX,
     toast, api,
   };
 })();

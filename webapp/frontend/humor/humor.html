@@ -534,6 +534,7 @@ async function carregarAnalises() {
 L.initPills('periodoPills', val => {
   state.periodo = val;
   document.getElementById('periodoPersonalizado').style.display = val === 'personalizado' ? 'grid' : 'none';
+  L.atualizarLabelPersonalizado('periodoPills');
   if (val !== 'personalizado' || (document.getElementById('dataDe').value && document.getElementById('dataAte').value)) carregarAnalises();
 });
 let _debouncePersonalizado = null;
@@ -545,6 +546,7 @@ let _debouncePersonalizado = null;
   // o resultado certo com um intervalo inválido.
   clearTimeout(_debouncePersonalizado);
   _debouncePersonalizado = setTimeout(() => {
+    L.atualizarLabelPersonalizado('periodoPills');
     if (state.periodo === 'personalizado' && document.getElementById('dataDe').value && document.getElementById('dataAte').value) carregarAnalises();
   }, 500);
 }));

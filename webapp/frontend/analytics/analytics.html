@@ -264,6 +264,7 @@ async function recarregarTudo() {
 L.initPills('periodoPills', val => {
   state.periodo = val;
   document.getElementById('periodoPersonalizado').style.display = val === 'personalizado' ? 'grid' : 'none';
+  L.atualizarLabelPersonalizado('periodoPills');
   const p = periodoIso(val);
   if (p) { periodoAtual = p; recarregarTudo(); }
 });
@@ -271,6 +272,7 @@ let _debouncePersonalizado = null;
 ['dataDe', 'dataAte'].forEach(id => document.getElementById(id).addEventListener('change', () => {
   clearTimeout(_debouncePersonalizado);
   _debouncePersonalizado = setTimeout(() => {
+    L.atualizarLabelPersonalizado('periodoPills');
     if (state.periodo !== 'personalizado') return;
     const p = periodoIso('personalizado');
     if (p) { periodoAtual = p; recarregarTudo(); }
