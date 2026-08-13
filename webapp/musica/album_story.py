@@ -109,10 +109,13 @@ def gerar_album_story(escuta: dict, incluir_review: bool = True, incluir_faixa_f
         kit.texto_rastreado_centralizado(draw, LARGURA / 2, y, "SEM NOTA", kit.cp(20), INK_DIM, tracking=2.5)
         y += 44
 
-    # espaço mínimo pra valer a pena abrir um bloco novo (cabeçalho + 1
-    # linha de conteúdo + respiro) — abaixo disso, pula o bloco em vez de
-    # espremer ele e invadir o rodapé.
-    ESPACO_MINIMO_BLOCO = 110
+    # espaço mínimo pra abrir o bloco da review — cabeçalho + 1 linha
+    # truncada cabem em ~150px; como LIMITE_CONTEUDO já deixa 92px de folga
+    # antes da linha real do rodapé, 60px de sobra aqui ainda garante que o
+    # pior caso (1 linha só) não encosta no rodapé. Um valor alto demais
+    # aqui (110) já fez a review sumir por só 5px de diferença — real bug
+    # visto em produção com a review "Banger!!!" de A. Vandal.
+    ESPACO_MINIMO_BLOCO = 60
 
     review = (escuta.get("review") or "").strip()
     tem_review_a_mostrar = incluir_review and bool(review)
