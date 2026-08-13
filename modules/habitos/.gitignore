@@ -1,5 +1,0 @@
-__pycache__/
-*.pyc
-database/*.db
-database/*.db.bak_*
-.streamlit/secrets.toml

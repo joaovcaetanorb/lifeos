@@ -39,6 +39,9 @@
       <button data-val="spotify">Segundo o Spotify</button>
     </div>
     <div class="pills" id="periodoPills">
+      <button class="pill" data-val="hoje">hoje</button>
+      <button class="pill" data-val="ontem">ontem</button>
+      <button class="pill" data-val="semana">esta semana</button>
       <button class="pill" data-val="mes">este mês</button>
       <button class="pill active" data-val="ano">este ano</button>
       <button class="pill" data-val="tudo">todos os tempos</button>
@@ -217,6 +220,8 @@ const state = { fonte: 'diario', periodo: 'ano' };
 
 /* ------------------------------------------------------------------- */
 function periodoIso(periodo) {
+  const rapido = L.periodoRapido(periodo);
+  if (rapido) return rapido;
   const hoje = new Date();
   const iso = d => L.isoLocal(d);
   if (periodo === 'mes') {

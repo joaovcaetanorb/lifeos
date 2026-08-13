@@ -63,11 +63,23 @@
       <span class="led"></span>
       <div class="grow"><div class="eyebrow" style="margin:0;">histórico</div><h3>Movimentos do cofre</h3></div>
     </div>
+    <div class="pills" id="periodoPills" style="margin-bottom:1rem;">
+      <button class="pill" data-val="hoje">hoje</button>
+      <button class="pill" data-val="ontem">ontem</button>
+      <button class="pill" data-val="semana">esta semana</button>
+      <button class="pill" data-val="mes">este mês</button>
+      <button class="pill active" data-val="tudo">todos os tempos</button>
+      <button class="pill" data-val="personalizado">personalizado</button>
+    </div>
+    <div class="field-row" id="periodoPersonalizado" style="display:none;max-width:420px;margin:-.4rem 0 1rem;">
+      <div class="field"><label>De</label><input type="date" id="dataDe" /></div>
+      <div class="field"><label>Até</label><input type="date" id="dataAte" /></div>
+    </div>
     <table class="data-table">
       <thead><tr><th>data</th><th>tipo</th><th>observação</th><th>valor</th><th></th></tr></thead>
       <tbody id="cofreTbody"></tbody>
     </table>
-    <p class="empty-state" id="cofreVazio" style="display:none;">Nenhum movimento no cofre ainda.</p>
+    <p class="empty-state" id="cofreVazio" style="display:none;">Nenhum movimento no cofre neste período ainda.</p>
   </section>
 
   <footer><span>backend FastAPI próprio · escreve no banco de verdade</span><span id="genTime"></span></footer>
@@ -82,6 +94,21 @@ const L = LifeOS;
 function moeda(v) { return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function hoje() { return L.isoLocal(); }
 document.getElementById('cData').value = hoje();
+let state = { periodo: 'tudo' };
+
+function periodoIso(periodo) {
+  const rapido = L.periodoRapido(periodo);
+  if (rapido) return rapido;
+  if (periodo === 'mes') {
+    const d = new Date();
+    return { inicio: L.isoLocal(new Date(d.getFullYear(), d.getMonth(), 1)), fim: L.isoLocal(d) };
+  }
+  if (periodo === 'personalizado') {
+    const de = document.getElementById('dataDe').value, ate = document.getElementById('dataAte').value;
+    return (de && ate) ? { inicio: de, fim: ate } : null;
+  }
+  return null; // 'tudo'
+}
 
 async function carregarResumo() {
   const r = await L.api('/api/financeiro/resumo');
@@ -91,7 +118,9 @@ async function carregarResumo() {
 }
 
 async function carregarCofre() {
-  const movimentos = await L.api('/api/financeiro/cofre/movimentos');
+  const p = periodoIso(state.periodo);
+  const q = p ? `?inicio=${p.inicio}&fim=${p.fim}` : '';
+  const movimentos = await L.api(`/api/financeiro/cofre/movimentos${q}`);
   const tbody = document.getElementById('cofreTbody');
   document.getElementById('cofreVazio').style.display = movimentos.length ? 'none' : 'block';
   tbody.innerHTML = movimentos.map(m => `
@@ -133,6 +162,19 @@ document.getElementById('btnSalvarMovimento').addEventListener('click', async ()
     carregarCofre(); carregarResumo();
   } catch (e) { L.toast(e.message, true); }
 });
+
+L.initPills('periodoPills', val => {
+  state.periodo = val;
+  document.getElementById('periodoPersonalizado').style.display = val === 'personalizado' ? 'grid' : 'none';
+  if (val !== 'personalizado' || (document.getElementById('dataDe').value && document.getElementById('dataAte').value)) carregarCofre();
+});
+let _debouncePeriodo = null;
+['dataDe', 'dataAte'].forEach(id => document.getElementById(id).addEventListener('change', () => {
+  clearTimeout(_debouncePeriodo);
+  _debouncePeriodo = setTimeout(() => {
+    if (state.periodo === 'personalizado' && document.getElementById('dataDe').value && document.getElementById('dataAte').value) carregarCofre();
+  }, 500);
+}));
 
 L.initReveal();
 L.initClock();

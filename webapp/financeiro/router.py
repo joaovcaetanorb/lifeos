@@ -110,8 +110,9 @@ def excluir_conta_fixa(conta_id: int):
 # ---------------------------------------------------------------------------
 
 @router.get("/gastos")
-def listar_gastos(mes: Optional[str] = None):
-    inicio, fim = _periodo_mes(mes)
+def listar_gastos(mes: Optional[str] = None, inicio: Optional[str] = None, fim: Optional[str] = None):
+    if not (inicio and fim):
+        inicio, fim = _periodo_mes(mes)
     return _df_records(models.listar_gastos(data_inicio=inicio, data_fim=fim))
 
 
@@ -149,8 +150,9 @@ def excluir_gasto(gasto_id: int):
 # ---------------------------------------------------------------------------
 
 @router.get("/receitas-extras")
-def listar_receitas_extras(mes: Optional[str] = None):
-    inicio, fim = _periodo_mes(mes)
+def listar_receitas_extras(mes: Optional[str] = None, inicio: Optional[str] = None, fim: Optional[str] = None):
+    if not (inicio and fim):
+        inicio, fim = _periodo_mes(mes)
     return _df_records(models.listar_receitas_extras(data_inicio=inicio, data_fim=fim))
 
 
@@ -182,8 +184,8 @@ def excluir_receita_extra(receita_id: int):
 # ---------------------------------------------------------------------------
 
 @router.get("/cofre/movimentos")
-def listar_movimentos_reserva():
-    return _df_records(models.listar_movimentos_reserva())
+def listar_movimentos_reserva(inicio: Optional[str] = None, fim: Optional[str] = None):
+    return _df_records(models.listar_movimentos_reserva(data_inicio=inicio, data_fim=fim))
 
 
 class MovimentoReservaIn(BaseModel):

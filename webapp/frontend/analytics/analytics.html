@@ -38,6 +38,7 @@
   </div>
 
   <div class="pills" id="periodoPills" style="margin-bottom:.6rem;">
+    <button class="pill" data-val="semana">esta semana</button>
     <button class="pill" data-val="mes">este mês</button>
     <button class="pill active" data-val="ano">este ano</button>
     <button class="pill" data-val="tudo">todos os tempos</button>
@@ -109,6 +110,8 @@ let periodoAtual = null;
 let state = { periodo: 'ano' };
 
 function periodoIso(periodo) {
+  const rapido = L.periodoRapido(periodo);
+  if (rapido) return rapido;
   const hoje = new Date();
   const fim = L.isoLocal(hoje);
   if (periodo === 'personalizado') {

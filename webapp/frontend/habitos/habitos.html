@@ -27,7 +27,10 @@
 .cal-day.vazio{ border:none; cursor:default; height:52px; }
 .cal-day.vazio:hover{ filter:none; }
 @media (max-width:640px){ .cal-day, .cal-day.vazio{ height:38px; font-size:.7rem; } }
-.dia-habito-row{ display:flex; align-items:center; gap:.6rem; padding:.5rem .7rem; border:1px solid var(--hair); border-radius:2px; font-size:.86rem; }
+.dia-habito-row{ display:flex; align-items:center; gap:.6rem; padding:.5rem .7rem; border:1px solid var(--hair); border-radius:2px; font-size:.86rem; cursor:pointer; transition:border-color .15s ease, filter .1s ease; }
+.dia-habito-row:hover{ border-color:var(--accent); filter:brightness(1.1); }
+.dia-habito-row.futuro{ cursor:default; opacity:.5; }
+.dia-habito-row.futuro:hover{ border-color:var(--hair); filter:none; }
 .dia-habito-row .chk{ width:20px; height:20px; flex:none; border-radius:2px; display:flex; align-items:center; justify-content:center; font-size:.78rem; }
 .dia-habito-row.ok .chk{ background:var(--accent); color:#08110c; }
 .dia-habito-row.no .chk{ border:1px solid var(--hair-bright); color:transparent; }
@@ -84,6 +87,9 @@
   </section>
 
   <div class="pills" id="periodoPills" style="margin:1rem 0;">
+    <button class="pill" data-val="hoje">hoje</button>
+    <button class="pill" data-val="ontem">ontem</button>
+    <button class="pill" data-val="semana">esta semana</button>
     <button class="pill" data-val="mes">este mês</button>
     <button class="pill active" data-val="ano">este ano</button>
     <button class="pill" data-val="tudo">todos os tempos</button>
@@ -156,6 +162,8 @@ let calState = { ano: hoje0.getFullYear(), mes: hoje0.getMonth() };
 let state = { periodo: 'ano' };
 
 function periodoIso(periodo) {
+  const rapido = L.periodoRapido(periodo);
+  if (rapido) return rapido;
   const hoje = new Date();
   const fim = L.isoLocal(hoje);
   if (periodo === 'personalizado') {
@@ -328,21 +336,50 @@ document.getElementById('calMesProximo').addEventListener('click', () => {
   renderCalendarioMes();
 });
 
-/* ---------------- modal de detalhe do dia ---------------- */
-function abrirModalDia(dataIso) {
-  const [a, m, d] = dataIso.split('-');
-  document.getElementById('modalDiaTitulo').textContent = `${d}/${m}/${a}`;
+/* ---------------- modal de detalhe do dia (editável) ---------------- */
+let modalDiaData = null;
+function nomesFeitosNoDia(dataIso) {
   const info = heatmapCache.find(x => x.data === dataIso);
-  const nomesFeitos = new Set((info && info.nomes) ? info.nomes.split(', ').filter(Boolean) : []);
+  return new Set((info && info.nomes) ? info.nomes.split(', ').filter(Boolean) : []);
+}
+function renderModalDia() {
+  const dataIso = modalDiaData;
+  const futuro = dataIso > L.isoLocal();
+  const nomesFeitos = nomesFeitosNoDia(dataIso);
   const lista = document.getElementById('modalDiaLista');
   if (!habitosCache.length) {
     lista.innerHTML = '<p class="empty-state">Nenhum hábito cadastrado ainda.</p>';
-  } else {
-    lista.innerHTML = habitosCache.map(h => {
-      const feito = nomesFeitos.has(h.nome);
-      return `<div class="dia-habito-row ${feito ? 'ok' : 'no'}"><span class="chk">${feito ? '✓' : ''}</span>${h.nome}</div>`;
-    }).join('');
+    return;
   }
+  lista.innerHTML = habitosCache.map(h => {
+    const feito = nomesFeitos.has(h.nome);
+    return `<div class="dia-habito-row ${feito ? 'ok' : 'no'} ${futuro ? 'futuro' : ''}" data-id="${h.id}"><span class="chk">${feito ? '✓' : ''}</span>${h.nome}</div>`;
+  }).join('') + (futuro ? '<p class="empty-state" style="padding-top:.4rem;">dia futuro — não dá pra marcar ainda</p>' : '');
+  if (!futuro) {
+    lista.querySelectorAll('.dia-habito-row').forEach(row => {
+      row.addEventListener('click', async () => {
+        const id = row.dataset.id;
+        const feito = row.classList.contains('ok');
+        try {
+          await L.api(`/api/habitos/habitos/${id}/${feito ? 'desmarcar' : 'marcar'}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: dataIso }),
+          });
+          await carregarHeatmap();
+          modalDiaData = dataIso;
+          renderModalDia();
+          carregarHabitos(); carregarResumo(); carregarEstatisticas();
+        } catch (err) {
+          L.toast('Não consegui atualizar esse dia.', true);
+        }
+      });
+    });
+  }
+}
+function abrirModalDia(dataIso) {
+  const [a, m, d] = dataIso.split('-');
+  document.getElementById('modalDiaTitulo').textContent = `${d}/${m}/${a}`;
+  modalDiaData = dataIso;
+  renderModalDia();
   document.getElementById('modalDia').classList.add('open');
 }
 function fecharModalDia() { document.getElementById('modalDia').classList.remove('open'); }

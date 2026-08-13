@@ -59,6 +59,30 @@ const LifeOS = (() => {
     return `${dt.getFullYear()}-${m}-${day}`;
   }
 
+  /* Atalhos de período usados pelos pills "hoje"/"ontem"/"esta semana" em
+     todas as páginas que filtram por data — cada página mantém seu próprio
+     periodoIso() pros demais casos (mês/ano/tudo/personalizado variam de
+     comportamento entre elas), só delega os 3 atalhos novos pra cá. */
+  function periodoRapido(periodo) {
+    const hoje = new Date();
+    const fim = isoLocal(hoje);
+    if (periodo === 'hoje') return { inicio: fim, fim };
+    if (periodo === 'ontem') {
+      const o = new Date(hoje);
+      o.setDate(o.getDate() - 1);
+      const iso = isoLocal(o);
+      return { inicio: iso, fim: iso };
+    }
+    if (periodo === 'semana') {
+      const dow = hoje.getDay(); // dom=0
+      const diff = dow === 0 ? 6 : dow - 1; // volta até segunda-feira
+      const i = new Date(hoje);
+      i.setDate(i.getDate() - diff);
+      return { inicio: isoLocal(i), fim };
+    }
+    return null;
+  }
+
   function initClock(elId) {
     const el = document.getElementById(elId || 'clock');
     if (!el) return;
@@ -193,7 +217,7 @@ const LifeOS = (() => {
   }
 
   return {
-    reduced, fmt, countUp, catmullRom, showTT, hideTT, isoLocal,
+    reduced, fmt, countUp, catmullRom, showTT, hideTT, isoLocal, periodoRapido,
     initReveal, initClock, initGlow, initSegmented, initPills, initTableToggles, initModuleSwitcher, initWheelScrollX,
     toast, api,
   };

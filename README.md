@@ -12,44 +12,51 @@ Toda funcionalidade precisa passar no teste: **isso me ajuda a entender melhor m
 
 ## Stack
 
-Python, Streamlit, SQLite, SQLAlchemy, Pandas (Plotly só quando necessário).
+FastAPI (backend + API REST) servindo um frontend estático (HTML/CSS/JS sem
+build step), banco Turso (libSQL) por módulo.
 
 ## Estrutura
 
 ```
-modules/
-  financeiro/      # controle financeiro pessoal (pronto)
-  projetos/        # metas e projetos com orçamento e checklist (pronto)
-  habitos/         # check-in diário de hábitos, streak e % cumprido (pronto)
-  livros/          # estante e diário de leitura (pronto)
-  musica/          # catálogo e diário de escutas (pronto)
-  dashboard_geral/ # visão consolidada das áreas acima (pronto)
+webapp/
+  main.py            # monta a API e serve o frontend de cada módulo
+  financeiro/         # controle financeiro pessoal
+  projetos/            # metas e projetos com orçamento e checklist
+  habitos/             # check-in diário de hábitos, streak e % cumprido
+  humor/               # registro de humor ao longo do dia
+  livros/              # estante e diário de leitura
+  musica/              # catálogo e diário de escutas
+  analytics/           # tendências cruzando os módulos acima
+  timeline/            # linha do tempo consolidada dos eventos
+  frontend/            # HTML/CSS/JS de cada módulo + assets compartilhados
 ```
 
-Cada módulo vive em `modules/<nome>/` como uma aplicação independente (roda
-sozinho com `streamlit run app.py` de dentro da própria pasta).
+Cada módulo tem seu próprio banco Turso (embedded replica) e vive isolado em
+`webapp/<nome>/` (router FastAPI) + `webapp/frontend/<nome>/` (páginas).
 
 ## Como rodar
 
 ```
-streamlit run app.py
+cd webapp
+uvicorn main:app --reload
 ```
 
-Isso sobe o LifeOS inteiro num processo só: `app.py`, na raiz, junta todos os
-módulos numa sidebar única (Geral, Financeiro, Projetos, Hábitos, Livros,
-Música) via `st.navigation`. Nenhum módulo precisa ser alterado pra isso — cada um
-continua funcionando sozinho (`streamlit run app.py` dentro de
-`modules/<nome>/`) se precisar depurar um em isolamento.
+Abre em `http://localhost:8000`.
+
+## Deploy
+
+`render.yaml` na raiz sobe o `webapp/` no Render (`rootDir: webapp`,
+`uvicorn main:app`).
 
 ## Roadmap
 
 1. Fundação/arquitetura
 2. **Financeiro** — pronto
 3. **Projetos** — pronto
-4. **Dashboard Geral** — pronto
-5. **Hábitos** — pronto
-6. Humor
-7. **Livros** — pronto
-8. **Música** — pronto
-9. Analytics
+4. **Hábitos** — pronto
+5. **Humor** — pronto
+6. **Livros** — pronto
+7. **Música** — pronto
+8. **Analytics** — pronto
+9. **Timeline** — pronto
 10. IA e Insights

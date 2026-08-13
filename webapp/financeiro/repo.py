@@ -154,9 +154,20 @@ def excluir_receita_extra(receita_id: int) -> None:
 # Cofre (reserva_movimentos)
 # ---------------------------------------------------------------------------
 
-def listar_movimentos_reserva() -> pd.DataFrame:
+def listar_movimentos_reserva(data_inicio: str | None = None, data_fim: str | None = None) -> pd.DataFrame:
     conn = get_connection()
-    return pd.read_sql_query("SELECT * FROM reserva_movimentos ORDER BY data DESC, id DESC", conn)
+    query = "SELECT * FROM reserva_movimentos"
+    condicoes, params = [], []
+    if data_inicio:
+        condicoes.append("data >= ?")
+        params.append(data_inicio)
+    if data_fim:
+        condicoes.append("data <= ?")
+        params.append(data_fim)
+    if condicoes:
+        query += " WHERE " + " AND ".join(condicoes)
+    query += " ORDER BY data DESC, id DESC"
+    return pd.read_sql_query(query, conn, params=params)
 
 
 def obter_movimento_reserva(movimento_id: int) -> dict | None:

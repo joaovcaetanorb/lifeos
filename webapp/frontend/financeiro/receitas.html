@@ -60,13 +60,25 @@
   <section class="module" data-reveal style="margin-top:1rem;">
     <div class="module-head">
       <span class="led"></span>
-      <div class="grow"><div class="eyebrow" style="margin:0;">histórico</div><h3>Renda extra do mês</h3></div>
+      <div class="grow"><div class="eyebrow" style="margin:0;">histórico</div><h3>Renda extra</h3></div>
+    </div>
+    <div class="pills" id="periodoPills" style="margin-bottom:1rem;">
+      <button class="pill" data-val="hoje">hoje</button>
+      <button class="pill" data-val="ontem">ontem</button>
+      <button class="pill" data-val="semana">esta semana</button>
+      <button class="pill active" data-val="mes">este mês</button>
+      <button class="pill" data-val="tudo">todos os tempos</button>
+      <button class="pill" data-val="personalizado">personalizado</button>
+    </div>
+    <div class="field-row" id="periodoPersonalizado" style="display:none;max-width:420px;margin:-.4rem 0 1rem;">
+      <div class="field"><label>De</label><input type="date" id="dataDe" /></div>
+      <div class="field"><label>Até</label><input type="date" id="dataAte" /></div>
     </div>
     <table class="data-table">
       <thead><tr><th>data</th><th>descrição</th><th>valor</th><th></th></tr></thead>
       <tbody id="receitasTbody"></tbody>
     </table>
-    <p class="empty-state" id="receitasVazio" style="display:none;">Nenhuma renda extra lançada neste mês ainda.</p>
+    <p class="empty-state" id="receitasVazio" style="display:none;">Nenhuma renda extra lançada neste período ainda.</p>
   </section>
 
   <footer><span>backend FastAPI próprio · escreve no banco de verdade</span><span id="genTime"></span></footer>
@@ -81,6 +93,18 @@ const L = LifeOS;
 function moeda(v) { return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function hoje() { return L.isoLocal(); }
 document.getElementById('rData').value = hoje();
+let state = { periodo: 'mes' };
+
+function periodoIso(periodo) {
+  const rapido = L.periodoRapido(periodo);
+  if (rapido) return rapido;
+  if (periodo === 'personalizado') {
+    const de = document.getElementById('dataDe').value, ate = document.getElementById('dataAte').value;
+    return (de && ate) ? { inicio: de, fim: ate } : null;
+  }
+  if (periodo === 'tudo') return { inicio: '0000-01-01', fim: '9999-12-31' };
+  return null; // 'mes' — deixa o backend usar o mês atual
+}
 
 async function carregarResumo() {
   const r = await L.api('/api/financeiro/resumo');
@@ -90,7 +114,9 @@ async function carregarResumo() {
 }
 
 async function carregarReceitas() {
-  const receitas = await L.api('/api/financeiro/receitas-extras');
+  const p = periodoIso(state.periodo);
+  const q = p ? `?inicio=${p.inicio}&fim=${p.fim}` : '';
+  const receitas = await L.api(`/api/financeiro/receitas-extras${q}`);
   const tbody = document.getElementById('receitasTbody');
   document.getElementById('receitasVazio').style.display = receitas.length ? 'none' : 'block';
   tbody.innerHTML = receitas.map(r => `
@@ -128,6 +154,19 @@ document.getElementById('btnSalvarReceita').addEventListener('click', async () =
     carregarReceitas(); carregarResumo();
   } catch (e) { L.toast(e.message, true); }
 });
+
+L.initPills('periodoPills', val => {
+  state.periodo = val;
+  document.getElementById('periodoPersonalizado').style.display = val === 'personalizado' ? 'grid' : 'none';
+  if (val !== 'personalizado' || (document.getElementById('dataDe').value && document.getElementById('dataAte').value)) carregarReceitas();
+});
+let _debouncePeriodo = null;
+['dataDe', 'dataAte'].forEach(id => document.getElementById(id).addEventListener('change', () => {
+  clearTimeout(_debouncePeriodo);
+  _debouncePeriodo = setTimeout(() => {
+    if (state.periodo === 'personalizado' && document.getElementById('dataDe').value && document.getElementById('dataAte').value) carregarReceitas();
+  }, 500);
+}));
 
 L.initReveal();
 L.initClock();
