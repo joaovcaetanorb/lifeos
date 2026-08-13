@@ -12,6 +12,9 @@ const LifeOS = (() => {
     opts = opts || {};
     const from = parseFloat(el.dataset.raw || 0);
     const format = opts.format || (v => fmt(v));
+    if (el.classList.contains('k-value') && from !== to) {
+      el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+    }
     if (reduced) { el.textContent = format(to); el.dataset.raw = to; return; }
     const dur = opts.dur || 800;
     const start = performance.now();
@@ -35,6 +38,18 @@ const LifeOS = (() => {
       d += `C ${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)} `;
     }
     return d;
+  }
+
+  /* Renderiza uma nota (0..max, aceita fração — ex.: 4.5) como estrelas
+     cheias/meia/vazias. Usada no lugar do antigo "★ 4.5" textual em
+     diario.html e albuns.html. */
+  function starsHtml(nota, max) {
+    max = max || 5;
+    if (nota === null || nota === undefined) return '<span class="stars-vazio">sem nota</span>';
+    const pct = Math.max(0, Math.min(100, (nota / max) * 100));
+    const cheio = '★'.repeat(max);
+    const notaFmt = String(nota).replace('.', ',');
+    return `<span class="stars" title="${notaFmt} de ${max}"><span class="stars-bg">${cheio}</span><span class="stars-fg" style="width:${pct}%">${cheio}</span></span>`;
   }
 
   function showTT(el, x, y, html) { el.innerHTML = html; el.classList.add('show'); el.style.left = x + 'px'; el.style.top = y + 'px'; }
@@ -235,7 +250,7 @@ const LifeOS = (() => {
   }
 
   return {
-    reduced, fmt, countUp, catmullRom, showTT, hideTT, isoLocal, periodoRapido,
+    reduced, fmt, countUp, catmullRom, starsHtml, showTT, hideTT, isoLocal, periodoRapido,
     initReveal, initClock, initGlow, initSegmented, initPills, atualizarLabelPersonalizado, initTableToggles, initModuleSwitcher, initWheelScrollX,
     toast, api,
   };
