@@ -85,7 +85,7 @@ const CATEGORIAS_GASTO = ["Alimentação","Transporte","Lazer","Compras pessoais
 const FORMAS_PAGAMENTO = ["Dinheiro","Vale-alimentação","Cartão de crédito"];
 
 function moeda(v) { return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
-function hoje() { return new Date().toISOString().slice(0, 10); }
+function hoje() { return L.isoLocal(); }
 
 document.getElementById('gCategoria').innerHTML = CATEGORIAS_GASTO.map(c => `<option value="${c}">${c}</option>`).join('');
 document.getElementById('gFormaPagamento').innerHTML = FORMAS_PAGAMENTO.map(f => `<option value="${f}">${f}</option>`).join('');

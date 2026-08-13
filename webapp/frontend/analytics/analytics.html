@@ -110,19 +110,19 @@ let state = { periodo: 'ano' };
 
 function periodoIso(periodo) {
   const hoje = new Date();
-  const fim = hoje.toISOString().slice(0, 10);
+  const fim = L.isoLocal(hoje);
   if (periodo === 'personalizado') {
     const de = document.getElementById('dataDe').value, ate = document.getElementById('dataAte').value;
     return (de && ate) ? { inicio: de, fim: ate } : null;
   }
   if (periodo === 'mes') {
-    return { inicio: new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10), fim };
+    return { inicio: L.isoLocal(new Date(hoje.getFullYear(), hoje.getMonth(), 1)), fim };
   }
   if (periodo === 'ano') {
-    return { inicio: new Date(hoje.getFullYear(), 0, 1).toISOString().slice(0, 10), fim };
+    return { inicio: L.isoLocal(new Date(hoje.getFullYear(), 0, 1)), fim };
   }
   // "tudo" — 3 anos pra trás (mesmo critério do Analytics antigo do Streamlit)
-  return { inicio: new Date(hoje.getFullYear() - 3, hoje.getMonth(), hoje.getDate()).toISOString().slice(0, 10), fim };
+  return { inicio: L.isoLocal(new Date(hoje.getFullYear() - 3, hoje.getMonth(), hoje.getDate())), fim };
 }
 
 /* ---------------- leitura do período: frase instantânea + IA opcional ---------------- */

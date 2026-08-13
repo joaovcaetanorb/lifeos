@@ -389,7 +389,7 @@ async function abrirGerenciar(projetoId) {
   const p = await L.api(`/api/projetos/projetos/${projetoId}`);
   document.getElementById('gerNomeProjeto').textContent = p.nome;
   preencherEditar(p);
-  document.getElementById('aporteData').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('aporteData').value = L.isoLocal();
   document.getElementById('modalGerenciar').classList.add('open');
   mudarPainel('checklist');
   await Promise.all([carregarChecklist(), carregarAportes()]);

@@ -49,6 +49,16 @@ const LifeOS = (() => {
     els.forEach(el => io.observe(el));
   }
 
+  /* "YYYY-MM-DD" da data LOCAL de um Date (não Date.toISOString(), que
+     converte pra UTC primeiro — vira o dia seguinte depois das 21h no
+     fuso do Brasil, UTC-3). */
+  function isoLocal(d) {
+    const dt = d || new Date();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    return `${dt.getFullYear()}-${m}-${day}`;
+  }
+
   function initClock(elId) {
     const el = document.getElementById(elId || 'clock');
     if (!el) return;
@@ -183,7 +193,7 @@ const LifeOS = (() => {
   }
 
   return {
-    reduced, fmt, countUp, catmullRom, showTT, hideTT,
+    reduced, fmt, countUp, catmullRom, showTT, hideTT, isoLocal,
     initReveal, initClock, initGlow, initSegmented, initPills, initTableToggles, initModuleSwitcher, initWheelScrollX,
     toast, api,
   };

@@ -253,7 +253,7 @@ function atualizarBadgeNota(inputId, badgeId) {
 document.getElementById('frNota').addEventListener('input', () => atualizarBadgeNota('frNota', 'frNotaBadge'));
 document.getElementById('mrNota').addEventListener('input', () => atualizarBadgeNota('mrNota', 'mrNotaBadge'));
 
-document.getElementById('frData').value = new Date().toISOString().slice(0, 10);
+document.getElementById('frData').value = L.isoLocal();
 document.getElementById('frHora').value = new Date().toTimeString().slice(0, 5);
 
 document.getElementById('btnRegistrar').addEventListener('click', async () => {
@@ -353,8 +353,8 @@ let registrosMesCache = [];
 async function carregarCalendarioMes() {
   const primeiro = new Date(calState.ano, calState.mes, 1);
   const ultimo = new Date(calState.ano, calState.mes + 1, 0);
-  const inicio = primeiro.toISOString().slice(0, 10);
-  const fim = ultimo.toISOString().slice(0, 10);
+  const inicio = L.isoLocal(primeiro);
+  const fim = L.isoLocal(ultimo);
   registrosMesCache = await L.api(`/api/humor/registros?inicio=${inicio}&fim=${fim}&limite=0`);
   renderCalendarioMes();
 }
@@ -369,7 +369,7 @@ function renderCalendarioMes() {
   const primeiroDoMes = new Date(calState.ano, calState.mes, 1);
   const ultimoDoMes = new Date(calState.ano, calState.mes + 1, 0);
   const offset = primeiroDoMes.getDay();
-  const hojeIso = new Date().toISOString().slice(0, 10);
+  const hojeIso = L.isoLocal();
 
   let html = DOW_LABELS.map(l => `<div class="cal-dow">${l}</div>`).join('');
   for (let i = 0; i < offset; i++) html += `<div class="cal-day vazio"></div>`;
@@ -429,16 +429,16 @@ let state = { periodo: 'ano' };
 
 function periodoIso(periodo) {
   const hoje = new Date();
-  const fim = hoje.toISOString().slice(0, 10);
+  const fim = L.isoLocal(hoje);
   if (periodo === 'personalizado') {
     return { inicio: document.getElementById('dataDe').value, fim: document.getElementById('dataAte').value };
   }
   if (periodo === 'mes') {
-    const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+    const inicio = L.isoLocal(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
     return { inicio, fim };
   }
   if (periodo === 'ano') {
-    const inicio = new Date(hoje.getFullYear(), 0, 1).toISOString().slice(0, 10);
+    const inicio = L.isoLocal(new Date(hoje.getFullYear(), 0, 1));
     return { inicio, fim };
   }
   return { inicio: null, fim };

@@ -297,7 +297,7 @@ document.getElementById('selAlbum').addEventListener('change', (e) => {
   atualizarFaixaFavorita(album ? album.spotify_id : null);
 });
 
-document.getElementById('escutaData').value = new Date().toISOString().slice(0, 10);
+document.getElementById('escutaData').value = L.isoLocal();
 
 document.getElementById('formEscuta').addEventListener('submit', async (ev) => {
   ev.preventDefault();
@@ -349,7 +349,7 @@ document.getElementById('formEscuta').addEventListener('submit', async (ev) => {
 
     L.toast('Escuta registrada.');
     ev.target.reset();
-    document.getElementById('escutaData').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('escutaData').value = L.isoLocal();
     spotifyEscolha = null;
     document.getElementById('spotifyEscolhido').style.display = 'none';
     atualizarFaixaFavorita(null);

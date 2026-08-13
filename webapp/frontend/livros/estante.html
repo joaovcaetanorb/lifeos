@@ -379,7 +379,7 @@ document.getElementById('modalLeiturasFechar').addEventListener('click', fecharM
 document.getElementById('modalLeituras').addEventListener('click', e => { if (e.target.id === 'modalLeituras') fecharModalLeituras(); });
 
 function abrirModalNovaLeitura() {
-  document.getElementById('neData').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('neData').value = L.isoLocal();
   document.getElementById('neStatus').value = 'Lendo';
   document.getElementById('neNota').value = '4';
   document.getElementById('neReview').value = '';

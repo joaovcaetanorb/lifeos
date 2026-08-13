@@ -244,7 +244,7 @@ document.getElementById('novoCapa').addEventListener('change', () => {
   }
 });
 
-document.getElementById('leituraData').value = new Date().toISOString().slice(0, 10);
+document.getElementById('leituraData').value = L.isoLocal();
 
 document.getElementById('formLeitura').addEventListener('submit', async (ev) => {
   ev.preventDefault();
@@ -291,7 +291,7 @@ document.getElementById('formLeitura').addEventListener('submit', async (ev) => 
 
     L.toast('Leitura registrada.');
     ev.target.reset();
-    document.getElementById('leituraData').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('leituraData').value = L.isoLocal();
     limparCapaNovo();
     await carregarLivros();
     await carregarTimeline();

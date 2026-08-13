@@ -80,7 +80,7 @@
 const L = LifeOS;
 
 function moeda(v) { return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
-function hoje() { return new Date().toISOString().slice(0, 10); }
+function hoje() { return L.isoLocal(); }
 document.getElementById('cData').value = hoje();
 
 async function carregarResumo() {

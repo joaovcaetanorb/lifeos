@@ -88,7 +88,7 @@ const state = { fonte: 'diario', periodo: 'ano' };
 
 function periodoIso(periodo) {
   const hoje = new Date();
-  const iso = d => d.toISOString().slice(0, 10);
+  const iso = d => L.isoLocal(d);
   if (periodo === 'mes') { const i = new Date(hoje.getFullYear(), hoje.getMonth(), 1); return { inicio: iso(i), fim: iso(hoje) }; }
   if (periodo === 'ano') { const i = new Date(hoje.getFullYear(), 0, 1); return { inicio: iso(i), fim: iso(hoje) }; }
   if (periodo === 'personalizado') {

@@ -421,7 +421,7 @@ document.getElementById('modalEscutasFechar').addEventListener('click', fecharMo
 document.getElementById('modalEscutas').addEventListener('click', e => { if (e.target.id === 'modalEscutas') fecharModalEscutas(); });
 
 function abrirModalNovaEscuta() {
-  document.getElementById('neData').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('neData').value = L.isoLocal();
   document.getElementById('neNota').value = '3';
   document.getElementById('neFaixa').value = '';
   document.getElementById('neReview').value = '';

@@ -204,7 +204,7 @@ function renderHeatmap() {
   const primeiroDoMes = new Date(calState.ano, calState.mes, 1);
   const ultimoDoMes = new Date(calState.ano, calState.mes + 1, 0);
   const offset = primeiroDoMes.getDay();
-  const hojeIso = new Date().toISOString().slice(0, 10);
+  const hojeIso = L.isoLocal();
 
   let html = DOW_LABELS.map(l => `<div class="cal-dow">${l}</div>`).join('');
   for (let i = 0; i < offset; i++) html += `<div class="cal-day vazio"></div>`;
@@ -440,8 +440,8 @@ async function carregarTicker() {
   const strip = document.getElementById('tickerStrip');
   const track = document.getElementById('tickerTrack');
   try {
-    const fim = new Date().toISOString().slice(0, 10);
-    const inicio = new Date(Date.now() - TICKER_JANELA_DIAS * 86400000).toISOString().slice(0, 10);
+    const fim = L.isoLocal();
+    const inicio = L.isoLocal(new Date(Date.now() - TICKER_JANELA_DIAS * 86400000));
     const r = await L.api(`/api/timeline?inicio=${inicio}&fim=${fim}`);
     const itens = r.eventos.slice(0, TICKER_MAX_ITENS);
     if (!itens.length) { strip.hidden = true; return; }
@@ -461,8 +461,8 @@ L.initWheelScrollX(document.getElementById('tickerStrip'));
 async function carregarMes() {
   const feed = document.getElementById('feed');
   feed.innerHTML = '<p class="empty-state">Carregando…</p>';
-  const inicio = new Date(calState.ano, calState.mes, 1).toISOString().slice(0, 10);
-  const fim = new Date(calState.ano, calState.mes + 1, 0).toISOString().slice(0, 10);
+  const inicio = L.isoLocal(new Date(calState.ano, calState.mes, 1));
+  const fim = L.isoLocal(new Date(calState.ano, calState.mes + 1, 0));
   try {
     const r = await L.api(`/api/timeline?inicio=${inicio}&fim=${fim}`);
     eventosCache = r.eventos;
