@@ -17,6 +17,7 @@ input[type="range"]{ flex:1; accent-color:var(--accent); }
 .chip:hover{ border-color:var(--hair-bright); color:var(--ink); }
 .chip.selected.pos{ background:rgba(57,135,229,.16); border-color:#3987e5; color:#a9cbf2; }
 .chip.selected.neg{ background:rgba(230,103,103,.16); border-color:#e66767; color:#f0b3b3; }
+.chip.selected.neu{ background:rgba(139,138,130,.16); border-color:var(--ink-muted); color:var(--ink); }
 
 .registro-row{ display:flex; gap:.9rem; align-items:flex-start; padding:.8rem 0; border-bottom:1px solid var(--hair); }
 .registro-row:last-child{ border-bottom:none; }
@@ -203,6 +204,7 @@ const L = LifeOS;
 const reduced = L.reduced;
 
 const TAGS_POSITIVAS = new Set(["Animado","Grato","Motivado","Calmo","Realizado","Confiante","Focado"]);
+const TAGS_NEUTRAS = new Set(["Normal"]);
 let TAGS_HUMOR = [];
 
 function corNota(nota) {
@@ -213,14 +215,14 @@ function corNota(nota) {
   const c = a.map((v, i) => Math.round(v + (b[i] - v) * tt));
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
-function corTag(tag) { return TAGS_POSITIVAS.has(tag) ? '#3987e5' : '#e66767'; }
+function corTag(tag) { return TAGS_NEUTRAS.has(tag) ? '#8b8a82' : (TAGS_POSITIVAS.has(tag) ? '#3987e5' : '#e66767'); }
 
 /* ---------------- chips de tags (form + modal) ---------------- */
 function montarChips(containerId, selecionadas) {
   const wrap = document.getElementById(containerId);
   const sel = new Set(selecionadas || []);
   wrap.innerHTML = TAGS_HUMOR.map(t => {
-    const cls = TAGS_POSITIVAS.has(t) ? 'pos' : 'neg';
+    const cls = TAGS_NEUTRAS.has(t) ? 'neu' : (TAGS_POSITIVAS.has(t) ? 'pos' : 'neg');
     return `<button type="button" class="chip ${cls} ${sel.has(t) ? 'selected' : ''}" data-tag="${t}">${t}</button>`;
   }).join('');
   wrap.querySelectorAll('.chip').forEach(chip => {

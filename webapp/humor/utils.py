@@ -10,18 +10,25 @@ from datetime import date, datetime
 # música) mais pra frente, e isso só funciona com um vocabulário fechado.
 TAGS_HUMOR = [
     "Animado", "Grato", "Motivado", "Calmo", "Realizado", "Confiante", "Focado",
+    "Normal",
     "Ansioso", "Cansado", "Irritado", "Triste", "Sobrecarregado", "Frustrado", "Entediado",
 ]
 
-# As 7 primeiras tags acima são o lado positivo do vocabulário; o resto é
-# negativo. Usado só pra colorir — não afeta a nota numérica.
+# As 7 primeiras tags acima são o lado positivo do vocabulário e as últimas 7
+# o lado negativo; "Normal" fica fora dos dois, em TAGS_NEUTRAS. Usado só pra
+# colorir — não afeta a nota numérica.
 TAGS_POSITIVAS = set(TAGS_HUMOR[:7])
+TAGS_NEUTRAS = {"Normal"}
 
 # Par validado (CVD ΔE 19.2, normal-vision ΔE 29.0) via
 # scripts/validate_palette.js da skill de dataviz — verde/vermelho falha
 # separação pra daltonismo deutan, por isso azul/vermelho.
 COR_TAG_POSITIVO = "#3987e5"
 COR_TAG_NEGATIVO = "#e66767"
+# Cinza claro (== --ink-muted do tema) — usado só como cor de tag/texto.
+# Diferente de COR_NEUTRO abaixo, que é escuro de propósito (ponto médio de
+# um gradiente com fundo preenchido, não texto sobre fundo escuro).
+COR_TAG_NEUTRO = "#8b8a82"
 
 # Ponto médio neutro pra escala divergente do calendário de humor.
 COR_NEUTRO = "#383835"
@@ -76,4 +83,6 @@ def texto_para_tags(texto: str) -> list[str]:
 
 
 def cor_tag(tag: str) -> str:
+    if tag in TAGS_NEUTRAS:
+        return COR_TAG_NEUTRO
     return COR_TAG_POSITIVO if tag in TAGS_POSITIVAS else COR_TAG_NEGATIVO
