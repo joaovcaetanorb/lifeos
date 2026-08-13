@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: lifeos-webapp
+    runtime: python
+    rootDir: webapp
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: TURSO_MUSICA_URL
+        sync: false
+      - key: TURSO_MUSICA_TOKEN
+        sync: false
+      - key: TURSO_LIVROS_URL
+        sync: false
+      - key: TURSO_LIVROS_TOKEN
+        sync: false
+      - key: TURSO_HABITOS_URL
+        sync: false
+      - key: TURSO_HABITOS_TOKEN
+        sync: false
+      - key: TURSO_HUMOR_URL
+        sync: false
+      - key: TURSO_HUMOR_TOKEN
+        sync: false
+      - key: TURSO_PROJETOS_URL
+        sync: false
+      - key: TURSO_PROJETOS_TOKEN
+        sync: false
+      - key: TURSO_FINANCEIRO_URL
+        sync: false
+      - key: TURSO_FINANCEIRO_TOKEN
+        sync: false
+      - key: TURSO_MOMENTOS_URL
+        sync: false
+      - key: TURSO_MOMENTOS_TOKEN
+        sync: false
+      - key: SPOTIFY_CLIENT_ID
+        sync: false
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false
+      - key: SPOTIFY_REDIRECT_URI
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
