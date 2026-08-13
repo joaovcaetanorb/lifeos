@@ -176,6 +176,23 @@ def listar_escutas(album_id: int) -> pd.DataFrame:
     )
 
 
+def obter_escuta_com_album(escuta_id: int) -> dict | None:
+    """Uma escuta já com álbum e artista resolvidos (join) — usada pra
+    montar o card de export individual (album_story.py)."""
+    conn = get_connection()
+    cursor = conn.execute(
+        """SELECT escutas.*, albuns.nome AS album_nome, albuns.capa_mime,
+                  albuns.ano_lancamento AS album_ano, albuns.genero AS album_genero,
+                  artistas.nome AS artista_nome
+           FROM escutas
+           JOIN albuns ON albuns.id = escutas.album_id
+           JOIN artistas ON artistas.id = albuns.artista_id
+           WHERE escutas.id = ?""",
+        (escuta_id,),
+    )
+    return linha_para_dict(cursor, cursor.fetchone())
+
+
 def listar_escutas_com_album() -> pd.DataFrame:
     """Todas as escutas já com álbum e artista resolvidos (join)."""
     conn = get_connection()

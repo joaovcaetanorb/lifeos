@@ -168,7 +168,7 @@ function cardHtml(a) {
       <div class="album-nome">${a.nome}</div>
       <div class="album-artista">${a.artista_nome}</div>
       <div class="album-meta">${a.ano_lancamento || '—'}${a.genero ? ' · ' + a.genero : ''}</div>
-      <div class="album-nota">${a.total_escutas ? `${a.nota_media != null ? '★ ' + a.nota_media.toFixed(1) : 'sem nota'} · ${a.total_escutas} escuta${a.total_escutas > 1 ? 's' : ''}` : 'nenhuma escuta ainda'}</div>
+      <div class="album-nota">${a.total_escutas ? `${L.starsHtml(a.nota_media)} · ${a.total_escutas} escuta${a.total_escutas > 1 ? 's' : ''}` : 'nenhuma escuta ainda'}</div>
       <div class="album-actions">
         <button data-action="escutas">escutas</button>
         <button data-action="editar">editar</button>
@@ -341,7 +341,6 @@ document.getElementById('soFavoritos').addEventListener('change', carregar);
 let escutasAlbumId = null;
 let escutasAlbumNome = '';
 
-function notaTexto(n) { return (n === null || n === undefined) ? 'sem nota' : `★ ${n}`; }
 function dataBr(iso) { if (!iso) return ''; const [a, m, d] = iso.split('-'); return `${d}/${m}/${a}`; }
 
 function slideHtml(e) {
@@ -349,7 +348,7 @@ function slideHtml(e) {
   <div class="revisao-item" data-id="${e.id}">
     <div class="cs-view">
       <div class="cs-data">${dataBr(e.data)}</div>
-      <div class="cs-nota">${notaTexto(e.nota)}</div>
+      <div class="cs-nota">${L.starsHtml(e.nota)}</div>
       ${e.faixa_favorita ? `<div class="cs-faixa">faixa favorita: ${e.faixa_favorita}</div>` : ''}
       <div class="cs-review">${e.review ? e.review.replace(/</g, '&lt;') : '<span style="color:var(--ink-dim);">sem review</span>'}</div>
       <div class="cs-actions">

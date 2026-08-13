@@ -28,7 +28,7 @@ def _abrir_imagem(item: dict) -> Image.Image | None:
     return None
 
 
-def _tile_capa(item: dict, tamanho: int) -> Image.Image:
+def tile_capa(item: dict, tamanho: int) -> Image.Image:
     imagem = _abrir_imagem(item)
     if imagem is not None:
         with imagem:
@@ -50,7 +50,7 @@ def montar_mosaico(albuns: list[dict], lado_grade: int, lado_total: int) -> Imag
     total_slots = lado_grade * lado_grade
     for i in range(total_slots):
         item = albuns[i] if i < len(albuns) else {}
-        tile = _tile_capa(item, tamanho_tile)
+        tile = tile_capa(item, tamanho_tile)
         col, linha = i % lado_grade, i // lado_grade
         mosaico.paste(tile, (col * tamanho_tile, linha * tamanho_tile))
     return mosaico

@@ -138,6 +138,10 @@
       <div class="grow"><div class="eyebrow" style="margin:0;">fechamento</div><h3>Relatório estilo Stories</h3></div>
     </div>
     <p style="color:var(--ink-muted);font-size:.86rem;margin:0 0 .8rem;">Card vertical 1080×1920 pronto pra postar, com o resumo do período selecionado acima. Cada clique gera uma versão nova.</p>
+    <div class="field" style="max-width:200px;margin-bottom:1rem;">
+      <label>Grade do mosaico</label>
+      <select id="selGradeRelatorio"><option value="3">3×3</option><option value="4">4×4</option><option value="5">5×5</option><option value="6">6×6</option></select>
+    </div>
     <div class="btn-row">
       <button class="btn btn-primary" id="btnRelatorio">gerar e baixar relatório</button>
     </div>
@@ -568,17 +572,18 @@ document.getElementById('btnRelatorio').addEventListener('click', async () => {
   if (!periodo) return;
   const btn = document.getElementById('btnRelatorio');
   const rotuloPill = document.querySelector('#periodoPills .pill.active').textContent;
+  const lado_grade = parseInt(document.getElementById('selGradeRelatorio').value, 10);
   btn.disabled = true; btn.textContent = 'gerando...';
   try {
     const res = await fetch('/api/musica/relatorio-stories', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inicio: periodo.inicio, fim: periodo.fim, rotulo: rotuloPill }),
+      body: JSON.stringify({ inicio: periodo.inicio, fim: periodo.fim, rotulo: rotuloPill, lado_grade }),
     });
     if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || `erro ${res.status}`); }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `spotify-${periodo.inicio}-a-${periodo.fim}.png`;
+    a.href = url; a.download = `spotify-${periodo.inicio}-a-${periodo.fim}-${lado_grade}x${lado_grade}.png`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
     L.toast('Relatório gerado e baixado.');

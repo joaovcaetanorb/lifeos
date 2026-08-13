@@ -118,6 +118,24 @@
   <footer><span>backend FastAPI próprio · escreve no banco de verdade</span><span id="genTime"></span></footer>
 </div>
 
+<div class="modal-backdrop" id="modalExport">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-head">
+      <h3>Exportar pra Stories</h3>
+      <button type="button" class="modal-close" id="modalExportFechar">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--ink-muted);font-size:.86rem;margin:0 0 .9rem;">Card vertical 1080×1920 com a capa, artista e a nota em estrelas — pronto pra postar.</p>
+      <label style="display:flex;align-items:center;gap:.5rem;font-size:.86rem;cursor:pointer;">
+        <input type="checkbox" id="modalExportReview" style="width:auto;height:auto;" /> incluir a review escrita
+      </label>
+      <div class="btn-row" style="margin-top:1.1rem;">
+        <button class="btn btn-primary" id="modalExportGerar">gerar e baixar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="/static/app.js"></script>
 <script>
 (function(){
@@ -126,7 +144,6 @@ const L = LifeOS;
 let modoAlbum = 'existente';
 let albunsCache = [];
 
-function notaTexto(n){ return (n === null || n === undefined) ? 'sem nota' : `★ ${n}`; }
 function dataBr(iso){ if(!iso) return ''; const [a,m,d]=iso.split('-'); return `${d}/${m}/${a}`; }
 
 async function carregarAlbuns() {
@@ -149,10 +166,11 @@ async function carregarTimeline() {
       <div class="escuta-body">
         <div class="escuta-title">${e.album_nome} — ${e.artista_nome}</div>
         <div class="escuta-sub">${dataBr(e.data)}${e.faixa_favorita ? ' · faixa favorita: ' + e.faixa_favorita : ''}</div>
-        <div class="escuta-nota">${notaTexto(e.nota)}</div>
+        <div class="escuta-nota">${L.starsHtml(e.nota)}</div>
         ${e.review ? `<div class="escuta-review">${e.review.replace(/</g,'&lt;')}</div>` : ''}
         <div class="escuta-actions">
           <button data-action="editar">editar</button>
+          <button data-action="exportar">exportar p/ stories</button>
           <button data-action="excluir">excluir</button>
         </div>
         <div class="edit-panel">
@@ -177,6 +195,10 @@ async function carregarTimeline() {
     const id = card.dataset.id;
     const panel = card.querySelector('.edit-panel');
     card.querySelector('[data-action="editar"]').addEventListener('click', () => panel.classList.toggle('open'));
+    card.querySelector('[data-action="exportar"]').addEventListener('click', () => {
+      const dados = escutas.find(x => String(x.id) === id);
+      abrirModalExport(id, dados);
+    });
     card.querySelector('[data-action="excluir"]').addEventListener('click', async () => {
       if (!confirm('Excluir essa escuta?')) return;
       await L.api(`/api/musica/escutas/${id}`, { method: 'DELETE' });
@@ -360,6 +382,47 @@ document.getElementById('formEscuta').addEventListener('submit', async (ev) => {
     L.toast(e.message, true);
   } finally {
     btn.disabled = false;
+  }
+});
+
+let exportEscutaId = null;
+
+function abrirModalExport(id, dados) {
+  exportEscutaId = id;
+  const chk = document.getElementById('modalExportReview');
+  const temReview = !!(dados && dados.review && dados.review.trim());
+  chk.checked = temReview;
+  chk.disabled = !temReview;
+  document.getElementById('modalExport').classList.add('show');
+}
+function fecharModalExport() { document.getElementById('modalExport').classList.remove('show'); }
+
+document.getElementById('modalExportFechar').addEventListener('click', fecharModalExport);
+document.getElementById('modalExport').addEventListener('click', e => { if (e.target.id === 'modalExport') fecharModalExport(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModalExport(); });
+
+document.getElementById('modalExportGerar').addEventListener('click', async () => {
+  const btn = document.getElementById('modalExportGerar');
+  btn.disabled = true; btn.textContent = 'gerando...';
+  try {
+    const incluir_review = document.getElementById('modalExportReview').checked;
+    const res = await fetch('/api/musica/album-stories', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ escuta_id: parseInt(exportEscutaId, 10), incluir_review }),
+    });
+    if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || `erro ${res.status}`); }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `album-${exportEscutaId}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    L.toast('Imagem gerada e baixada.');
+    fecharModalExport();
+  } catch (e) {
+    L.toast(`Não consegui gerar: ${e.message}`, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'gerar e baixar';
   }
 });
 

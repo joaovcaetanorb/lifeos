@@ -8,9 +8,11 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
+from . import album_story
 from . import calculations as calc
 from . import colagem
 from . import relatorio_stories
+from . import repo as models
 
 router = APIRouter(prefix="/api/musica", tags=["musica-export"])
 
@@ -25,8 +27,8 @@ class ColagemIn(BaseModel):
 
 @router.post("/colagem")
 def gerar_colagem(body: ColagemIn):
-    if body.lado_grade not in (3, 4, 5):
-        raise HTTPException(400, "lado_grade precisa ser 3, 4 ou 5.")
+    if body.lado_grade not in (3, 4, 5, 6):
+        raise HTTPException(400, "lado_grade precisa ser 3, 4, 5 ou 6.")
     if body.formato not in ("post", "stories"):
         raise HTTPException(400, "formato precisa ser 'post' ou 'stories'.")
 
@@ -50,15 +52,33 @@ class RelatorioStoriesIn(BaseModel):
     inicio: str
     fim: str
     rotulo: Optional[str] = None
+    lado_grade: int = 3
 
 
 @router.post("/relatorio-stories")
 def gerar_relatorio_stories(body: RelatorioStoriesIn):
+    if body.lado_grade not in (3, 4, 5, 6):
+        raise HTTPException(400, "lado_grade precisa ser 3, 4, 5 ou 6.")
     dados = calc.resumo_periodo_real(body.inicio, body.fim)
     if dados["total_faixas"] == 0:
         raise HTTPException(404, "Nenhuma faixa sincronizada nesse período.")
-    top_albuns = calc.top_albuns_historico(body.inicio, body.fim, 9).to_dict("records")
+    top_albuns = calc.top_albuns_historico(body.inicio, body.fim, body.lado_grade ** 2).to_dict("records")
     rotulo = body.rotulo or f"{body.inicio} a {body.fim}"
-    png = relatorio_stories.gerar_relatorio_stories(dados, rotulo, top_albuns)
-    nome = f"spotify-{body.inicio}-a-{body.fim}.png"
+    png = relatorio_stories.gerar_relatorio_stories(dados, rotulo, top_albuns, body.lado_grade)
+    nome = f"spotify-{body.inicio}-a-{body.fim}-{body.lado_grade}x{body.lado_grade}.png"
+    return Response(content=png, media_type="image/png", headers={"Content-Disposition": f'inline; filename="{nome}"'})
+
+
+class AlbumStoryIn(BaseModel):
+    escuta_id: int
+    incluir_review: bool = True
+
+
+@router.post("/album-stories")
+def gerar_album_story(body: AlbumStoryIn):
+    escuta = models.obter_escuta_com_album(body.escuta_id)
+    if escuta is None:
+        raise HTTPException(404, "Escuta não encontrada.")
+    png = album_story.gerar_album_story(escuta, body.incluir_review)
+    nome = f"album-{body.escuta_id}.png"
     return Response(content=png, media_type="image/png", headers={"Content-Disposition": f'inline; filename="{nome}"'})
