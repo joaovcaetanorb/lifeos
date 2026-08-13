@@ -62,7 +62,7 @@ h1.title{
   margin:0; letter-spacing:-.01em; text-wrap:balance;
 }
 h1.title .cursor{ display:inline-block; width:.5em; height:.9em; background:var(--accent); margin-left:.15em; transform:translateY(.12em); }
-@media (prefers-reduced-motion: no-preference){ h1.title .cursor{ animation:blink 1.05s steps(1) infinite; } }
+@media (prefers-reduced-motion: no-preference){ h1.title .cursor{ animation:blink .75s steps(1) infinite; } }
 @keyframes blink{ 0%,49%{ opacity:1; } 50%,100%{ opacity:0; } }
 .hero p{ color:var(--ink-muted); max-width:58ch; margin:.6rem 0 0; }
 
