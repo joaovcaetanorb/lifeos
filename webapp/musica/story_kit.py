@@ -191,7 +191,8 @@ def modulo_cabecalho(draw: ImageDraw.ImageDraw, x: float, y: float, texto: str) 
     return 40
 
 
-def chip(draw: ImageDraw.ImageDraw, cx_start: float, y: float, texto: str, fonte: ImageFont.FreeTypeFont) -> float:
+def chip(draw: ImageDraw.ImageDraw, cx_start: float, y: float, texto: str, fonte: ImageFont.FreeTypeFont,
+         cor_borda=HAIR_BRIGHT, cor_texto=INK_MUTED) -> float:
     """Desenha uma pill (borda fina, cantos retos) começando em cx_start;
     retorna a posição x logo após o chip (pra empilhar chips numa linha)."""
     pad_x, pad_y = 20, 12
@@ -199,12 +200,13 @@ def chip(draw: ImageDraw.ImageDraw, cx_start: float, y: float, texto: str, fonte
     altura = altura_linha(fonte)
     x1, y1 = cx_start, y
     x2, y2 = x1 + largura + 2 * pad_x, y1 + altura + 2 * pad_y
-    draw.rectangle([x1, y1, x2, y2], outline=HAIR_BRIGHT, width=2)
-    draw.text((x1 + pad_x, y1 + pad_y - 2), texto, font=fonte, fill=INK_MUTED)
+    draw.rectangle([x1, y1, x2, y2], outline=cor_borda, width=2)
+    draw.text((x1 + pad_x, y1 + pad_y - 2), texto, font=fonte, fill=cor_texto)
     return x2
 
 
-def linha_chips_centralizada(draw: ImageDraw.ImageDraw, y: float, textos: list, fonte: ImageFont.FreeTypeFont, gap: int = 14) -> int:
+def linha_chips_centralizada(draw: ImageDraw.ImageDraw, y: float, textos: list, fonte: ImageFont.FreeTypeFont, gap: int = 14,
+                              cor_borda=HAIR_BRIGHT, cor_texto=INK_MUTED) -> int:
     """Quebra os chips em linhas que cabem em LARGURA_UTIL, cada linha
     centralizada. Retorna a altura total ocupada."""
     pad_x, pad_y = 20, 12
@@ -228,7 +230,7 @@ def linha_chips_centralizada(draw: ImageDraw.ImageDraw, y: float, textos: list, 
         largura_total = sum(draw.textlength(t, font=fonte) + 2 * pad_x for t in linha) + gap * (len(linha) - 1)
         x = LARGURA / 2 - largura_total / 2
         for t in linha:
-            x = chip(draw, x, y_cursor, t, fonte) + gap
+            x = chip(draw, x, y_cursor, t, fonte, cor_borda, cor_texto) + gap
         y_cursor += altura_chip + 12
     return y_cursor - y - 12
 
@@ -278,16 +280,22 @@ def linha_estrelas(imagem: Image.Image, draw: ImageDraw.ImageDraw, cx: float, y:
 # fundo + scanlines
 # ---------------------------------------------------------------------------
 
-def fundo() -> Image.Image:
+def fundo(cor_tingimento: str | None = None) -> Image.Image:
     """Fundo quase-preto com leve gradiente vertical (bg -> panel), igual
-    ao body do frontend — evita a chapa lisa de uma cor só."""
+    ao body do frontend — evita a chapa lisa de uma cor só. cor_tingimento
+    (hex, opcional) mistura uma fração baixa dessa cor no gradiente inteiro
+    — dá uma atmosfera "tingida" pela cor de destaque (ex.: cor da capa)
+    sem comprometer legibilidade; sem ela, fundo idêntico ao de sempre."""
     topo = tuple(int(BG[i:i + 2], 16) for i in (1, 3, 5))
     base = tuple(int(PANEL[i:i + 2], 16) for i in (1, 3, 5))
+    tint = tuple(int(cor_tingimento[i:i + 2], 16) for i in (1, 3, 5)) if cor_tingimento else None
     img = Image.new("RGB", (LARGURA, ALTURA))
     draw = ImageDraw.Draw(img)
     for y in range(ALTURA):
         t = (y / ALTURA) ** 1.6  # a maior parte fica escura, só clareia perto do rodapé
         cor = tuple(int(topo[i] + (base[i] - topo[i]) * t * 0.35) for i in range(3))
+        if tint:
+            cor = tuple(int(cor[i] * 0.85 + tint[i] * 0.15) for i in range(3))
         draw.line([(0, y), (LARGURA, y)], fill=cor)
     return img
 

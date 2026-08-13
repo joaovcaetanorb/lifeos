@@ -3,6 +3,7 @@ relatório estilo Stories — ambos devolvem PNG bytes direto, sem estado de
 sessão (a versão Streamlit guardava os bytes em st.session_state pra
 sobreviver a reruns; aqui cada request já devolve o arquivo pronto)."""
 
+import re
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Response
@@ -69,17 +70,25 @@ def gerar_relatorio_stories(body: RelatorioStoriesIn):
     return Response(content=png, media_type="image/png", headers={"Content-Disposition": f'inline; filename="{nome}"'})
 
 
+_HEX_COR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
 class AlbumStoryIn(BaseModel):
     escuta_id: int
     incluir_review: bool = True
     incluir_faixa_favorita: bool = True
+    cor_hex: Optional[str] = None  # sobrescreve a cor de destaque; tem prioridade sobre usar_cor_capa
+    usar_cor_capa: bool = False  # cor de destaque "puxada" automaticamente da capa
 
 
 @router.post("/album-stories")
 def gerar_album_story(body: AlbumStoryIn):
+    if body.cor_hex is not None and not _HEX_COR_RE.match(body.cor_hex):
+        raise HTTPException(400, "cor_hex precisa ser um hex tipo #RRGGBB.")
     escuta = models.obter_escuta_com_album(body.escuta_id)
     if escuta is None:
         raise HTTPException(404, "Escuta não encontrada.")
-    png = album_story.gerar_album_story(escuta, body.incluir_review, body.incluir_faixa_favorita)
+    png = album_story.gerar_album_story(escuta, body.incluir_review, body.incluir_faixa_favorita,
+                                         cor_hex=body.cor_hex, usar_cor_capa=body.usar_cor_capa)
     nome = f"album-{body.escuta_id}.png"
     return Response(content=png, media_type="image/png", headers={"Content-Disposition": f'inline; filename="{nome}"'})

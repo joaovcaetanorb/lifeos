@@ -33,29 +33,44 @@ def _data_br(iso: str) -> str:
 LIMITE_CONTEUDO = ALTURA - 220
 
 
-def _bloco_faixa_favorita(draw: ImageDraw.ImageDraw, y: float, faixa: str, limite_y: float) -> float:
+def _bloco_faixa_favorita(draw: ImageDraw.ImageDraw, y: float, faixa: str, cor_accent: str) -> float:
     """Faixa favorita costuma vir como uma lista "Música A, Música B, ..."
-    (checklist da tracklist no formulário do diário) — quebra em linhas em
-    vez de truncar numa só, senão só a primeira música sobrevive. Trunca a
-    lista (com "…") se não houver espaço pra ela toda antes de limite_y."""
-    y0 = y
-    y += kit.modulo_cabecalho(draw, MARGEM, y, "faixa favorita")
+    (checklist da tracklist no formulário do diário) — cada música vira uma
+    pill (mesmo componente de kit.chip usado nos destaques do relatório de
+    período), em vez de texto corrido: fica claro que é uma LISTA. Sempre
+    mostra TODAS as faixas (sem cortar em "+N") — prioridade é a lista
+    completa; é a review que cede espaço se sobrar pouco, não o contrário."""
     itens = [t.strip() for t in faixa.split(",") if t.strip()]
-    fonte = kit.jbm(34, bold=True)
-    altura_por_linha = kit.altura_linha(fonte) + 8
+    titulo = "faixas favoritas" if len(itens) > 1 else "faixa favorita"
+    y0 = y
+    y += kit.modulo_cabecalho(draw, MARGEM, y, titulo)
+    fonte = kit.jbm(25, bold=True)
     y_texto = y + 14
-    max_linhas = max(1, int((limite_y - y_texto) / altura_por_linha))
-    if len(itens) > 1 or max_linhas < 1:
-        y_fim = kit.paragrafo_centralizado(draw, y_texto, "\n".join(itens), fonte, ACCENT_BRIGHT,
-                                            LARGURA_UTIL - 80, max_linhas=max_linhas, gap=8)
-    else:
-        y_fim = y_texto + kit.centralizado(draw, y_texto, itens[0] if itens else faixa, fonte, ACCENT_BRIGHT)
+
+    altura_ocupada = kit.linha_chips_centralizada(draw, y_texto, itens, fonte, gap=12,
+                                                   cor_borda=cor_accent, cor_texto=cor_accent)
+    y_fim = y_texto + altura_ocupada
     draw.rectangle([MARGEM, y0, LARGURA - MARGEM, y_fim + 22], outline=HAIR, width=2)
     return y_fim + 22 + 36
 
 
-def gerar_album_story(escuta: dict, incluir_review: bool = True, incluir_faixa_favorita: bool = True) -> bytes:
-    imagem = kit.fundo()
+def gerar_album_story(escuta: dict, incluir_review: bool = True, incluir_faixa_favorita: bool = True,
+                       cor_hex: str | None = None, usar_cor_capa: bool = False) -> bytes:
+    """cor_hex (manual) tem prioridade sobre usar_cor_capa (automática, via
+    colagem.cor_dominante); sem nenhum dos dois, mantém o verde padrão do
+    app — a personalização é sempre opt-in, nunca muda o comportamento
+    default de quem não mexeu nessas opções."""
+    capa = colagem.tile_capa({"album_id": escuta.get("album_id")}, LADO_CAPA)
+
+    personalizado = bool(cor_hex) or usar_cor_capa
+    if cor_hex:
+        cor_accent = cor_hex
+    elif usar_cor_capa:
+        cor_accent = colagem.cor_dominante(capa)
+    else:
+        cor_accent = ACCENT_BRIGHT
+
+    imagem = kit.fundo(cor_accent if personalizado else None)
     draw = ImageDraw.Draw(imagem)
 
     y = kit.bloco_topbar(imagem, draw, "LIFEOS · MÓDULO MÚSICA", date.today().strftime("%d/%m/%Y"))
@@ -65,7 +80,7 @@ def gerar_album_story(escuta: dict, incluir_review: bool = True, incluir_faixa_f
 
     # artista em destaque — o "protagonista" do card, tratamento igual ao
     # "ARTISTA #1" do relatório de período, só que como herói da tela
-    kit.texto_rastreado_centralizado(draw, LARGURA / 2, y, "ARTISTA", kit.cp(20), ACCENT_BRIGHT, tracking=3)
+    kit.texto_rastreado_centralizado(draw, LARGURA / 2, y, "ARTISTA", kit.cp(20), cor_accent, tracking=3)
     y += 34
     fonte_artista, texto_artista = kit.fonte_ajustada(draw, escuta["artista_nome"], True, 76, LARGURA_UTIL, tamanho_minimo=36)
     y += kit.centralizado(draw, y, texto_artista, fonte_artista, INK) + 30
@@ -79,14 +94,13 @@ def gerar_album_story(escuta: dict, incluir_review: bool = True, incluir_faixa_f
     kit.texto_rastreado_centralizado(draw, LARGURA / 2, y, texto_album, fonte_album, INK_MUTED, tracking=1.5)
     y += kit.altura_linha(fonte_album) + 40
 
-    capa = colagem.tile_capa({"album_id": escuta.get("album_id")}, LADO_CAPA)
     x_capa = int(LARGURA / 2 - LADO_CAPA / 2)
     imagem.paste(capa, (x_capa, int(y)))
     draw.rectangle([x_capa, y, x_capa + LADO_CAPA, y + LADO_CAPA], outline=HAIR, width=2)
     y += LADO_CAPA + 36
 
     if escuta.get("nota") is not None:
-        y += kit.linha_estrelas(imagem, draw, LARGURA / 2, y, float(escuta["nota"]), 5, raio=24, gap=15)
+        y += kit.linha_estrelas(imagem, draw, LARGURA / 2, y, float(escuta["nota"]), 5, raio=24, gap=15, cor_cheia=cor_accent)
         y += 18
         nota_fmt = str(escuta["nota"]).rstrip("0").rstrip(".") if isinstance(escuta["nota"], float) else str(escuta["nota"])
         kit.texto_rastreado_centralizado(draw, LARGURA / 2, y, f"{nota_fmt} DE 5", kit.cp(20), INK_MUTED, tracking=2.5)
@@ -100,13 +114,18 @@ def gerar_album_story(escuta: dict, incluir_review: bool = True, incluir_faixa_f
     # espremer ele e invadir o rodapé.
     ESPACO_MINIMO_BLOCO = 110
 
-    faixa_favorita = (escuta.get("faixa_favorita") or "").strip()
-    if incluir_faixa_favorita and faixa_favorita and (LIMITE_CONTEUDO - y) > ESPACO_MINIMO_BLOCO:
-        y += 16
-        y = _bloco_faixa_favorita(draw, y, faixa_favorita, LIMITE_CONTEUDO)
-
     review = (escuta.get("review") or "").strip()
-    if incluir_review and review and (LIMITE_CONTEUDO - y) > ESPACO_MINIMO_BLOCO:
+    tem_review_a_mostrar = incluir_review and bool(review)
+
+    # faixa favorita tem prioridade sobre a review: sempre mostra a lista
+    # completa (o usuário prefere assim); é a review que cede espaço/some
+    # se sobrar pouco depois dela, não o contrário.
+    faixa_favorita = (escuta.get("faixa_favorita") or "").strip()
+    if incluir_faixa_favorita and faixa_favorita:
+        y += 16
+        y = _bloco_faixa_favorita(draw, y, faixa_favorita, cor_accent)
+
+    if tem_review_a_mostrar and (LIMITE_CONTEUDO - y) > ESPACO_MINIMO_BLOCO:
         y += 4
         y0 = y
         y += kit.modulo_cabecalho(draw, MARGEM, y, "review")
