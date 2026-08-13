@@ -127,6 +127,9 @@
     <div class="modal-body">
       <p style="color:var(--ink-muted);font-size:.86rem;margin:0 0 .9rem;">Card vertical 1080×1920 com a capa, artista e a nota em estrelas — pronto pra postar.</p>
       <label style="display:flex;align-items:center;gap:.5rem;font-size:.86rem;cursor:pointer;">
+        <input type="checkbox" id="modalExportFaixa" style="width:auto;height:auto;" /> incluir a faixa favorita
+      </label>
+      <label style="display:flex;align-items:center;gap:.5rem;font-size:.86rem;cursor:pointer;margin-top:.5rem;">
         <input type="checkbox" id="modalExportReview" style="width:auto;height:auto;" /> incluir a review escrita
       </label>
       <div class="btn-row" style="margin-top:1.1rem;">
@@ -389,10 +392,14 @@ let exportEscutaId = null;
 
 function abrirModalExport(id, dados) {
   exportEscutaId = id;
-  const chk = document.getElementById('modalExportReview');
+  const chkReview = document.getElementById('modalExportReview');
   const temReview = !!(dados && dados.review && dados.review.trim());
-  chk.checked = temReview;
-  chk.disabled = !temReview;
+  chkReview.checked = temReview;
+  chkReview.disabled = !temReview;
+  const chkFaixa = document.getElementById('modalExportFaixa');
+  const temFaixa = !!(dados && dados.faixa_favorita && dados.faixa_favorita.trim());
+  chkFaixa.checked = temFaixa;
+  chkFaixa.disabled = !temFaixa;
   document.getElementById('modalExport').classList.add('show');
 }
 function fecharModalExport() { document.getElementById('modalExport').classList.remove('show'); }
@@ -406,9 +413,10 @@ document.getElementById('modalExportGerar').addEventListener('click', async () =
   btn.disabled = true; btn.textContent = 'gerando...';
   try {
     const incluir_review = document.getElementById('modalExportReview').checked;
+    const incluir_faixa_favorita = document.getElementById('modalExportFaixa').checked;
     const res = await fetch('/api/musica/album-stories', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ escuta_id: parseInt(exportEscutaId, 10), incluir_review }),
+      body: JSON.stringify({ escuta_id: parseInt(exportEscutaId, 10), incluir_review, incluir_faixa_favorita }),
     });
     if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || `erro ${res.status}`); }
     const blob = await res.blob();

@@ -72,6 +72,7 @@ def gerar_relatorio_stories(body: RelatorioStoriesIn):
 class AlbumStoryIn(BaseModel):
     escuta_id: int
     incluir_review: bool = True
+    incluir_faixa_favorita: bool = True
 
 
 @router.post("/album-stories")
@@ -79,6 +80,6 @@ def gerar_album_story(body: AlbumStoryIn):
     escuta = models.obter_escuta_com_album(body.escuta_id)
     if escuta is None:
         raise HTTPException(404, "Escuta não encontrada.")
-    png = album_story.gerar_album_story(escuta, body.incluir_review)
+    png = album_story.gerar_album_story(escuta, body.incluir_review, body.incluir_faixa_favorita)
     nome = f"album-{body.escuta_id}.png"
     return Response(content=png, media_type="image/png", headers={"Content-Disposition": f'inline; filename="{nome}"'})

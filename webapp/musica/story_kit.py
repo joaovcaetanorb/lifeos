@@ -113,6 +113,23 @@ def fonte_ajustada(draw: ImageDraw.ImageDraw, texto: str, bold: bool, tamanho_in
     return fonte, texto
 
 
+def fonte_ajustada_generica(draw: ImageDraw.ImageDraw, texto: str, carregador, bold: bool, tamanho_inicial: int,
+                             largura_maxima: int = LARGURA_UTIL, tamanho_minimo: int = 14, tracking: float = 0) -> tuple:
+    """Como fonte_ajustada, mas recebe o carregador de fonte (jbm ou cp) —
+    útil pra rótulos rastreados (letter-spacing) em vez do texto grande
+    padrão em jbm."""
+    tamanho = tamanho_inicial
+    fonte = carregador(tamanho, bold)
+    while tamanho > tamanho_minimo and largura_rastreada(draw, texto, fonte, tracking) > largura_maxima:
+        tamanho -= 2
+        fonte = carregador(tamanho, bold)
+    if largura_rastreada(draw, texto, fonte, tracking) > largura_maxima:
+        while texto and largura_rastreada(draw, texto + "…", fonte, tracking) > largura_maxima:
+            texto = texto[:-1]
+        texto = f"{texto}…" if texto else "…"
+    return fonte, texto
+
+
 def quebrar_paragrafo(draw: ImageDraw.ImageDraw, texto: str, fonte: ImageFont.FreeTypeFont, largura_maxima: int) -> list[str]:
     """Quebra um texto livre (review) em linhas que cabem em largura_maxima,
     respeitando quebras de parágrafo (\\n) já existentes no texto."""
