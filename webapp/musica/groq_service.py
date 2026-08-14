@@ -32,7 +32,16 @@ _SISTEMA = (
     "Varie a estrutura das frases entre as observações — não comece todas "
     "com 'O usuário...' ou repita o mesmo esqueleto sujeito-verbo-explicação "
     "toda vez. Escreva como quem está contando algo interessante pra um "
-    "amigo, não gerando um relatório."
+    "amigo, não gerando um relatório.\n\n"
+    "Cuidado especial com 'sequência de dias seguidos ouvindo' e 'dia da "
+    "semana com mais faixas': não invente uma explicação de estilo de vida "
+    "em cima desses números (tipo 'virou um ritual diário' ou 'a música "
+    "serve de café pra começar a semana'). Pra quem ouve música todo dia, "
+    "uma sequência de dias seguidos não é notável — é só a rotina normal, "
+    "não uma descoberta. Só comente esses dois números se o valor for "
+    "realmente incomum dentro do período (ex: sequência longa quase do "
+    "tamanho do período todo, ou um dia MUITO destoante dos outros); senão, "
+    "ignore-os e foque nas outras observações."
 )
 
 _client_singleton: Groq | None = None
