@@ -34,6 +34,7 @@ def listar_momentos(inicio: Optional[str] = None, fim: Optional[str] = None):
 class MomentoIn(BaseModel):
     texto: str
     categoria: str
+    data: Optional[str] = None
 
 
 @router.post("", status_code=201)
@@ -42,7 +43,7 @@ def criar_momento(body: MomentoIn):
         raise HTTPException(400, "Escreve alguma coisa.")
     if body.categoria not in models.CATEGORIAS_MOMENTO:
         raise HTTPException(400, f"Categoria precisa ser uma de: {', '.join(models.CATEGORIAS_MOMENTO)}.")
-    mid = models.inserir_momento(body.texto.strip(), body.categoria)
+    mid = models.inserir_momento(body.texto.strip(), body.categoria, data=body.data or None)
     return {"id": mid}
 
 

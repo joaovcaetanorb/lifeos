@@ -70,7 +70,10 @@
     </div>
     <div class="field"><input type="text" id="momentoTexto" placeholder="Ex.: Fui no samba" maxlength="140" /></div>
     <div class="categoria-pills" id="categoriaPills"></div>
-    <div class="btn-row"><button class="btn btn-primary" id="btnSalvarMomento">registrar</button></div>
+    <div class="btn-row" style="align-items:center;">
+      <input type="date" id="momentoData" style="height:2.1rem; padding:0 .5rem; font-size:.8rem; background:var(--panel-raised); border:1px solid var(--hair); color:var(--ink); border-radius:2px; font-family:var(--font-data);" />
+      <button class="btn btn-primary" id="btnSalvarMomento">registrar</button>
+    </div>
   </section>
 
   <section class="module" data-reveal style="margin-top:1rem;">
@@ -163,21 +166,25 @@ document.querySelectorAll('.categoria-pill').forEach(btn => {
   });
 });
 
+document.getElementById('momentoData').value = L.isoLocal();
 document.getElementById('btnSalvarMomento').addEventListener('click', async () => {
   const texto = document.getElementById('momentoTexto').value.trim();
+  const dataInput = document.getElementById('momentoData');
+  const data = dataInput.value || L.isoLocal();
   if (!texto) { L.toast('Escreve alguma coisa.', true); return; }
   if (!categoriaSelecionada) { L.toast('Escolhe uma categoria.', true); return; }
   try {
     await L.api('/api/momentos', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ texto, categoria: categoriaSelecionada }),
+      body: JSON.stringify({ texto, categoria: categoriaSelecionada, data }),
     });
     L.toast('Registrado.');
     document.getElementById('momentoTexto').value = '';
     document.querySelectorAll('.categoria-pill').forEach(b => b.classList.remove('active'));
     categoriaSelecionada = null;
-    const hoje = new Date();
-    calState = { ano: hoje.getFullYear(), mes: hoje.getMonth() };
+    const [ano, mes] = data.split('-').map(Number);
+    calState = { ano, mes: mes - 1 };
+    dataInput.value = L.isoLocal();
     limparFiltroFeed();
     carregarMes();
     carregarTicker();
