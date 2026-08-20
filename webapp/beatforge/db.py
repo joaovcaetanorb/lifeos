@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS beat_sessoes (
     estado_emocional_snapshot TEXT DEFAULT '',
     referencia_audicao_snapshot TEXT DEFAULT '',
     observacao TEXT DEFAULT '',
+    audio_dados BLOB,
+    audio_mime TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -67,6 +69,7 @@ CREATE TABLE IF NOT EXISTS sample_crate (
     tags TEXT DEFAULT '',
     status TEXT NOT NULL DEFAULT 'novo' CHECK (status IN ('novo', 'usado', 'descartado')),
     observacao TEXT DEFAULT '',
+    capa_url TEXT DEFAULT '',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 """
@@ -146,11 +149,29 @@ def _semear_dicas(conn) -> None:
     conn.commit()
 
 
+def _migrar_schema(conn) -> None:
+    """Colunas adicionadas depois da criação inicial das tabelas — em
+    produção elas já existiam sem essas colunas, `CREATE TABLE IF NOT
+    EXISTS` não altera tabela existente."""
+    colunas_sessoes = {r[1] for r in conn.execute("PRAGMA table_info(beat_sessoes)").fetchall()}
+    if "audio_dados" not in colunas_sessoes:
+        conn.execute("ALTER TABLE beat_sessoes ADD COLUMN audio_dados BLOB")
+    if "audio_mime" not in colunas_sessoes:
+        conn.execute("ALTER TABLE beat_sessoes ADD COLUMN audio_mime TEXT")
+
+    colunas_crate = {r[1] for r in conn.execute("PRAGMA table_info(sample_crate)").fetchall()}
+    if "capa_url" not in colunas_crate:
+        conn.execute("ALTER TABLE sample_crate ADD COLUMN capa_url TEXT DEFAULT ''")
+
+    conn.commit()
+
+
 def init_db() -> None:
     conn = get_connection()
     conn.executescript(SCHEMA)
     conn.commit()
     _semear_dicas(conn)
+    _migrar_schema(conn)
 
 
 def inicializar_banco() -> None:

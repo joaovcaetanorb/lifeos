@@ -102,26 +102,43 @@ def excluir_beat(beat_id: int) -> None:
 # Sessões
 # ---------------------------------------------------------------------------
 
+_COLUNAS_SESSAO = (
+    "id, beat_id, data, duracao_minutos, proximo_passo_brutal, estado_emocional_snapshot, "
+    "referencia_audicao_snapshot, observacao, audio_mime, created_at"
+)
+
+
 def listar_sessoes(beat_id: int) -> pd.DataFrame:
+    """Não traz `audio_dados` (BLOB) — ver obter_audio_sessao() pra servir o
+    áudio sob demanda."""
     conn = get_connection()
     return pd.read_sql_query(
-        "SELECT * FROM beat_sessoes WHERE beat_id = ? ORDER BY data DESC, id DESC",
+        f"SELECT {_COLUNAS_SESSAO} FROM beat_sessoes WHERE beat_id = ? ORDER BY data DESC, id DESC",
         conn, params=[beat_id],
     )
+
+
+def obter_audio_sessao(sessao_id: int) -> tuple[bytes, str] | None:
+    conn = get_connection()
+    cursor = conn.execute("SELECT audio_dados, audio_mime FROM beat_sessoes WHERE id = ?", (sessao_id,))
+    row = cursor.fetchone()
+    if row is None or row[0] is None:
+        return None
+    return row[0], row[1] or "audio/webm"
 
 
 def inserir_sessao(
     beat_id: int, data: str, duracao_minutos: int, proximo_passo_brutal: str,
     estado_emocional_snapshot: str = "", referencia_audicao_snapshot: str = "",
-    observacao: str = "",
+    observacao: str = "", audio_dados: bytes | None = None, audio_mime: str | None = None,
 ) -> int:
     conn = get_connection()
     cur = conn.execute(
         """INSERT INTO beat_sessoes (beat_id, data, duracao_minutos, proximo_passo_brutal,
-           estado_emocional_snapshot, referencia_audicao_snapshot, observacao)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+           estado_emocional_snapshot, referencia_audicao_snapshot, observacao, audio_dados, audio_mime)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (beat_id, data, duracao_minutos, proximo_passo_brutal,
-         estado_emocional_snapshot, referencia_audicao_snapshot, observacao),
+         estado_emocional_snapshot, referencia_audicao_snapshot, observacao, audio_dados, audio_mime),
     )
     conn.commit()
     return cur.lastrowid
@@ -137,7 +154,8 @@ def listar_sessoes_todas(data_inicio: str | None = None, data_fim: str | None = 
     """Sessões de todos os beats juntas, com o nome do beat via join — usado
     pro streak/tempo-total em calculations.py e, no futuro, pela Timeline."""
     conn = get_connection()
-    query = """SELECT beat_sessoes.*, beats.nome AS beat_nome
+    colunas = ", ".join(f"beat_sessoes.{c}" for c in _COLUNAS_SESSAO.split(", "))
+    query = f"""SELECT {colunas}, beats.nome AS beat_nome
                FROM beat_sessoes
                JOIN beats ON beats.id = beat_sessoes.beat_id"""
     condicoes, params = [], []
@@ -196,11 +214,13 @@ def obter_item_crate(item_id: int) -> dict | None:
     return linha_para_dict(cursor, cursor.fetchone())
 
 
-def inserir_item_crate(link: str, nome: str = "", fonte: str = "", tags: str = "", observacao: str = "") -> int:
+def inserir_item_crate(
+    link: str, nome: str = "", fonte: str = "", tags: str = "", observacao: str = "", capa_url: str = "",
+) -> int:
     conn = get_connection()
     cur = conn.execute(
-        "INSERT INTO sample_crate (link, nome, fonte, tags, observacao) VALUES (?, ?, ?, ?, ?)",
-        (link, nome, fonte, tags, observacao),
+        "INSERT INTO sample_crate (link, nome, fonte, tags, observacao, capa_url) VALUES (?, ?, ?, ?, ?, ?)",
+        (link, nome, fonte, tags, observacao, capa_url),
     )
     conn.commit()
     return cur.lastrowid

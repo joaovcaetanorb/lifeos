@@ -14,7 +14,8 @@
 
 .beat-card{ background:var(--panel-raised); border:1px solid var(--hair); border-radius:var(--radius); padding:1rem 1.1rem; display:flex; gap:1rem; margin-bottom:.8rem; }
 .beat-card:hover{ border-color:var(--hair-bright); }
-.beat-capa-wrap{ flex:none; } .beat-capa-wrap .card-cover{ width:96px; height:96px; }
+.beat-capa-wrap{ flex:none; } .beat-capa-wrap .card-cover{ width:96px; height:96px; border-radius:50%; }
+.beat-capa-wrap .card-cover.placeholder{ font-size:2rem; }
 .beat-body{ flex:1; min-width:0; }
 .beat-head{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; flex-wrap:wrap; }
 .beat-nome{ font-weight:700; font-size:1.02rem; }
@@ -49,12 +50,32 @@
 .sessao-extra{ margin-top:.3rem; color:var(--ink-muted); font-size:.78rem; }
 .sessao-row button{ margin-top:.5rem; background:none; border:1px solid var(--hair); color:var(--ink-dim); font-size:.7rem; padding:.2rem .5rem; border-radius:2px; cursor:pointer; }
 .sessao-row button:hover{ border-color:var(--danger); color:var(--danger); }
+.sessao-row audio{ width:100%; margin-top:.5rem; height:32px; }
 
-.sorteio-box{ border:1px solid var(--accent); border-radius:var(--radius); background:var(--accent-soft); padding:1rem 1.1rem; margin-top:.9rem; }
-.sorteio-box .sorteio-link{ font-weight:700; color:var(--accent-bright); word-break:break-all; }
-.sorteio-box .sorteio-meta{ color:var(--ink-muted); font-size:.82rem; margin-top:.3rem; }
-.crate-row{ display:flex; align-items:flex-start; gap:.7rem; padding:.6rem 0; border-bottom:1px solid var(--hair); font-size:.86rem; }
+.gravador{ display:flex; align-items:center; gap:.7rem; flex-wrap:wrap; margin-top:.3rem; }
+.gravador button.gravando{ border-color:var(--danger); color:var(--danger); animation:rec-pulse 1.3s ease-in-out infinite; }
+@keyframes rec-pulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(224,101,90,.4); } 50%{ box-shadow:0 0 0 6px rgba(224,101,90,0); } }
+.gravador-timer{ font-variant-numeric:tabular-nums; color:var(--ink-muted); font-size:.84rem; }
+.gravador audio{ flex:1; min-width:180px; height:32px; }
+
+.dice-roll-wrap{ display:flex; flex-direction:column; align-items:center; gap:.6rem; padding:2rem 0; }
+.dice-roll{ font-size:3.5rem; animation:dice-spin .9s cubic-bezier(.36,.07,.19,.97) infinite; }
+@keyframes dice-spin{ 0%{ transform:rotate(0deg) scale(1); } 25%{ transform:rotate(90deg) scale(1.15); } 50%{ transform:rotate(180deg) scale(1); } 75%{ transform:rotate(270deg) scale(1.15); } 100%{ transform:rotate(360deg) scale(1); } }
+@media (prefers-reduced-motion: reduce){ .dice-roll{ animation:none; } }
+
+.disco-reveal{ display:flex; flex-direction:column; align-items:center; text-align:center; padding:1.4rem 0 .6rem; }
+.disco{ width:170px; height:170px; border-radius:50%; background:radial-gradient(circle at 50% 50%, #1a1d14 0 20%, #101208 21% 100%), repeating-radial-gradient(circle, rgba(255,255,255,.05) 0 2px, transparent 2px 6px);
+  background-size:cover, cover; background-position:center; box-shadow:0 12px 40px -12px rgba(0,0,0,.7), 0 0 0 1px var(--hair-bright); position:relative; animation:disco-spin 3.2s linear infinite; }
+.disco.sem-capa{ background:radial-gradient(circle at 50% 50%, var(--panel-raised) 0 20%, #101208 21% 100%), repeating-radial-gradient(circle, rgba(255,255,255,.05) 0 2px, transparent 2px 6px); }
+.disco-furo{ position:absolute; top:50%; left:50%; width:20px; height:20px; border-radius:50%; background:var(--panel); border:2px solid var(--hair-bright); transform:translate(-50%,-50%); }
+@keyframes disco-spin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+@media (prefers-reduced-motion: reduce){ .disco{ animation:none; } }
+.disco-titulo{ margin-top:1rem; font-weight:700; font-size:1.05rem; color:var(--accent-bright); }
+.disco-meta{ color:var(--ink-muted); font-size:.82rem; margin-top:.25rem; }
+
+.crate-row{ display:flex; align-items:center; gap:.7rem; padding:.6rem 0; border-bottom:1px solid var(--hair); font-size:.86rem; }
 .crate-row:last-child{ border-bottom:none; }
+.crate-thumb{ flex:none; width:40px; height:40px; border-radius:50%; object-fit:cover; border:1px solid var(--hair-bright); background:var(--panel-raised); }
 .crate-body{ flex:1; min-width:0; }
 .crate-link{ color:var(--ink); word-break:break-all; }
 .crate-meta{ color:var(--ink-dim); font-size:.76rem; margin-top:.2rem; }
@@ -107,7 +128,44 @@
   <section class="module" data-reveal>
     <div class="module-head">
       <span class="led"></span>
-      <div class="grow"><div class="eyebrow" style="margin:0;">novo</div><h3>+ novo beat</h3></div>
+      <div class="grow"><div class="eyebrow" style="margin:0;">sample digging</div><h3>Crate de Samples</h3></div>
+      <button class="btn btn-primary" id="btnSortear">🎲 sortear</button>
+    </div>
+    <div id="sorteioResultado"></div>
+    <div class="field-row" style="margin-top:1rem;">
+      <div class="field"><label>Link do Spotify</label><input type="text" id="novoCrateLink" placeholder="https://open.spotify.com/track/..." /></div>
+      <div class="field"><label>Nome / faixa (opcional)</label><input type="text" id="novoCrateNome" /></div>
+    </div>
+    <div class="field" style="margin-top:.6rem;"><label>Tags (opcional)</label><input type="text" id="novoCrateTags" placeholder="ex.: soul, batida lenta, vocal" /></div>
+    <div class="field" style="margin-top:.6rem;"><label>Observação (opcional)</label><input type="text" id="novoCrateObs" /></div>
+    <div class="btn-row" style="margin-top:.6rem;"><button type="button" class="btn" id="btnAddCrate">adicionar ao crate</button></div>
+
+    <div class="pills" id="cratePills" style="margin:1rem 0 .6rem;">
+      <button class="pill active" data-val="novo">novos</button>
+      <button class="pill" data-val="usado">usados</button>
+      <button class="pill" data-val="descartado">descartados</button>
+    </div>
+    <div id="crateLista"><p class="empty-state">Carregando…</p></div>
+  </section>
+
+  <div class="pills" id="statusPills" style="margin:1rem 0 .9rem;">
+    <button class="pill active" data-val="">todos</button>
+    <button class="pill" data-val="Lixeira">lixeira</button>
+    <button class="pill" data-val="Loop Eterno">loop eterno</button>
+    <button class="pill" data-val="Estrutura Montada">estrutura montada</button>
+    <button class="pill" data-val="Mixagem Crua">mixagem crua</button>
+    <button class="pill" data-val="Pronto para Master">pronto para master</button>
+  </div>
+
+  <section class="module" data-reveal>
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">pipeline</div><h3>Seus beats</h3></div></div>
+    <div id="lista"><p class="empty-state">Carregando…</p></div>
+  </section>
+
+  <section class="module" data-reveal>
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">raro</div><h3>criar do zero (sem passar pelo crate)</h3></div>
       <button class="btn" id="btnToggleNovo">expandir</button>
     </div>
     <div id="formNovoWrap" style="display:none;margin-top:.9rem;">
@@ -149,43 +207,6 @@
     </div>
   </section>
 
-  <div class="pills" id="statusPills" style="margin:1rem 0 .9rem;">
-    <button class="pill active" data-val="">todos</button>
-    <button class="pill" data-val="Lixeira">lixeira</button>
-    <button class="pill" data-val="Loop Eterno">loop eterno</button>
-    <button class="pill" data-val="Estrutura Montada">estrutura montada</button>
-    <button class="pill" data-val="Mixagem Crua">mixagem crua</button>
-    <button class="pill" data-val="Pronto para Master">pronto para master</button>
-  </div>
-
-  <section class="module" data-reveal>
-    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">pipeline</div><h3>Seus beats</h3></div></div>
-    <div id="lista"><p class="empty-state">Carregando…</p></div>
-  </section>
-
-  <section class="module" data-reveal>
-    <div class="module-head">
-      <span class="led"></span>
-      <div class="grow"><div class="eyebrow" style="margin:0;">sample digging</div><h3>Crate de Samples</h3></div>
-      <button class="btn btn-primary" id="btnSortear">🎲 sortear</button>
-    </div>
-    <div id="sorteioResultado"></div>
-    <div class="field-row" style="margin-top:1rem;">
-      <div class="field"><label>Link do Spotify</label><input type="text" id="novoCrateLink" placeholder="https://open.spotify.com/track/..." /></div>
-      <div class="field"><label>Nome / faixa (opcional)</label><input type="text" id="novoCrateNome" /></div>
-    </div>
-    <div class="field" style="margin-top:.6rem;"><label>Tags (opcional)</label><input type="text" id="novoCrateTags" placeholder="ex.: soul, batida lenta, vocal" /></div>
-    <div class="field" style="margin-top:.6rem;"><label>Observação (opcional)</label><input type="text" id="novoCrateObs" /></div>
-    <div class="btn-row" style="margin-top:.6rem;"><button type="button" class="btn" id="btnAddCrate">adicionar ao crate</button></div>
-
-    <div class="pills" id="cratePills" style="margin:1rem 0 .6rem;">
-      <button class="pill active" data-val="novo">novos</button>
-      <button class="pill" data-val="usado">usados</button>
-      <button class="pill" data-val="descartado">descartados</button>
-    </div>
-    <div id="crateLista"><p class="empty-state">Carregando…</p></div>
-  </section>
-
   <section class="module" data-reveal>
     <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">referência</div><h3>Dicas & Referências</h3></div></div>
     <div id="dicasLista"><p class="empty-state">Carregando…</p></div>
@@ -220,6 +241,14 @@
         <textarea id="sessaoProximoPasso" placeholder="Uma ação concreta e específica — não uma intenção vaga. Ex.: 'recortar 4 fatias novas do sample original' ou 'reverb na clap, pan pra esquerda'."></textarea>
       </div>
       <div class="field" style="margin-top:.6rem;"><label>Observação (opcional)</label><input type="text" id="sessaoObs" /></div>
+      <div class="field" style="margin-top:.6rem;">
+        <label>Áudio da sessão (opcional)</label>
+        <div class="gravador">
+          <button type="button" class="btn" id="btnGravar">🎙️ gravar áudio (opcional)</button>
+          <span class="gravador-timer" id="gravarTimer"></span>
+          <audio id="audioPreview" controls style="display:none;"></audio>
+        </div>
+      </div>
       <div class="btn-row" style="margin-top:.7rem;"><button type="button" class="btn btn-primary" id="btnFecharSessao">fechar sessão</button></div>
       <div id="sessoesLista" style="margin-top:1.2rem;"></div>
     </div>
@@ -442,8 +471,10 @@ function crateRowHtml(c) {
   if (c.status !== 'descartado') acoes.push(`<button type="button" data-action="descartar-crate">descartar</button>`);
   if (c.status !== 'novo') acoes.push(`<button type="button" data-action="reabrir-crate">reabrir</button>`);
   acoes.push(`<button type="button" data-action="excluir-crate">excluir</button>`);
+  const thumb = c.capa_url ? `<img class="crate-thumb" src="${c.capa_url}" alt="" />` : `<div class="crate-thumb"></div>`;
   return `
   <div class="crate-row" data-id="${c.id}">
+    ${thumb}
     <div class="crate-body">
       <a class="crate-link" href="${c.link}" target="_blank" rel="noopener">${c.nome || c.link}</a>
       <span class="crate-status status-${c.status}">${c.status}</span>
@@ -453,22 +484,36 @@ function crateRowHtml(c) {
   </div>`;
 }
 
+async function usarItemCrate(id) {
+  const beat = await L.api(`/api/beatforge/crate/${id}/usar`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: L.isoLocal() }),
+  });
+  L.toast(`Beat '${beat.nome}' criado — bora fazer.`);
+  await carregarCrate();
+  await carregarResumo();
+  await carregarLista();
+  return beat;
+}
+
 async function carregarCrate() {
   const el = document.getElementById('crateLista');
   const itens = await L.api(`/api/beatforge/crate?status=${encodeURIComponent(filtroCrateStatus)}`);
   el.innerHTML = itens.length ? itens.map(crateRowHtml).join('') : '<p class="empty-state">Nada por aqui ainda.</p>';
   el.querySelectorAll('.crate-row').forEach(row => {
     const id = parseInt(row.dataset.id, 10);
-    const acao = async (status) => {
+    const btnUsar = row.querySelector('[data-action="usar-crate"]');
+    if (btnUsar) btnUsar.addEventListener('click', async () => {
+      try { const beat = await usarItemCrate(id); await abrirGerenciar(beat.id); }
+      catch (err) { L.toast(err.message, true); }
+    });
+    const acaoStatus = async (status) => {
       try { await L.api(`/api/beatforge/crate/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }); await carregarCrate(); await carregarResumo(); }
       catch (err) { L.toast(err.message, true); }
     };
-    const btnUsar = row.querySelector('[data-action="usar-crate"]');
-    if (btnUsar) btnUsar.addEventListener('click', () => acao('usado'));
     const btnDescartar = row.querySelector('[data-action="descartar-crate"]');
-    if (btnDescartar) btnDescartar.addEventListener('click', () => acao('descartado'));
+    if (btnDescartar) btnDescartar.addEventListener('click', () => acaoStatus('descartado'));
     const btnReabrir = row.querySelector('[data-action="reabrir-crate"]');
-    if (btnReabrir) btnReabrir.addEventListener('click', () => acao('novo'));
+    if (btnReabrir) btnReabrir.addEventListener('click', () => acaoStatus('novo'));
     row.querySelector('[data-action="excluir-crate"]').addEventListener('click', async () => {
       try { await L.api(`/api/beatforge/crate/${id}`, { method: 'DELETE' }); await carregarCrate(); await carregarResumo(); }
       catch (err) { L.toast(err.message, true); }
@@ -501,30 +546,54 @@ document.getElementById('btnAddCrate').addEventListener('click', async () => {
   } catch (err) { L.toast(err.message, true); }
 });
 
+function discoHtml(c) {
+  const capaStyle = c.capa_url ? ` style="background-image:url('${c.capa_url}')"` : '';
+  const tags = (c.tags || '').split(',').map(t => t.trim()).filter(Boolean).join(' · ');
+  return `
+  <div class="disco-reveal">
+    <div class="disco ${c.capa_url ? '' : 'sem-capa'}"${capaStyle}><div class="disco-furo"></div></div>
+    <div class="disco-titulo">${c.nome || c.link}</div>
+    <div class="disco-meta">${tags || 'sem tags'}${c.observacao ? ' · ' + c.observacao : ''}</div>
+    <div class="btn-row" style="justify-content:center;margin-top:.8rem;">
+      <button type="button" class="btn btn-primary" data-action="usar-sorteado">🔥 usar esse — criar beat</button>
+      <button type="button" class="btn" data-action="descartar-sorteado">descartar</button>
+      <button type="button" class="btn" data-action="sortear-outro">sortear outro</button>
+    </div>
+  </div>`;
+}
+
 document.getElementById('btnSortear').addEventListener('click', async () => {
   const el = document.getElementById('sorteioResultado');
+  const btnSortear = document.getElementById('btnSortear');
+  btnSortear.disabled = true;
+  el.innerHTML = `<div class="dice-roll-wrap"><div class="dice-roll">🎲</div></div>`;
   try {
-    const c = await L.api('/api/beatforge/crate/sortear');
-    el.innerHTML = `
-      <div class="sorteio-box">
-        <a class="sorteio-link" href="${c.link}" target="_blank" rel="noopener">${c.nome || c.link}</a>
-        <div class="sorteio-meta">${(c.tags || '').split(',').filter(Boolean).join(' · ') || 'sem tags'}${c.observacao ? ' · ' + c.observacao : ''}</div>
-        <div class="btn-row" style="margin-top:.6rem;">
-          <button type="button" class="btn btn-primary" data-action="usar-sorteado">usar esse</button>
-          <button type="button" class="btn" data-action="sortear-outro">sortear outro</button>
-        </div>
-      </div>`;
+    const [c] = await Promise.all([
+      L.api('/api/beatforge/crate/sortear'),
+      new Promise(resolve => setTimeout(resolve, 900)),
+    ]);
+    el.innerHTML = discoHtml(c);
     el.querySelector('[data-action="usar-sorteado"]').addEventListener('click', async () => {
-      await L.api(`/api/beatforge/crate/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'usado' }) });
-      L.toast('Marcado como usado — bora fazer o beat.');
-      el.innerHTML = '';
-      await carregarCrate();
-      await carregarResumo();
+      try {
+        const beat = await usarItemCrate(c.id);
+        el.innerHTML = '';
+        await abrirGerenciar(beat.id);
+      } catch (err) { L.toast(err.message, true); }
     });
-    el.querySelector('[data-action="sortear-outro"]').addEventListener('click', () => document.getElementById('btnSortear').click());
+    el.querySelector('[data-action="descartar-sorteado"]').addEventListener('click', async () => {
+      try {
+        await L.api(`/api/beatforge/crate/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'descartado' }) });
+        el.innerHTML = '';
+        await carregarCrate();
+        await carregarResumo();
+      } catch (err) { L.toast(err.message, true); }
+    });
+    el.querySelector('[data-action="sortear-outro"]').addEventListener('click', () => btnSortear.click());
   } catch (err) {
     el.innerHTML = '';
     L.toast(err.message, true);
+  } finally {
+    btnSortear.disabled = false;
   }
 });
 
@@ -544,6 +613,7 @@ function sessaoRowHtml(s) {
     <div class="sessao-passo"><b>Próximo passo:</b> ${s.proximo_passo_brutal}</div>
     ${extra ? `<div class="sessao-extra">${extra}</div>` : ''}
     ${s.observacao ? `<div class="sessao-extra">${s.observacao}</div>` : ''}
+    ${s.audio_url ? `<audio controls src="${s.audio_url}"></audio>` : ''}
     <button type="button" data-action="excluir-sessao">excluir</button>
   </div>`;
 }
@@ -566,11 +636,67 @@ async function carregarSessoes() {
   });
 }
 
+/* ------------------------------------------------------------------- */
+/* gravação de áudio da sessão (MediaRecorder)                          */
+/* ------------------------------------------------------------------- */
+
+let mediaRecorder = null, audioChunks = [], audioBlob = null, recTimer = null, recSeconds = 0;
+
+function resetGravacao() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+  clearInterval(recTimer);
+  audioBlob = null;
+  const preview = document.getElementById('audioPreview');
+  preview.style.display = 'none';
+  preview.removeAttribute('src');
+  document.getElementById('btnGravar').textContent = '🎙️ gravar áudio (opcional)';
+  document.getElementById('btnGravar').classList.remove('gravando');
+  document.getElementById('gravarTimer').textContent = '';
+}
+
+document.getElementById('btnGravar').addEventListener('click', async () => {
+  if (mediaRecorder && mediaRecorder.state === 'recording') { mediaRecorder.stop(); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    L.toast('Seu navegador não suporta gravação de áudio.', true);
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+      stream.getTracks().forEach(t => t.stop());
+      clearInterval(recTimer);
+      const preview = document.getElementById('audioPreview');
+      preview.src = URL.createObjectURL(audioBlob);
+      preview.style.display = 'block';
+      document.getElementById('btnGravar').textContent = '🎙️ regravar';
+      document.getElementById('btnGravar').classList.remove('gravando');
+      document.getElementById('gravarTimer').textContent = '';
+    };
+    mediaRecorder.start();
+    recSeconds = 0;
+    document.getElementById('audioPreview').style.display = 'none';
+    document.getElementById('btnGravar').textContent = '⏹ parar gravação';
+    document.getElementById('btnGravar').classList.add('gravando');
+    recTimer = setInterval(() => {
+      recSeconds++;
+      const m = String(Math.floor(recSeconds / 60)).padStart(2, '0'), s = String(recSeconds % 60).padStart(2, '0');
+      document.getElementById('gravarTimer').textContent = `${m}:${s}`;
+    }, 1000);
+  } catch (err) {
+    L.toast('Não consegui acessar o microfone.', true);
+  }
+});
+
 async function prefillContexto() {
   document.getElementById('sessaoData').value = L.isoLocal();
   document.getElementById('sessaoDuracao').value = '';
   document.getElementById('sessaoProximoPasso').value = '';
   document.getElementById('sessaoObs').value = '';
+  resetGravacao();
   try {
     const ctx = await L.api('/api/beatforge/contexto-atual');
     document.getElementById('sessaoEstado').value = ctx.estado_emocional || '';
@@ -583,18 +709,19 @@ document.getElementById('btnFecharSessao').addEventListener('click', async () =>
   const duracao = parseInt(document.getElementById('sessaoDuracao').value, 10);
   if (!proximoPasso) { L.toast('Sem Próximo Passo Brutal, sem fechar sessão.', true); return; }
   if (!duracao || duracao <= 0) { L.toast('Informe uma duração maior que zero.', true); return; }
+  const fd = new FormData();
+  fd.append('data', document.getElementById('sessaoData').value);
+  fd.append('duracao_minutos', duracao);
+  fd.append('proximo_passo_brutal', proximoPasso);
+  fd.append('estado_emocional_snapshot', document.getElementById('sessaoEstado').value.trim());
+  fd.append('referencia_audicao_snapshot', document.getElementById('sessaoReferencia').value.trim());
+  fd.append('observacao', document.getElementById('sessaoObs').value.trim());
+  if (audioBlob) {
+    const ext = (audioBlob.type.split('/')[1] || 'webm').split(';')[0];
+    fd.append('audio', audioBlob, `sessao.${ext}`);
+  }
   try {
-    await L.api(`/api/beatforge/beats/${beatAtualId}/sessoes`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        data: document.getElementById('sessaoData').value,
-        duracao_minutos: duracao,
-        proximo_passo_brutal: proximoPasso,
-        estado_emocional_snapshot: document.getElementById('sessaoEstado').value.trim(),
-        referencia_audicao_snapshot: document.getElementById('sessaoReferencia').value.trim(),
-        observacao: document.getElementById('sessaoObs').value.trim(),
-      }),
-    });
+    await L.api(`/api/beatforge/beats/${beatAtualId}/sessoes`, { method: 'POST', body: fd });
     L.toast('Sessão fechada.');
     await prefillContexto();
     await carregarSessoes();
@@ -676,6 +803,7 @@ async function abrirGerenciar(beatId) {
   await Promise.all([carregarSessoes(), prefillContexto()]);
 }
 function fecharGerenciar() {
+  resetGravacao();
   document.getElementById('modalGerenciar').classList.remove('open');
   beatAtualId = null;
 }

@@ -15,6 +15,7 @@ from musica import repo as musica_repo
 from . import calculations as calc
 from . import fotos
 from . import repo as models
+from . import spotify_oembed
 
 router = APIRouter(prefix="/api/beatforge", tags=["beatforge"])
 
@@ -202,37 +203,48 @@ def obter_capa_beat(beat_id: int):
 # sessões
 # ---------------------------------------------------------------------------
 
+def _sessao_out(sessao: dict) -> dict:
+    sessao = dict(sessao)
+    sessao["audio_url"] = f"/api/beatforge/sessoes/{int(sessao['id'])}/audio" if sessao.get("audio_mime") else None
+    return sessao
+
+
 @router.get("/beats/{beat_id}/sessoes")
 def listar_sessoes(beat_id: int):
     if models.obter_beat(beat_id) is None:
         raise HTTPException(404, "Beat não encontrado.")
-    return _df_records(models.listar_sessoes(beat_id))
-
-
-class SessaoIn(BaseModel):
-    data: str
-    duracao_minutos: int
-    proximo_passo_brutal: str
-    estado_emocional_snapshot: str = ""
-    referencia_audicao_snapshot: str = ""
-    observacao: str = ""
+    return [_sessao_out(s) for s in _df_records(models.listar_sessoes(beat_id))]
 
 
 @router.post("/beats/{beat_id}/sessoes", status_code=201)
-def criar_sessao(beat_id: int, body: SessaoIn):
+async def criar_sessao(
+    beat_id: int,
+    data: str = Form(...),
+    duracao_minutos: int = Form(...),
+    proximo_passo_brutal: str = Form(...),
+    estado_emocional_snapshot: str = Form(""),
+    referencia_audicao_snapshot: str = Form(""),
+    observacao: str = Form(""),
+    audio: Optional[UploadFile] = None,
+):
     if models.obter_beat(beat_id) is None:
         raise HTTPException(404, "Beat não encontrado.")
-    if not body.proximo_passo_brutal.strip():
+    if not proximo_passo_brutal.strip():
         raise HTTPException(
             400, "Sem Próximo Passo Brutal, sem fechar sessão — defina uma ação específica antes de salvar."
         )
-    if body.duracao_minutos <= 0:
+    if duracao_minutos <= 0:
         raise HTTPException(400, "Informe uma duração maior que zero.")
 
+    audio_dados, audio_mime = None, None
+    if audio is not None and audio.filename:
+        audio_dados = await audio.read()
+        audio_mime = audio.content_type or "audio/webm"
+
     models.inserir_sessao(
-        beat_id, body.data, body.duracao_minutos, body.proximo_passo_brutal.strip(),
-        body.estado_emocional_snapshot.strip(), body.referencia_audicao_snapshot.strip(),
-        body.observacao.strip(),
+        beat_id, data, duracao_minutos, proximo_passo_brutal.strip(),
+        estado_emocional_snapshot.strip(), referencia_audicao_snapshot.strip(),
+        observacao.strip(), audio_dados=audio_dados, audio_mime=audio_mime,
     )
     return _beat_out(models.obter_beat(beat_id))
 
@@ -240,6 +252,15 @@ def criar_sessao(beat_id: int, body: SessaoIn):
 @router.delete("/sessoes/{sessao_id}", status_code=204)
 def excluir_sessao(sessao_id: int):
     models.excluir_sessao(sessao_id)
+
+
+@router.get("/sessoes/{sessao_id}/audio")
+def obter_audio_sessao(sessao_id: int):
+    audio = models.obter_audio_sessao(sessao_id)
+    if audio is None:
+        raise HTTPException(404, "Essa sessão não tem áudio.")
+    dados, mime = audio
+    return Response(content=dados, media_type=mime, headers={"Cache-Control": "public, max-age=86400"})
 
 
 # ---------------------------------------------------------------------------
@@ -295,12 +316,50 @@ class CrateIn(BaseModel):
 
 @router.post("/crate", status_code=201)
 def criar_item_crate(body: CrateIn):
-    if not body.link.strip():
-        raise HTTPException(400, "Informe o link do sample.")
+    link = body.link.strip()
+    if not link:
+        raise HTTPException(400, "Informe o link do Spotify.")
+
+    nome, capa_url = body.nome.strip(), ""
+    metadata = spotify_oembed.buscar_metadata_spotify(link)
+    if metadata:
+        nome = nome or metadata["titulo"]
+        capa_url = metadata["capa_url"]
+
     item_id = models.inserir_item_crate(
-        body.link.strip(), body.nome.strip(), body.fonte.strip(), body.tags.strip(), body.observacao.strip(),
+        link, nome, body.fonte.strip(), body.tags.strip(), body.observacao.strip(), capa_url,
     )
     return models.obter_item_crate(item_id)
+
+
+class CrateUsarIn(BaseModel):
+    data: str
+
+
+@router.post("/crate/{item_id}/usar", status_code=201)
+def usar_item_crate(item_id: int, body: CrateUsarIn):
+    """Cria um beat a partir de um item do crate (fluxo do sorteio) — origem
+    já vem preenchida com o link/nome do sample, sem exigir 'como extraiu'
+    ainda (isso só se sabe depois de mexer no beat de verdade; editável
+    depois no painel 'editar'). Baixa a capa do Spotify pro beat também,
+    quando disponível."""
+    item = models.obter_item_crate(item_id)
+    if item is None:
+        raise HTTPException(404, "Item não encontrado.")
+
+    capa_dados, capa_mime = None, None
+    baixada = spotify_oembed.baixar_capa(item.get("capa_url") or "")
+    if baixada:
+        capa_dados, capa_mime = baixada
+
+    beat_id = models.inserir_beat(
+        item["nome"] or item["link"], body.data, None, "", "",
+        "sample", item["nome"] or item["link"], "",
+        "Loop Eterno", "", item["link"], item.get("observacao") or "",
+        capa_dados=capa_dados, capa_mime=capa_mime,
+    )
+    models.atualizar_status_crate(item_id, "usado")
+    return _beat_out(models.obter_beat(beat_id))
 
 
 class CrateStatusIn(BaseModel):
