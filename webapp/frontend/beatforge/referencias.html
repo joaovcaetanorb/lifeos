@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+<title>Referências · Beat Forge · lifeOS</title>
+<link rel="stylesheet" href="/static/tokens.css" />
+<link rel="stylesheet" href="/static/effects.css" />
+<style>
+.dica-row{ display:flex; align-items:flex-start; gap:.6rem; padding:.55rem 0; border-bottom:1px solid var(--hair); font-size:.86rem; }
+.dica-row:last-child{ border-bottom:none; }
+.dica-texto{ flex:1; line-height:1.5; }
+.dica-row button{ background:none; border:1px solid var(--hair); color:var(--ink-dim); font-size:.7rem; padding:.2rem .5rem; border-radius:2px; cursor:pointer; flex:none; }
+.dica-row button:hover{ border-color:var(--danger); color:var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div><div class="vignette"></div><div class="grain"></div><div class="glow-blob" id="glowBlob"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="id"><span class="led-dot"></span> LIFEOS · MÓDULO BEAT FORGE</div>
+    <div class="id"><span class="clock" id="clock">--:--:--</span></div>
+  </div>
+
+  <div class="hero boot-flicker">
+    <div class="eyebrow">referência — pra quando bater o platô</div>
+    <h1 class="title">$ referencias<span class="cursor"></span></h1>
+    <p>Dicas fixas de produção e referências de estilo (Madlib, Knxwledge, Alchemist, JPEGMAFIA, Conductor Williams e o que mais você quiser guardar) — edite, apague, adicione as suas.</p>
+  </div>
+
+  <nav class="modnav">
+    <a href="/beatforge/beatforge.html">crate</a>
+    <a href="/beatforge/beats.html">beats</a>
+    <a href="/beatforge/referencias.html" class="active">referências</a>
+  </nav>
+
+  <section class="module" data-reveal>
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">referência</div><h3>Dicas & Referências</h3></div></div>
+    <div id="dicasLista"><p class="empty-state">Carregando…</p></div>
+    <div class="field-row" style="margin-top:.8rem;">
+      <input type="text" id="novaDica" placeholder="nova dica ou referência..." style="flex:1;" />
+      <button type="button" class="btn" id="btnAddDica">adicionar</button>
+    </div>
+  </section>
+
+  <footer><span>backend FastAPI próprio · escreve no banco de verdade</span><span id="genTime"></span></footer>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+(function(){
+"use strict";
+const L = LifeOS;
+
+function dicaRowHtml(d) {
+  return `<div class="dica-row" data-id="${d.id}"><div class="dica-texto">${d.texto}</div><button type="button" data-action="excluir-dica">excluir</button></div>`;
+}
+
+async function carregarDicas() {
+  const el = document.getElementById('dicasLista');
+  const dicas = await L.api('/api/beatforge/dicas');
+  if (!dicas.length) { el.innerHTML = '<p class="empty-state">Nenhuma dica ainda.</p>'; return; }
+  el.innerHTML = dicas.map(dicaRowHtml).join('');
+  el.querySelectorAll('[data-action="excluir-dica"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = parseInt(btn.closest('.dica-row').dataset.id, 10);
+      try { await L.api(`/api/beatforge/dicas/${id}`, { method: 'DELETE' }); await carregarDicas(); }
+      catch (err) { L.toast(err.message, true); }
+    });
+  });
+}
+
+document.getElementById('btnAddDica').addEventListener('click', async () => {
+  const input = document.getElementById('novaDica');
+  const texto = input.value.trim();
+  if (!texto) return;
+  try {
+    await L.api('/api/beatforge/dicas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto }) });
+    input.value = '';
+    await carregarDicas();
+  } catch (err) { L.toast(err.message, true); }
+});
+
+L.initReveal();
+L.initClock();
+L.initModuleSwitcher('beatforge');
+L.initGlow();
+document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
+carregarDicas();
+})();
+</script>
+</body>
+</html>
