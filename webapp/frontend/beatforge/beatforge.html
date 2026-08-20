@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+<title>Beat Forge · lifeOS</title>
+<link rel="stylesheet" href="/static/tokens.css" />
+<link rel="stylesheet" href="/static/effects.css" />
+<style>
+.welcome-box{ margin-top:.9rem; border:1px solid var(--hair-bright); border-left:3px solid var(--accent); background:var(--accent-soft); padding:.9rem 1.1rem; font-size:.86rem; line-height:1.6; border-radius:0 2px 2px 0; }
+.welcome-box b{ color:var(--accent-bright); }
+.streak-line{ margin-top:.3rem; color:var(--accent-bright); font-weight:700; font-size:.92rem; }
+
+.beat-card{ background:var(--panel-raised); border:1px solid var(--hair); border-radius:var(--radius); padding:1rem 1.1rem; display:flex; gap:1rem; margin-bottom:.8rem; }
+.beat-card:hover{ border-color:var(--hair-bright); }
+.beat-capa-wrap{ flex:none; } .beat-capa-wrap .card-cover{ width:96px; height:96px; }
+.beat-body{ flex:1; min-width:0; }
+.beat-head{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; flex-wrap:wrap; }
+.beat-nome{ font-weight:700; font-size:1.02rem; }
+.beat-status{ font-family:var(--font-label); font-size:.62rem; letter-spacing:.06em; text-transform:uppercase; padding:.15rem .5rem; border-radius:2px; border:1px solid var(--hair-bright); color:var(--ink-muted); white-space:nowrap; }
+.beat-status.status-lixeira{ color:var(--danger); border-color:var(--danger); }
+.beat-status.status-loopeterno{ color:var(--ink-muted); }
+.beat-status.status-estruturamontada{ color:var(--accent-bright); border-color:var(--accent); }
+.beat-status.status-mixagemcrua{ color:#e0a55a; border-color:#e0a55a; }
+.beat-status.status-prontoparamaster{ color:#08110c; background:var(--accent-bright); border-color:var(--accent-bright); font-weight:700; }
+.beat-meta{ color:var(--ink-muted); font-size:.82rem; margin-top:.3rem; }
+.beat-origem{ color:var(--ink-dim); font-size:.8rem; margin-top:.2rem; }
+.beat-tags{ display:flex; gap:.3rem; flex-wrap:wrap; margin-top:.5rem; }
+.tag-chip{ font-size:.68rem; padding:.15rem .45rem; border:1px solid var(--hair); border-radius:2px; color:var(--ink-muted); background:var(--panel); }
+.proximo-box{ margin-top:.6rem; border-left:2px solid var(--accent); padding:.4rem .7rem; background:var(--panel); font-size:.82rem; }
+.proximo-box b{ color:var(--accent-bright); }
+.proximo-box.vazio{ color:var(--ink-dim); font-style:italic; border-left-color:var(--hair); }
+
+.tag-toggle-wrap{ display:flex; gap:.4rem; flex-wrap:wrap; }
+.tag-toggle{ background:var(--panel-raised); border:1px solid var(--hair); color:var(--ink-muted); font-size:.76rem; padding:.35rem .7rem; border-radius:2px; cursor:pointer; transition:border-color .15s ease, color .15s ease, background .15s ease; }
+.tag-toggle:hover{ border-color:var(--hair-bright); }
+.tag-toggle.active{ border-color:var(--accent); color:var(--accent-bright); background:var(--accent-soft); }
+
+.dica-row{ display:flex; align-items:flex-start; gap:.6rem; padding:.55rem 0; border-bottom:1px solid var(--hair); font-size:.86rem; }
+.dica-row:last-child{ border-bottom:none; }
+.dica-texto{ flex:1; line-height:1.5; }
+.dica-row button{ background:none; border:1px solid var(--hair); color:var(--ink-dim); font-size:.7rem; padding:.2rem .5rem; border-radius:2px; cursor:pointer; flex:none; }
+.dica-row button:hover{ border-color:var(--danger); color:var(--danger); }
+
+.sessao-row{ border:1px solid var(--hair); border-radius:2px; padding:.7rem .8rem; margin-bottom:.6rem; font-size:.84rem; }
+.sessao-head{ display:flex; justify-content:space-between; gap:.6rem; color:var(--ink-dim); font-size:.74rem; }
+.sessao-passo{ margin-top:.3rem; } .sessao-passo b{ color:var(--accent-bright); }
+.sessao-extra{ margin-top:.3rem; color:var(--ink-muted); font-size:.78rem; }
+.sessao-row button{ margin-top:.5rem; background:none; border:1px solid var(--hair); color:var(--ink-dim); font-size:.7rem; padding:.2rem .5rem; border-radius:2px; cursor:pointer; }
+.sessao-row button:hover{ border-color:var(--danger); color:var(--danger); }
+
+.sorteio-box{ border:1px solid var(--accent); border-radius:var(--radius); background:var(--accent-soft); padding:1rem 1.1rem; margin-top:.9rem; }
+.sorteio-box .sorteio-link{ font-weight:700; color:var(--accent-bright); word-break:break-all; }
+.sorteio-box .sorteio-meta{ color:var(--ink-muted); font-size:.82rem; margin-top:.3rem; }
+.crate-row{ display:flex; align-items:flex-start; gap:.7rem; padding:.6rem 0; border-bottom:1px solid var(--hair); font-size:.86rem; }
+.crate-row:last-child{ border-bottom:none; }
+.crate-body{ flex:1; min-width:0; }
+.crate-link{ color:var(--ink); word-break:break-all; }
+.crate-meta{ color:var(--ink-dim); font-size:.76rem; margin-top:.2rem; }
+.crate-status{ font-family:var(--font-label); font-size:.6rem; letter-spacing:.06em; text-transform:uppercase; padding:.1rem .4rem; border-radius:2px; border:1px solid var(--hair-bright); color:var(--ink-muted); }
+.crate-status.status-usado{ color:var(--accent-bright); border-color:var(--accent); }
+.crate-status.status-descartado{ color:var(--ink-dim); }
+.crate-actions{ display:flex; gap:.35rem; flex:none; flex-wrap:wrap; }
+.crate-actions button{ background:none; border:1px solid var(--hair); color:var(--ink-dim); font-size:.68rem; padding:.2rem .5rem; border-radius:2px; cursor:pointer; }
+.crate-actions button:hover{ border-color:var(--accent); color:var(--accent-bright); }
+.crate-actions button[data-action="descartar-crate"]:hover{ border-color:var(--danger); color:var(--danger); }
+
+.modal-overlay{ position:fixed; inset:0; z-index:70; display:flex; align-items:center; justify-content:center; padding:1.2rem;
+  background:rgba(5,6,4,.6); backdrop-filter:blur(4px); opacity:0; pointer-events:none; transition:opacity .2s ease; }
+.modal-overlay.open{ opacity:1; pointer-events:auto; }
+.modal-box{ background:var(--panel); border:1px solid var(--hair-bright); border-radius:var(--radius); padding:1.3rem 1.4rem 1.5rem;
+  width:min(460px, 100%); max-height:88vh; overflow-y:auto; box-shadow:0 24px 60px -20px rgba(0,0,0,.8); transform:scale(.96) translateY(10px); transition:transform .2s cubic-bezier(.16,.8,.3,1); }
+.modal-overlay.open .modal-box{ transform:scale(1) translateY(0); }
+.modal-box.wide{ width:min(760px, 94vw); }
+.modal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
+.modal-head h3{ margin:0; font-size:1rem; font-weight:700; }
+.modal-close{ background:none; border:1px solid var(--hair); color:var(--ink-muted); width:26px; height:26px; border-radius:2px; cursor:pointer; line-height:1; }
+.modal-close:hover{ border-color:var(--accent); color:var(--accent-bright); }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div><div class="vignette"></div><div class="grain"></div><div class="glow-blob" id="glowBlob"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="id"><span class="led-dot"></span> LIFEOS · MÓDULO BEAT FORGE</div>
+    <div class="id"><span class="clock" id="clock">--:--:--</span></div>
+  </div>
+
+  <div class="hero boot-flicker">
+    <div class="eyebrow">diário de produção — dados reais</div>
+    <h1 class="title">$ beatforge<span class="cursor"></span></h1>
+    <p id="resumoTxt">Carregando…</p>
+    <p class="streak-line" id="streakTxt"></p>
+    <div class="welcome-box">
+      <b>Beat Forge</b> — seu diário de bordo pra furar o platô.
+      Toda sessão fechada aqui exige uma resposta: <b>qual é o Próximo Passo Brutal?</b>
+      Não vale "melhorar a mix" ou "mexer nisso depois". Tem que ser uma ação que você
+      consegue fazer nos primeiros 5 minutos da próxima sessão — tipo "recortar 4 fatias
+      novas do sample original" ou "reverb na clap, pan pra esquerda". Se você não sabe
+      qual é, a sessão não fechou.
+    </div>
+  </div>
+
+  <section class="module" data-reveal>
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">novo</div><h3>+ novo beat</h3></div>
+      <button class="btn" id="btnToggleNovo">expandir</button>
+    </div>
+    <div id="formNovoWrap" style="display:none;margin-top:.9rem;">
+      <div class="field-row">
+        <div class="field"><label>Nome</label><input type="text" id="novoNome" /></div>
+        <div class="field"><label>Data</label><input type="date" id="novoData" /></div>
+      </div>
+      <div class="field-row" style="margin-top:.6rem;">
+        <div class="field"><label>BPM (opcional)</label><input type="number" id="novoBpm" min="0" step="1" /></div>
+        <div class="field"><label>Tonalidade (opcional)</label><input type="text" id="novoTom" placeholder="ex.: F# menor" /></div>
+      </div>
+      <div class="field" style="margin-top:.6rem;"><label>Duração alvo (opcional)</label><input type="text" id="novoDuracaoAlvo" placeholder="ex.: 2:30" /></div>
+
+      <div class="field" style="margin-top:.9rem;"><label>Origem</label></div>
+      <div class="segmented" id="novoOrigemSwitch" style="margin-top:.4rem;">
+        <span class="thumb"></span>
+        <button data-val="sample" class="active">sample</button>
+        <button data-val="sintese">síntese</button>
+      </div>
+      <div class="field-row" style="margin-top:.6rem;">
+        <div class="field"><label id="novoOrigemRefLabel">Artista / Álbum / Ano</label><input type="text" id="novoOrigemRef" /></div>
+        <div class="field"><label id="novoOrigemMetodoLabel">Como extraiu (obrigatório)</label><input type="text" id="novoOrigemMetodo" placeholder="ex.: peguei só os 2 segundos finais" /></div>
+      </div>
+
+      <div class="field" style="margin-top:.9rem;"><label>Status inicial</label>
+        <select id="novoStatus">
+          <option>Lixeira</option><option selected>Loop Eterno</option>
+          <option>Estrutura Montada</option><option>Mixagem Crua</option><option>Pronto para Master</option>
+        </select>
+      </div>
+
+      <div class="field" style="margin-top:.9rem;"><label>Técnicas</label></div>
+      <div class="tag-toggle-wrap" id="novoTecnicasWrap" style="margin-top:.4rem;"></div>
+
+      <div class="field" style="margin-top:.9rem;"><label>Link externo (opcional)</label><input type="text" id="novoLink" placeholder="https://..." /></div>
+      <div class="field" style="margin-top:.6rem;"><label>Observações (opcional)</label><textarea id="novoObservacoes"></textarea></div>
+      <div class="field" style="margin-top:.6rem;"><label>Capa (opcional)</label><input type="file" id="novoCapa" accept="image/*" /></div>
+      <div class="btn-row" style="margin-top:.9rem;"><button class="btn btn-primary" id="btnCriarBeat">criar beat</button></div>
+    </div>
+  </section>
+
+  <div class="pills" id="statusPills" style="margin:1rem 0 .9rem;">
+    <button class="pill active" data-val="">todos</button>
+    <button class="pill" data-val="Lixeira">lixeira</button>
+    <button class="pill" data-val="Loop Eterno">loop eterno</button>
+    <button class="pill" data-val="Estrutura Montada">estrutura montada</button>
+    <button class="pill" data-val="Mixagem Crua">mixagem crua</button>
+    <button class="pill" data-val="Pronto para Master">pronto para master</button>
+  </div>
+
+  <section class="module" data-reveal>
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">pipeline</div><h3>Seus beats</h3></div></div>
+    <div id="lista"><p class="empty-state">Carregando…</p></div>
+  </section>
+
+  <section class="module" data-reveal>
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">sample digging</div><h3>Crate de Samples</h3></div>
+      <button class="btn btn-primary" id="btnSortear">🎲 sortear</button>
+    </div>
+    <div id="sorteioResultado"></div>
+    <div class="field-row" style="margin-top:1rem;">
+      <div class="field"><label>Link do Spotify</label><input type="text" id="novoCrateLink" placeholder="https://open.spotify.com/track/..." /></div>
+      <div class="field"><label>Nome / faixa (opcional)</label><input type="text" id="novoCrateNome" /></div>
+    </div>
+    <div class="field" style="margin-top:.6rem;"><label>Tags (opcional)</label><input type="text" id="novoCrateTags" placeholder="ex.: soul, batida lenta, vocal" /></div>
+    <div class="field" style="margin-top:.6rem;"><label>Observação (opcional)</label><input type="text" id="novoCrateObs" /></div>
+    <div class="btn-row" style="margin-top:.6rem;"><button type="button" class="btn" id="btnAddCrate">adicionar ao crate</button></div>
+
+    <div class="pills" id="cratePills" style="margin:1rem 0 .6rem;">
+      <button class="pill active" data-val="novo">novos</button>
+      <button class="pill" data-val="usado">usados</button>
+      <button class="pill" data-val="descartado">descartados</button>
+    </div>
+    <div id="crateLista"><p class="empty-state">Carregando…</p></div>
+  </section>
+
+  <section class="module" data-reveal>
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">referência</div><h3>Dicas & Referências</h3></div></div>
+    <div id="dicasLista"><p class="empty-state">Carregando…</p></div>
+    <div class="field-row" style="margin-top:.8rem;">
+      <input type="text" id="novaDica" placeholder="nova dica ou referência..." style="flex:1;" />
+      <button type="button" class="btn" id="btnAddDica">adicionar</button>
+    </div>
+  </section>
+
+  <footer><span>backend FastAPI próprio · escreve no banco de verdade</span><span id="genTime"></span></footer>
+</div>
+
+<div class="modal-overlay" id="modalGerenciar">
+  <div class="modal-box wide">
+    <div class="modal-head"><h3 id="gerNomeBeat">beat</h3><button type="button" class="modal-close" id="gerFechar">×</button></div>
+
+    <div class="segmented" id="gerSwitch">
+      <span class="thumb"></span>
+      <button data-val="sessoes" class="active">sessões</button>
+      <button data-val="editar">editar / excluir</button>
+    </div>
+
+    <div id="painelSessoes" style="margin-top:1rem;">
+      <div class="field"><label>Data</label><input type="date" id="sessaoData" /></div>
+      <div class="field-row" style="margin-top:.6rem;">
+        <div class="field"><label>Duração (minutos)</label><input type="number" id="sessaoDuracao" min="1" step="5" /></div>
+        <div class="field"><label>Estado emocional (do Humor)</label><input type="text" id="sessaoEstado" /></div>
+      </div>
+      <div class="field" style="margin-top:.6rem;"><label>Referência de audição (da Música)</label><input type="text" id="sessaoReferencia" /></div>
+      <div class="field" style="margin-top:.6rem;">
+        <label>Próximo Passo Brutal (obrigatório)</label>
+        <textarea id="sessaoProximoPasso" placeholder="Uma ação concreta e específica — não uma intenção vaga. Ex.: 'recortar 4 fatias novas do sample original' ou 'reverb na clap, pan pra esquerda'."></textarea>
+      </div>
+      <div class="field" style="margin-top:.6rem;"><label>Observação (opcional)</label><input type="text" id="sessaoObs" /></div>
+      <div class="btn-row" style="margin-top:.7rem;"><button type="button" class="btn btn-primary" id="btnFecharSessao">fechar sessão</button></div>
+      <div id="sessoesLista" style="margin-top:1.2rem;"></div>
+    </div>
+
+    <div id="painelEditar" style="display:none;margin-top:1rem;">
+      <div class="field-row">
+        <div class="field"><label>Nome</label><input type="text" id="edNome" /></div>
+        <div class="field"><label>Data</label><input type="date" id="edData" /></div>
+      </div>
+      <div class="field-row" style="margin-top:.6rem;">
+        <div class="field"><label>BPM</label><input type="number" id="edBpm" min="0" step="1" /></div>
+        <div class="field"><label>Tonalidade</label><input type="text" id="edTom" /></div>
+      </div>
+      <div class="field" style="margin-top:.6rem;"><label>Duração alvo</label><input type="text" id="edDuracaoAlvo" /></div>
+
+      <div class="field" style="margin-top:.9rem;"><label>Origem</label></div>
+      <div class="segmented" id="edOrigemSwitch" style="margin-top:.4rem;">
+        <span class="thumb"></span>
+        <button data-val="sample" class="active">sample</button>
+        <button data-val="sintese">síntese</button>
+      </div>
+      <div class="field-row" style="margin-top:.6rem;">
+        <div class="field"><label id="edOrigemRefLabel">Artista / Álbum / Ano</label><input type="text" id="edOrigemRef" /></div>
+        <div class="field"><label id="edOrigemMetodoLabel">Como extraiu</label><input type="text" id="edOrigemMetodo" /></div>
+      </div>
+
+      <div class="field" style="margin-top:.9rem;"><label>Status</label>
+        <select id="edStatus">
+          <option>Lixeira</option><option>Loop Eterno</option>
+          <option>Estrutura Montada</option><option>Mixagem Crua</option><option>Pronto para Master</option>
+        </select>
+      </div>
+
+      <div class="field" style="margin-top:.9rem;"><label>Técnicas</label></div>
+      <div class="tag-toggle-wrap" id="edTecnicasWrap" style="margin-top:.4rem;"></div>
+
+      <div class="field" style="margin-top:.9rem;"><label>Link externo</label><input type="text" id="edLink" /></div>
+      <div class="field" style="margin-top:.6rem;"><label>Observações</label><textarea id="edObservacoes"></textarea></div>
+      <div class="field" style="margin-top:.6rem;"><label>Substituir capa (opcional)</label><input type="file" id="edCapa" accept="image/*" /></div>
+      <div class="btn-row" style="margin-top:.9rem;">
+        <button type="button" class="btn btn-primary" id="btnSalvarBeat">salvar alterações</button>
+      </div>
+      <div style="margin-top:1.1rem;border-top:1px solid var(--hair);padding-top:.9rem;">
+        <label style="display:flex;gap:.4rem;align-items:center;font-size:.82rem;color:var(--ink-muted);">
+          <input type="checkbox" id="confirmarExclusaoBeat" /> confirmar exclusão deste beat
+        </label>
+        <button type="button" class="btn" id="btnExcluirBeat" style="margin-top:.6rem;" disabled>excluir beat</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+(function(){
+"use strict";
+const L = LifeOS;
+
+let filtroStatus = '';
+let beatAtualId = null;
+let painelAtual = 'sessoes';
+let tecnicasDisponiveis = [];
+
+function fmtDuracao(min) {
+  min = min || 0;
+  const h = Math.floor(min / 60), m = min % 60;
+  if (h === 0) return `${m}min`;
+  return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, '0')}`;
+}
+function dataBr(iso) { if (!iso) return ''; const [a, m, d] = iso.split('-'); return `${d}/${m}/${a}`; }
+function slugStatus(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ''); }
+function placeholderCapa() { return null; }
+
+/* ------------------------------------------------------------------- */
+/* técnicas (multiselect de pills, dinâmico via /tecnicas)              */
+/* ------------------------------------------------------------------- */
+
+function tecnicasToggleHtml(prefix) {
+  return tecnicasDisponiveis.map(t => `<button type="button" class="tag-toggle" data-val="${t}">${t}</button>`).join('');
+}
+
+function initTecnicasToggle(containerId) {
+  const wrap = document.getElementById(containerId);
+  wrap.innerHTML = tecnicasToggleHtml();
+  wrap.querySelectorAll('.tag-toggle').forEach(btn => {
+    btn.addEventListener('click', () => btn.classList.toggle('active'));
+  });
+}
+
+function getTecnicasSelecionadas(containerId) {
+  return [...document.querySelectorAll(`#${containerId} .tag-toggle.active`)].map(b => b.dataset.val).join(',');
+}
+
+function setTecnicasSelecionadas(containerId, csv) {
+  const selecionadas = new Set((csv || '').split(',').map(s => s.trim()).filter(Boolean));
+  document.querySelectorAll(`#${containerId} .tag-toggle`).forEach(btn => {
+    btn.classList.toggle('active', selecionadas.has(btn.dataset.val));
+  });
+}
+
+async function carregarTecnicas() {
+  tecnicasDisponiveis = await L.api('/api/beatforge/tecnicas');
+  initTecnicasToggle('novoTecnicasWrap');
+  initTecnicasToggle('edTecnicasWrap');
+}
+
+/* ------------------------------------------------------------------- */
+/* toggle de origem (sample / síntese)                                  */
+/* ------------------------------------------------------------------- */
+
+function aplicarLabelsOrigem(prefix, val) {
+  const refLabel = document.getElementById(`${prefix}OrigemRefLabel`);
+  const metodoLabel = document.getElementById(`${prefix}OrigemMetodoLabel`);
+  if (val === 'sintese') {
+    refLabel.textContent = 'Synth usado (opcional)';
+    metodoLabel.textContent = 'Como sintetizou (obrigatório)';
+  } else {
+    refLabel.textContent = 'Artista / Álbum / Ano';
+    metodoLabel.textContent = 'Como extraiu (obrigatório)';
+  }
+}
+
+let novoOrigemVal = 'sample', edOrigemVal = 'sample';
+L.initSegmented('novoOrigemSwitch', val => { novoOrigemVal = val; aplicarLabelsOrigem('novo', val); });
+L.initSegmented('edOrigemSwitch', val => { edOrigemVal = val; aplicarLabelsOrigem('ed', val); });
+
+/* ------------------------------------------------------------------- */
+async function carregarResumo() {
+  const r = await L.api('/api/beatforge/resumo');
+  document.getElementById('resumoTxt').textContent =
+    `${r.total_beats} beat(s) · ${fmtDuracao(r.tempo_investido_mes_min)} investidos este mês · ${r.crate_novos} sample(s) no crate`;
+  document.getElementById('streakTxt').textContent =
+    r.streak_dias > 0 ? `🔥 streak de ${r.streak_dias} dia(s) seguidos produzindo` : '';
+}
+
+function beatCardHtml(b) {
+  const meta = [];
+  if (b.bpm) meta.push(`${b.bpm} BPM`);
+  if (b.tonalidade) meta.push(b.tonalidade);
+  if (b.duracao_alvo) meta.push(b.duracao_alvo);
+  const origemIcone = b.origem_tipo === 'sintese' ? '🎹' : '🎚️';
+  const origemTxt = [b.origem_referencia, b.origem_metodo].filter(Boolean).join(' — ');
+  const tags = (b.tecnicas || '').split(',').map(t => t.trim()).filter(Boolean)
+    .map(t => `<span class="tag-chip">${t}</span>`).join('');
+  const proximo = b.ultimo_passo_brutal
+    ? `<div class="proximo-box"><b>Próximo:</b> ${b.ultimo_passo_brutal}</div>`
+    : `<div class="proximo-box vazio">Nenhuma sessão registrada ainda — defina seu primeiro Próximo Passo Brutal.</div>`;
+  return `
+  <div class="beat-card" data-id="${b.id}">
+    <div class="beat-capa-wrap">
+      ${b.capa_url ? `<img class="card-cover" src="${b.capa_url}" alt="" />` : `<div class="card-cover placeholder">🔥</div>`}
+    </div>
+    <div class="beat-body">
+      <div class="beat-head">
+        <div class="beat-nome">${b.nome}</div>
+        <span class="beat-status status-${slugStatus(b.status)}">${b.status}</span>
+      </div>
+      ${meta.length ? `<div class="beat-meta">${meta.join(' · ')}</div>` : ''}
+      <div class="beat-origem">${origemIcone} ${origemTxt}</div>
+      ${tags ? `<div class="beat-tags">${tags}</div>` : ''}
+      <div class="beat-meta" style="margin-top:.4rem;">${fmtDuracao(b.tempo_investido_min)} investidos · ${b.total_sessoes} sessão(ões)</div>
+      ${proximo}
+      <div class="btn-row" style="margin-top:.8rem;">
+        <button type="button" class="btn" data-action="gerenciar">gerenciar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function carregarLista() {
+  const el = document.getElementById('lista');
+  const params = filtroStatus ? `?status=${encodeURIComponent(filtroStatus)}` : '';
+  const beats = await L.api(`/api/beatforge/beats${params}`);
+  if (!beats.length) { el.innerHTML = '<p class="empty-state">Nenhum beat cadastrado ainda.</p>'; return; }
+  el.innerHTML = beats.map(beatCardHtml).join('');
+  el.querySelectorAll('[data-action="gerenciar"]').forEach(btn => {
+    btn.addEventListener('click', () => abrirGerenciar(parseInt(btn.closest('.beat-card').dataset.id, 10)));
+  });
+}
+
+function dicaRowHtml(d) {
+  return `<div class="dica-row" data-id="${d.id}"><div class="dica-texto">${d.texto}</div><button type="button" data-action="excluir-dica">excluir</button></div>`;
+}
+
+async function carregarDicas() {
+  const el = document.getElementById('dicasLista');
+  const dicas = await L.api('/api/beatforge/dicas');
+  if (!dicas.length) { el.innerHTML = '<p class="empty-state">Nenhuma dica ainda.</p>'; return; }
+  el.innerHTML = dicas.map(dicaRowHtml).join('');
+  el.querySelectorAll('[data-action="excluir-dica"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = parseInt(btn.closest('.dica-row').dataset.id, 10);
+      try { await L.api(`/api/beatforge/dicas/${id}`, { method: 'DELETE' }); await carregarDicas(); }
+      catch (err) { L.toast(err.message, true); }
+    });
+  });
+}
+
+document.getElementById('btnAddDica').addEventListener('click', async () => {
+  const input = document.getElementById('novaDica');
+  const texto = input.value.trim();
+  if (!texto) return;
+  try {
+    await L.api('/api/beatforge/dicas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto }) });
+    input.value = '';
+    await carregarDicas();
+  } catch (err) { L.toast(err.message, true); }
+});
+
+/* ------------------------------------------------------------------- */
+/* crate de samples (sorteio + fila)                                    */
+/* ------------------------------------------------------------------- */
+
+let filtroCrateStatus = 'novo';
+
+function crateRowHtml(c) {
+  const tags = (c.tags || '').split(',').map(t => t.trim()).filter(Boolean).join(' · ');
+  const acoes = [];
+  if (c.status !== 'usado') acoes.push(`<button type="button" data-action="usar-crate">usar</button>`);
+  if (c.status !== 'descartado') acoes.push(`<button type="button" data-action="descartar-crate">descartar</button>`);
+  if (c.status !== 'novo') acoes.push(`<button type="button" data-action="reabrir-crate">reabrir</button>`);
+  acoes.push(`<button type="button" data-action="excluir-crate">excluir</button>`);
+  return `
+  <div class="crate-row" data-id="${c.id}">
+    <div class="crate-body">
+      <a class="crate-link" href="${c.link}" target="_blank" rel="noopener">${c.nome || c.link}</a>
+      <span class="crate-status status-${c.status}">${c.status}</span>
+      ${tags || c.observacao ? `<div class="crate-meta">${[tags, c.observacao].filter(Boolean).join(' · ')}</div>` : ''}
+    </div>
+    <div class="crate-actions">${acoes.join('')}</div>
+  </div>`;
+}
+
+async function carregarCrate() {
+  const el = document.getElementById('crateLista');
+  const itens = await L.api(`/api/beatforge/crate?status=${encodeURIComponent(filtroCrateStatus)}`);
+  el.innerHTML = itens.length ? itens.map(crateRowHtml).join('') : '<p class="empty-state">Nada por aqui ainda.</p>';
+  el.querySelectorAll('.crate-row').forEach(row => {
+    const id = parseInt(row.dataset.id, 10);
+    const acao = async (status) => {
+      try { await L.api(`/api/beatforge/crate/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }); await carregarCrate(); await carregarResumo(); }
+      catch (err) { L.toast(err.message, true); }
+    };
+    const btnUsar = row.querySelector('[data-action="usar-crate"]');
+    if (btnUsar) btnUsar.addEventListener('click', () => acao('usado'));
+    const btnDescartar = row.querySelector('[data-action="descartar-crate"]');
+    if (btnDescartar) btnDescartar.addEventListener('click', () => acao('descartado'));
+    const btnReabrir = row.querySelector('[data-action="reabrir-crate"]');
+    if (btnReabrir) btnReabrir.addEventListener('click', () => acao('novo'));
+    row.querySelector('[data-action="excluir-crate"]').addEventListener('click', async () => {
+      try { await L.api(`/api/beatforge/crate/${id}`, { method: 'DELETE' }); await carregarCrate(); await carregarResumo(); }
+      catch (err) { L.toast(err.message, true); }
+    });
+  });
+}
+
+L.initPills('cratePills', val => { filtroCrateStatus = val; carregarCrate(); });
+
+document.getElementById('btnAddCrate').addEventListener('click', async () => {
+  const link = document.getElementById('novoCrateLink').value.trim();
+  if (!link) { L.toast('Cola o link do Spotify.', true); return; }
+  try {
+    await L.api('/api/beatforge/crate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        link,
+        nome: document.getElementById('novoCrateNome').value.trim(),
+        tags: document.getElementById('novoCrateTags').value.trim(),
+        observacao: document.getElementById('novoCrateObs').value.trim(),
+      }),
+    });
+    L.toast('Sample adicionado ao crate.');
+    document.getElementById('novoCrateLink').value = '';
+    document.getElementById('novoCrateNome').value = '';
+    document.getElementById('novoCrateTags').value = '';
+    document.getElementById('novoCrateObs').value = '';
+    await carregarCrate();
+    await carregarResumo();
+  } catch (err) { L.toast(err.message, true); }
+});
+
+document.getElementById('btnSortear').addEventListener('click', async () => {
+  const el = document.getElementById('sorteioResultado');
+  try {
+    const c = await L.api('/api/beatforge/crate/sortear');
+    el.innerHTML = `
+      <div class="sorteio-box">
+        <a class="sorteio-link" href="${c.link}" target="_blank" rel="noopener">${c.nome || c.link}</a>
+        <div class="sorteio-meta">${(c.tags || '').split(',').filter(Boolean).join(' · ') || 'sem tags'}${c.observacao ? ' · ' + c.observacao : ''}</div>
+        <div class="btn-row" style="margin-top:.6rem;">
+          <button type="button" class="btn btn-primary" data-action="usar-sorteado">usar esse</button>
+          <button type="button" class="btn" data-action="sortear-outro">sortear outro</button>
+        </div>
+      </div>`;
+    el.querySelector('[data-action="usar-sorteado"]').addEventListener('click', async () => {
+      await L.api(`/api/beatforge/crate/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'usado' }) });
+      L.toast('Marcado como usado — bora fazer o beat.');
+      el.innerHTML = '';
+      await carregarCrate();
+      await carregarResumo();
+    });
+    el.querySelector('[data-action="sortear-outro"]').addEventListener('click', () => document.getElementById('btnSortear').click());
+  } catch (err) {
+    el.innerHTML = '';
+    L.toast(err.message, true);
+  }
+});
+
+async function carregar() {
+  await Promise.all([carregarResumo(), carregarLista(), carregarDicas(), carregarCrate()]);
+}
+
+/* ------------------------------------------------------------------- */
+/* modal gerenciar (sessões / editar)                                   */
+/* ------------------------------------------------------------------- */
+
+function sessaoRowHtml(s) {
+  const extra = [s.estado_emocional_snapshot, s.referencia_audicao_snapshot].filter(Boolean).join(' · ');
+  return `
+  <div class="sessao-row" data-id="${s.id}">
+    <div class="sessao-head"><span>${dataBr(s.data)}</span><span>${fmtDuracao(s.duracao_minutos)}</span></div>
+    <div class="sessao-passo"><b>Próximo passo:</b> ${s.proximo_passo_brutal}</div>
+    ${extra ? `<div class="sessao-extra">${extra}</div>` : ''}
+    ${s.observacao ? `<div class="sessao-extra">${s.observacao}</div>` : ''}
+    <button type="button" data-action="excluir-sessao">excluir</button>
+  </div>`;
+}
+
+async function carregarSessoes() {
+  const el = document.getElementById('sessoesLista');
+  el.innerHTML = '<p class="empty-state">Carregando…</p>';
+  const sessoes = await L.api(`/api/beatforge/beats/${beatAtualId}/sessoes`);
+  el.innerHTML = sessoes.length ? sessoes.map(sessaoRowHtml).join('') : '<p class="empty-state">Nenhuma sessão registrada ainda.</p>';
+  el.querySelectorAll('[data-action="excluir-sessao"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = parseInt(btn.closest('.sessao-row').dataset.id, 10);
+      try {
+        await L.api(`/api/beatforge/sessoes/${id}`, { method: 'DELETE' });
+        L.toast('Sessão excluída.');
+        await carregarSessoes();
+        await carregarLista();
+      } catch (err) { L.toast(err.message, true); }
+    });
+  });
+}
+
+async function prefillContexto() {
+  document.getElementById('sessaoData').value = L.isoLocal();
+  document.getElementById('sessaoDuracao').value = '';
+  document.getElementById('sessaoProximoPasso').value = '';
+  document.getElementById('sessaoObs').value = '';
+  try {
+    const ctx = await L.api('/api/beatforge/contexto-atual');
+    document.getElementById('sessaoEstado').value = ctx.estado_emocional || '';
+    document.getElementById('sessaoReferencia').value = ctx.referencia_audicao || '';
+  } catch (err) { /* Humor/Música podem não ter dados ainda — segue sem preencher */ }
+}
+
+document.getElementById('btnFecharSessao').addEventListener('click', async () => {
+  const proximoPasso = document.getElementById('sessaoProximoPasso').value.trim();
+  const duracao = parseInt(document.getElementById('sessaoDuracao').value, 10);
+  if (!proximoPasso) { L.toast('Sem Próximo Passo Brutal, sem fechar sessão.', true); return; }
+  if (!duracao || duracao <= 0) { L.toast('Informe uma duração maior que zero.', true); return; }
+  try {
+    await L.api(`/api/beatforge/beats/${beatAtualId}/sessoes`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: document.getElementById('sessaoData').value,
+        duracao_minutos: duracao,
+        proximo_passo_brutal: proximoPasso,
+        estado_emocional_snapshot: document.getElementById('sessaoEstado').value.trim(),
+        referencia_audicao_snapshot: document.getElementById('sessaoReferencia').value.trim(),
+        observacao: document.getElementById('sessaoObs').value.trim(),
+      }),
+    });
+    L.toast('Sessão fechada.');
+    await prefillContexto();
+    await carregarSessoes();
+    await carregarLista();
+  } catch (err) { L.toast(err.message, true); }
+});
+
+function preencherEditar(b) {
+  document.getElementById('edNome').value = b.nome;
+  document.getElementById('edData').value = b.data;
+  document.getElementById('edBpm').value = b.bpm || '';
+  document.getElementById('edTom').value = b.tonalidade || '';
+  document.getElementById('edDuracaoAlvo').value = b.duracao_alvo || '';
+  edOrigemVal = b.origem_tipo || 'sample';
+  document.querySelectorAll('#edOrigemSwitch button').forEach(btn => btn.classList.toggle('active', btn.dataset.val === edOrigemVal));
+  aplicarLabelsOrigem('ed', edOrigemVal);
+  document.getElementById('edOrigemRef').value = b.origem_referencia || '';
+  document.getElementById('edOrigemMetodo').value = b.origem_metodo || '';
+  document.getElementById('edStatus').value = b.status;
+  setTecnicasSelecionadas('edTecnicasWrap', b.tecnicas || '');
+  document.getElementById('edLink').value = b.link_externo || '';
+  document.getElementById('edObservacoes').value = b.observacoes || '';
+  document.getElementById('edCapa').value = '';
+  document.getElementById('confirmarExclusaoBeat').checked = false;
+  document.getElementById('btnExcluirBeat').disabled = true;
+}
+
+document.getElementById('confirmarExclusaoBeat').addEventListener('change', (e) => {
+  document.getElementById('btnExcluirBeat').disabled = !e.target.checked;
+});
+
+document.getElementById('btnSalvarBeat').addEventListener('click', async () => {
+  const fd = new FormData();
+  fd.append('nome', document.getElementById('edNome').value);
+  fd.append('data', document.getElementById('edData').value);
+  fd.append('bpm', document.getElementById('edBpm').value || '');
+  fd.append('tonalidade', document.getElementById('edTom').value);
+  fd.append('duracao_alvo', document.getElementById('edDuracaoAlvo').value);
+  fd.append('origem_tipo', edOrigemVal);
+  fd.append('origem_referencia', document.getElementById('edOrigemRef').value);
+  fd.append('origem_metodo', document.getElementById('edOrigemMetodo').value);
+  fd.append('status', document.getElementById('edStatus').value);
+  fd.append('tecnicas', getTecnicasSelecionadas('edTecnicasWrap'));
+  fd.append('link_externo', document.getElementById('edLink').value);
+  fd.append('observacoes', document.getElementById('edObservacoes').value);
+  const capa = document.getElementById('edCapa').files[0];
+  if (capa) fd.append('capa', capa);
+  try {
+    await L.api(`/api/beatforge/beats/${beatAtualId}`, { method: 'PATCH', body: fd });
+    L.toast('Beat atualizado.');
+    document.getElementById('gerNomeBeat').textContent = document.getElementById('edNome').value;
+    await carregarLista();
+  } catch (err) { L.toast(err.message, true); }
+});
+
+document.getElementById('btnExcluirBeat').addEventListener('click', async () => {
+  try {
+    await L.api(`/api/beatforge/beats/${beatAtualId}`, { method: 'DELETE' });
+    L.toast('Beat excluído.');
+    fecharGerenciar();
+    await carregar();
+  } catch (err) { L.toast(err.message, true); }
+});
+
+function mudarPainel(val) {
+  painelAtual = val;
+  document.getElementById('painelSessoes').style.display = val === 'sessoes' ? 'block' : 'none';
+  document.getElementById('painelEditar').style.display = val === 'editar' ? 'block' : 'none';
+}
+L.initSegmented('gerSwitch', mudarPainel);
+
+async function abrirGerenciar(beatId) {
+  beatAtualId = beatId;
+  const b = await L.api(`/api/beatforge/beats/${beatId}`);
+  document.getElementById('gerNomeBeat').textContent = b.nome;
+  preencherEditar(b);
+  document.getElementById('modalGerenciar').classList.add('open');
+  mudarPainel('sessoes');
+  await Promise.all([carregarSessoes(), prefillContexto()]);
+}
+function fecharGerenciar() {
+  document.getElementById('modalGerenciar').classList.remove('open');
+  beatAtualId = null;
+}
+document.getElementById('gerFechar').addEventListener('click', fecharGerenciar);
+document.getElementById('modalGerenciar').addEventListener('click', e => { if (e.target.id === 'modalGerenciar') fecharGerenciar(); });
+
+/* ------------------------------------------------------------------- */
+/* novo beat / filtro de status                                         */
+/* ------------------------------------------------------------------- */
+
+document.getElementById('btnToggleNovo').addEventListener('click', () => {
+  const wrap = document.getElementById('formNovoWrap');
+  const aberto = wrap.style.display !== 'none';
+  wrap.style.display = aberto ? 'none' : 'block';
+  document.getElementById('btnToggleNovo').textContent = aberto ? 'expandir' : 'recolher';
+  if (!aberto) document.getElementById('novoData').value = L.isoLocal();
+});
+
+document.getElementById('btnCriarBeat').addEventListener('click', async () => {
+  const nome = document.getElementById('novoNome').value.trim();
+  const origemMetodo = document.getElementById('novoOrigemMetodo').value.trim();
+  if (!nome) { L.toast('Informe um nome para o beat.', true); return; }
+  if (!origemMetodo) { L.toast('Descreva a origem: como extraiu o sample ou qual synth usou.', true); return; }
+  const fd = new FormData();
+  fd.append('nome', nome);
+  fd.append('data', document.getElementById('novoData').value || L.isoLocal());
+  fd.append('bpm', document.getElementById('novoBpm').value || '');
+  fd.append('tonalidade', document.getElementById('novoTom').value.trim());
+  fd.append('duracao_alvo', document.getElementById('novoDuracaoAlvo').value.trim());
+  fd.append('origem_tipo', novoOrigemVal);
+  fd.append('origem_referencia', document.getElementById('novoOrigemRef').value.trim());
+  fd.append('origem_metodo', origemMetodo);
+  fd.append('status', document.getElementById('novoStatus').value);
+  fd.append('tecnicas', getTecnicasSelecionadas('novoTecnicasWrap'));
+  fd.append('link_externo', document.getElementById('novoLink').value.trim());
+  fd.append('observacoes', document.getElementById('novoObservacoes').value.trim());
+  const capa = document.getElementById('novoCapa').files[0];
+  if (capa) fd.append('capa', capa);
+  try {
+    await L.api('/api/beatforge/beats', { method: 'POST', body: fd });
+    L.toast(`Beat '${nome}' criado.`);
+    document.getElementById('novoNome').value = '';
+    document.getElementById('novoBpm').value = '';
+    document.getElementById('novoTom').value = '';
+    document.getElementById('novoDuracaoAlvo').value = '';
+    document.getElementById('novoOrigemRef').value = '';
+    document.getElementById('novoOrigemMetodo').value = '';
+    document.getElementById('novoLink').value = '';
+    document.getElementById('novoObservacoes').value = '';
+    document.getElementById('novoCapa').value = '';
+    setTecnicasSelecionadas('novoTecnicasWrap', '');
+    document.getElementById('formNovoWrap').style.display = 'none';
+    document.getElementById('btnToggleNovo').textContent = 'expandir';
+    await carregar();
+  } catch (err) { L.toast(err.message, true); }
+});
+
+L.initPills('statusPills', val => { filtroStatus = val; carregarLista(); });
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharGerenciar(); });
+
+L.initReveal();
+L.initClock();
+L.initModuleSwitcher('beatforge');
+L.initGlow();
+document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
+carregarTecnicas().then(carregar);
+})();
+</script>
+</body>
+</html>

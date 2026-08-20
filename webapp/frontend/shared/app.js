@@ -164,7 +164,7 @@ const LifeOS = (() => {
     { key: 'musica', label: 'Música', href: '/musica/estatisticas.html' },
     { key: 'livros', label: 'Livros', href: '/livros/estante.html' },
     { key: 'habitos', label: 'Hábitos', href: '/habitos/habitos.html' },
-    { key: 'projetos', label: 'Projetos', href: '/projetos/projetos.html' },
+    { key: 'beatforge', label: 'Beat Forge', href: '/beatforge/beatforge.html' },
     { key: 'humor', label: 'Humor', href: '/humor/humor.html' },
     { key: 'timeline', label: 'Timeline', href: '/timeline/timeline.html' },
     { key: 'analytics', label: 'Analytics', href: '/analytics/analytics.html' },

@@ -8,6 +8,7 @@ webapp/musica/data/
 webapp/livros/data/
 webapp/habitos/data/
 webapp/humor/data/
+webapp/beatforge/data/
 webapp/.venv/
 webapp/run_pid.txt
 webapp/run_stdout.log

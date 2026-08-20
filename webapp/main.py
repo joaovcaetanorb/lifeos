@@ -21,6 +21,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from analytics.router import router as analytics_router
+from beatforge.db import inicializar_banco as inicializar_banco_beatforge
+from beatforge.router import router as beatforge_router
 from financeiro.db import inicializar_banco as inicializar_banco_financeiro
 from financeiro.router import router as financeiro_router
 from habitos.db import inicializar_banco as inicializar_banco_habitos
@@ -51,6 +53,7 @@ _FRONTEND_DIR = _WEBAPP_DIR / "frontend"
 (_FRONTEND_DIR / "projetos").mkdir(parents=True, exist_ok=True)
 (_FRONTEND_DIR / "financeiro").mkdir(parents=True, exist_ok=True)
 (_FRONTEND_DIR / "timeline").mkdir(parents=True, exist_ok=True)
+(_FRONTEND_DIR / "beatforge").mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="LifeOS — fora do Streamlit")
 
@@ -69,6 +72,7 @@ def _startup() -> None:
         ("projetos", inicializar_banco_projetos),
         ("financeiro", inicializar_banco_financeiro),
         ("momentos", inicializar_banco_momentos),
+        ("beatforge", inicializar_banco_beatforge),
     )
     for nome, fn in modulos:
         try:
@@ -88,6 +92,7 @@ app.include_router(financeiro_router)
 app.include_router(momentos_router)
 app.include_router(timeline_router)
 app.include_router(analytics_router)
+app.include_router(beatforge_router)
 
 app.mount("/static", StaticFiles(directory=str(_FRONTEND_DIR / "shared")), name="shared-static")
 app.mount("/musica", StaticFiles(directory=str(_FRONTEND_DIR / "musica"), html=True), name="musica-frontend")
@@ -98,6 +103,7 @@ app.mount("/projetos", StaticFiles(directory=str(_FRONTEND_DIR / "projetos"), ht
 app.mount("/financeiro", StaticFiles(directory=str(_FRONTEND_DIR / "financeiro"), html=True), name="financeiro-frontend")
 app.mount("/timeline", StaticFiles(directory=str(_FRONTEND_DIR / "timeline"), html=True), name="timeline-frontend")
 app.mount("/analytics", StaticFiles(directory=str(_FRONTEND_DIR / "analytics"), html=True), name="analytics-frontend")
+app.mount("/beatforge", StaticFiles(directory=str(_FRONTEND_DIR / "beatforge"), html=True), name="beatforge-frontend")
 
 
 @app.get("/", response_class=HTMLResponse)
