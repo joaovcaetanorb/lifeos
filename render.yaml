@@ -40,6 +40,10 @@ services:
         sync: false
       - key: TURSO_BEATFORGE_TOKEN
         sync: false
+      - key: TURSO_REVISAO_URL
+        sync: false
+      - key: TURSO_REVISAO_TOKEN
+        sync: false
       - key: SPOTIFY_CLIENT_ID
         sync: false
       - key: SPOTIFY_CLIENT_SECRET

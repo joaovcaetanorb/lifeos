@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+<title>Revisão semanal · lifeOS</title>
+<link rel="stylesheet" href="/static/tokens.css" />
+<link rel="stylesheet" href="/static/effects.css" />
+<style>
+.semana-nav{ display:flex; align-items:center; justify-content:center; gap:1rem; margin-bottom:1.4rem; }
+.semana-label{ font-family:var(--font-data); font-size:.95rem; color:var(--ink); min-width:11rem; text-align:center; }
+.semana-label small{ display:block; color:var(--ink-muted); font-size:.72rem; margin-top:.15rem; }
+
+.k-delta{ font-size:.76rem; color:var(--ink-muted); margin-top:.25rem; }
+.k-delta.sem-dado{ opacity:.6; }
+
+.correlacao-narrativa{ padding:.7rem 0; border-bottom:1px solid var(--hair); font-size:.87rem; line-height:1.6; color:var(--ink); opacity:0; transform:translateX(-8px); }
+.correlacao-narrativa:last-child{ border-bottom:none; }
+.correlacao-narrativa.in{ opacity:1; transform:none; transition:opacity .5s ease, transform .5s ease; }
+.correlacao-narrativa b{ color:var(--accent-bright); }
+
+.revisao-status{ font-size:.78rem; color:var(--ink-muted); margin-top:.5rem; }
+
+.historico-item{ padding:.7rem 0; border-bottom:1px solid var(--hair); cursor:pointer; }
+.historico-item:last-child{ border-bottom:none; }
+.historico-item:hover .historico-semana{ color:var(--accent-bright); }
+.historico-semana{ font-family:var(--font-data); font-size:.85rem; color:var(--ink); transition:color .15s ease; }
+.historico-trecho{ font-size:.8rem; color:var(--ink-muted); margin-top:.25rem; line-height:1.5; }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div><div class="vignette"></div><div class="grain"></div><div class="glow-blob" id="glowBlob"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="id"><span class="led-dot"></span> LIFEOS · MÓDULO REVISÃO</div>
+    <div class="id"><span class="clock" id="clock">--:--:--</span></div>
+  </div>
+
+  <div class="hero boot-flicker">
+    <div class="eyebrow">ritual, não navegação livre</div>
+    <h1 class="title">$ revisão-semanal<span class="cursor"></span></h1>
+    <p>Uma semana de cada vez: o que mudou em relação à anterior, e um espaço pra decidir algo com isso — não só olhar os números.</p>
+  </div>
+
+  <div class="semana-nav">
+    <button class="btn" id="btnSemanaAnterior">‹ semana anterior</button>
+    <div class="semana-label" id="semanaLabel">—</div>
+    <button class="btn" id="btnProximaSemana">próxima semana ›</button>
+  </div>
+
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">cruzamentos</div><h3>Isso se relaciona com outros módulos?</h3></div>
+    </div>
+    <div id="correlacoesGrid"><p class="empty-state" style="padding-top:0;">Carregando…</p></div>
+  </section>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">reflexão</div><h3>O que fazer com isso</h3></div>
+    </div>
+    <div class="field-row" style="grid-template-columns:1fr;">
+      <div class="field"><label>O que funcionou</label><textarea id="campoFuncionou" placeholder="O que valeu a pena repetir…"></textarea></div>
+      <div class="field"><label>O que travou</label><textarea id="campoTravou" placeholder="O que atrapalhou ou não saiu do lugar…"></textarea></div>
+      <div class="field"><label>Ajuste pra próxima semana</label><textarea id="campoAjuste" placeholder="Uma coisa concreta pra mudar…"></textarea></div>
+    </div>
+    <div class="btn-row"><button class="btn btn-primary" id="btnSalvarRevisao">salvar</button></div>
+    <div class="revisao-status" id="revisaoStatus"></div>
+  </section>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head">
+      <span class="led"></span>
+      <div class="grow"><div class="eyebrow" style="margin:0;">arquivo</div><h3>Revisões anteriores</h3></div>
+    </div>
+    <div id="historicoLista"><p class="empty-state" style="padding-top:0;">Carregando…</p></div>
+  </section>
+
+  <footer><span>backend FastAPI próprio · comparação sempre com a semana imediatamente anterior</span><span id="genTime"></span></footer>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+(function(){
+"use strict";
+const L = LifeOS;
+
+const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const fmtMoeda = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+function isoParaDate(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function segundaFeiraDe(date) {
+  const dow = date.getDay(); // dom=0
+  const diff = dow === 0 ? -6 : 1 - dow;
+  const d = new Date(date);
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+function somarDias(date, n) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+function rotuloIntervalo(inicioDate, fimDate) {
+  const diaI = inicioDate.getDate(), diaF = fimDate.getDate();
+  const mesI = MESES[inicioDate.getMonth()], mesF = MESES[fimDate.getMonth()];
+  const meio = mesI === mesF ? `${diaI}–${diaF} ${mesF}` : `${diaI} ${mesI} – ${diaF} ${mesF}`;
+  return `${meio} · ${fimDate.getFullYear()}`;
+}
+
+const CAMPOS = [
+  { chave: 'financeiro', label: 'gastos', formatar: v => fmtMoeda(v.total), numerico: v => v.total, moeda: true },
+  { chave: 'habitos', label: 'hábitos cumpridos', formatar: v => v.media_percentual.toFixed(0) + '%', numerico: v => v.media_percentual, sufixo: 'pp' },
+  { chave: 'humor', label: 'humor médio', formatar: v => v.nota_media.toFixed(1) + '/10', numerico: v => v.nota_media },
+  { chave: 'livros', label: 'livros concluídos', formatar: v => String(v.livros_concluidos), numerico: v => v.livros_concluidos },
+  { chave: 'musica', label: 'escutas registradas', formatar: v => String(v.escutas), numerico: v => v.escutas },
+  { chave: 'projetos', label: 'itens concluídos', formatar: v => String(v.itens_concluidos), numerico: v => v.itens_concluidos },
+];
+
+function deltaTexto(campo, atualVal, anteriorVal) {
+  if (anteriorVal == null) return { texto: 'sem dado na semana anterior', semDado: true };
+  const diff = campo.numerico(atualVal) - campo.numerico(anteriorVal);
+  if (Math.abs(diff) < 0.05) return { texto: 'igual à semana anterior', semDado: false };
+  const seta = diff > 0 ? '▲' : '▼';
+  const valorTxt = campo.moeda ? fmtMoeda(Math.abs(diff)) : Math.abs(diff).toFixed(campo.sufixo ? 0 : 1) + (campo.sufixo || '');
+  return { texto: `${seta} ${valorTxt} vs. semana anterior`, semDado: false };
+}
+
+function montarKpis(r) {
+  const grid = document.getElementById('kpiGrid');
+  const cards = [];
+  CAMPOS.forEach(campo => {
+    const atualVal = r.atual[campo.chave];
+    if (!atualVal) return;
+    const anteriorVal = r.anterior[campo.chave];
+    const delta = deltaTexto(campo, atualVal, anteriorVal);
+    cards.push(`
+      <div class="kpi">
+        <div class="k-label">${campo.label}</div>
+        <div class="k-value">${campo.formatar(atualVal)}</div>
+        <div class="k-delta${delta.semDado ? ' sem-dado' : ''}">${delta.texto}</div>
+      </div>
+    `);
+  });
+  grid.innerHTML = cards.length ? cards.join('') : '<p class="empty-state">Sem dados registrados nessa semana ainda.</p>';
+}
+
+function formatarValorMetrica(v, metrica) {
+  return metrica.indexOf('R$') !== -1 ? fmtMoeda(v) : v.toFixed(1);
+}
+function fraseCorrelacao(c) {
+  const diff = c.media_a - c.media_b;
+  const direcao = diff > 0 ? 'maior' : (diff < 0 ? 'menor' : 'igual');
+  const percentual = c.media_b ? Math.abs(diff / c.media_b * 100) : null;
+  const pctTxt = (percentual !== null && isFinite(percentual)) ? `${percentual.toFixed(0)}% ${direcao}` : direcao;
+  const valorA = formatarValorMetrica(c.media_a, c.metrica);
+  const valorB = formatarValorMetrica(c.media_b, c.metrica);
+  return `<b>${c.titulo}</b>: seu(sua) ${c.metrica} é <b>${pctTxt}</b> em <b>${c.label_a}</b> (${valorA}, n=${c.n_a}) do que em <b>${c.label_b}</b> (${valorB}, n=${c.n_b}).`;
+}
+function montarCorrelacoes(pares) {
+  const grid = document.getElementById('correlacoesGrid');
+  if (!pares.length) {
+    grid.innerHTML = '<p class="empty-state">Ainda não há dados suficientes pra cruzar módulos nessa janela — continua registrando por mais algumas semanas.</p>';
+    return;
+  }
+  grid.innerHTML = pares.map(c => `<div class="correlacao-narrativa" data-reveal>${fraseCorrelacao(c)}</div>`).join('');
+  L.initReveal('.correlacao-narrativa');
+}
+
+/* ---------------- navegação de semana ---------------- */
+const hoje = new Date();
+const segundaHoje = segundaFeiraDe(hoje);
+let semanaMonday = segundaFeiraDe(hoje);
+
+function atualizarBotoesNav() {
+  document.getElementById('btnProximaSemana').disabled = semanaMonday.getTime() >= segundaHoje.getTime();
+}
+
+async function carregarSemana() {
+  const semanaSunday = somarDias(semanaMonday, 6);
+  const inicioIso = L.isoLocal(semanaMonday);
+  const fimIso = L.isoLocal(semanaSunday);
+  const hojeIso = L.isoLocal(hoje);
+  const fimConsulta = fimIso > hojeIso ? hojeIso : fimIso;
+
+  document.getElementById('semanaLabel').innerHTML =
+    rotuloIntervalo(semanaMonday, semanaSunday) +
+    (semanaMonday.getTime() === segundaHoje.getTime() ? '<small>semana atual</small>' : '');
+  atualizarBotoesNav();
+
+  document.getElementById('kpiGrid').innerHTML = '<p class="empty-state">Carregando…</p>';
+  document.getElementById('correlacoesGrid').innerHTML = '<p class="empty-state">Carregando…</p>';
+  document.getElementById('revisaoStatus').textContent = '';
+  ['campoFuncionou', 'campoTravou', 'campoAjuste'].forEach(id => document.getElementById(id).value = '');
+
+  // Duas chamadas independentes: o resumo (Analytics) e a reflexão salva
+  // (banco próprio da revisão) não podem depender uma da outra — se falta
+  // configurar o Turso da revisão, o resumo ainda deve aparecer normalmente.
+  try {
+    const resumo = await L.api(`/api/revisao/resumo?inicio=${inicioIso}&fim=${fimConsulta}`);
+    montarKpis(resumo);
+    montarCorrelacoes(resumo.correlacoes);
+  } catch (e) {
+    document.getElementById('kpiGrid').innerHTML = '';
+    document.getElementById('correlacoesGrid').innerHTML = '';
+    L.toast(`Não consegui carregar o resumo da semana: ${e.message}`, true);
+  }
+
+  try {
+    const entrada = await L.api(`/api/revisao/entrada?semana_inicio=${inicioIso}`);
+    if (entrada) {
+      document.getElementById('campoFuncionou').value = entrada.o_que_funcionou || '';
+      document.getElementById('campoTravou').value = entrada.o_que_travou || '';
+      document.getElementById('campoAjuste').value = entrada.ajuste_proxima_semana || '';
+      document.getElementById('revisaoStatus').textContent = `atualizado em ${entrada.updated_at}`;
+    }
+  } catch (e) {
+    L.toast(`Não consegui carregar a reflexão salva: ${e.message}`, true);
+  }
+}
+
+document.getElementById('btnSemanaAnterior').addEventListener('click', () => {
+  semanaMonday = somarDias(semanaMonday, -7);
+  carregarSemana();
+});
+document.getElementById('btnProximaSemana').addEventListener('click', () => {
+  if (semanaMonday.getTime() >= segundaHoje.getTime()) return;
+  semanaMonday = somarDias(semanaMonday, 7);
+  carregarSemana();
+});
+
+/* ---------------- reflexão ---------------- */
+document.getElementById('btnSalvarRevisao').addEventListener('click', async () => {
+  const btn = document.getElementById('btnSalvarRevisao');
+  btn.disabled = true; btn.textContent = 'salvando...';
+  try {
+    const semanaSunday = somarDias(semanaMonday, 6);
+    const entrada = await L.api('/api/revisao/entrada', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        semana_inicio: L.isoLocal(semanaMonday),
+        semana_fim: L.isoLocal(semanaSunday),
+        o_que_funcionou: document.getElementById('campoFuncionou').value,
+        o_que_travou: document.getElementById('campoTravou').value,
+        ajuste_proxima_semana: document.getElementById('campoAjuste').value,
+      }),
+    });
+    document.getElementById('revisaoStatus').textContent = `atualizado em ${entrada.updated_at}`;
+    L.toast('Revisão salva.');
+    carregarHistorico();
+  } catch (e) {
+    L.toast(`Não consegui salvar: ${e.message}`, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'salvar';
+  }
+});
+
+/* ---------------- histórico ---------------- */
+function trecho(texto) {
+  if (!texto) return null;
+  return texto.length > 90 ? texto.slice(0, 90) + '…' : texto;
+}
+async function carregarHistorico() {
+  const lista = document.getElementById('historicoLista');
+  try {
+    const registros = await L.api('/api/revisao/historico?limite=12');
+    if (!registros.length) {
+      lista.innerHTML = '<p class="empty-state">Nenhuma revisão salva ainda.</p>';
+      return;
+    }
+    lista.innerHTML = registros.map(r => {
+      const partes = [trecho(r.o_que_funcionou), trecho(r.o_que_travou), trecho(r.ajuste_proxima_semana)].filter(Boolean);
+      return `
+        <div class="historico-item" data-semana="${r.semana_inicio}">
+          <div class="historico-semana">${rotuloIntervalo(isoParaDate(r.semana_inicio), isoParaDate(r.semana_fim))}</div>
+          ${partes.length ? `<div class="historico-trecho">${partes.join(' · ')}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+    lista.querySelectorAll('.historico-item').forEach(el => {
+      el.addEventListener('click', () => {
+        semanaMonday = isoParaDate(el.dataset.semana);
+        carregarSemana();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    });
+  } catch (e) {
+    lista.innerHTML = `<p class="empty-state">Não consegui carregar o histórico: ${e.message}</p>`;
+  }
+}
+
+L.initReveal();
+L.initClock();
+L.initGlow();
+L.initModuleSwitcher('revisao');
+document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
+
+carregarSemana();
+carregarHistorico();
+})();
+</script>
+</body>
+</html>

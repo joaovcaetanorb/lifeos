@@ -39,6 +39,8 @@ from musica.router import router as musica_router
 from musica.spotify_router import router as musica_spotify_router
 from projetos.db import inicializar_banco as inicializar_banco_projetos
 from projetos.router import router as projetos_router
+from revisao.db import inicializar_banco as inicializar_banco_revisao
+from revisao.router import router as revisao_router
 from timeline.router import router as timeline_router
 
 _WEBAPP_DIR = Path(__file__).resolve().parent
@@ -54,6 +56,7 @@ _FRONTEND_DIR = _WEBAPP_DIR / "frontend"
 (_FRONTEND_DIR / "financeiro").mkdir(parents=True, exist_ok=True)
 (_FRONTEND_DIR / "timeline").mkdir(parents=True, exist_ok=True)
 (_FRONTEND_DIR / "beatforge").mkdir(parents=True, exist_ok=True)
+(_FRONTEND_DIR / "revisao").mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="LifeOS — fora do Streamlit")
 
@@ -73,6 +76,7 @@ def _startup() -> None:
         ("financeiro", inicializar_banco_financeiro),
         ("momentos", inicializar_banco_momentos),
         ("beatforge", inicializar_banco_beatforge),
+        ("revisão", inicializar_banco_revisao),
     )
     for nome, fn in modulos:
         try:
@@ -93,6 +97,7 @@ app.include_router(momentos_router)
 app.include_router(timeline_router)
 app.include_router(analytics_router)
 app.include_router(beatforge_router)
+app.include_router(revisao_router)
 
 app.mount("/static", StaticFiles(directory=str(_FRONTEND_DIR / "shared")), name="shared-static")
 app.mount("/musica", StaticFiles(directory=str(_FRONTEND_DIR / "musica"), html=True), name="musica-frontend")
@@ -104,6 +109,7 @@ app.mount("/financeiro", StaticFiles(directory=str(_FRONTEND_DIR / "financeiro")
 app.mount("/timeline", StaticFiles(directory=str(_FRONTEND_DIR / "timeline"), html=True), name="timeline-frontend")
 app.mount("/analytics", StaticFiles(directory=str(_FRONTEND_DIR / "analytics"), html=True), name="analytics-frontend")
 app.mount("/beatforge", StaticFiles(directory=str(_FRONTEND_DIR / "beatforge"), html=True), name="beatforge-frontend")
+app.mount("/revisao", StaticFiles(directory=str(_FRONTEND_DIR / "revisao"), html=True), name="revisao-frontend")
 
 
 @app.get("/", response_class=HTMLResponse)

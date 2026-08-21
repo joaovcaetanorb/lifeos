@@ -32,6 +32,8 @@ class Settings:
     turso_momentos_token: str | None = os.environ.get("TURSO_MOMENTOS_TOKEN") or None
     turso_beatforge_url: str | None = os.environ.get("TURSO_BEATFORGE_URL") or None
     turso_beatforge_token: str | None = os.environ.get("TURSO_BEATFORGE_TOKEN") or None
+    turso_revisao_url: str | None = os.environ.get("TURSO_REVISAO_URL") or None
+    turso_revisao_token: str | None = os.environ.get("TURSO_REVISAO_TOKEN") or None
     spotify_client_id: str | None = os.environ.get("SPOTIFY_CLIENT_ID") or None
     spotify_client_secret: str | None = os.environ.get("SPOTIFY_CLIENT_SECRET") or None
     spotify_redirect_uri: str | None = os.environ.get("SPOTIFY_REDIRECT_URI") or None

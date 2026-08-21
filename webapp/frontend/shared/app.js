@@ -169,6 +169,7 @@ const LifeOS = (() => {
     { key: 'timeline', label: 'Timeline', href: '/timeline/timeline.html' },
     { key: 'analytics', label: 'Analytics', href: '/analytics/analytics.html' },
     { key: 'financeiro', label: 'Financeiro', href: '/financeiro/gastos.html' },
+    { key: 'revisao', label: 'Revisão Semanal', href: '/revisao/revisao.html' },
   ];
 
   /* Transforma o primeiro ".id" do .topbar (o rótulo "LIFEOS · MÓDULO X")
