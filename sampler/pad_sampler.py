@@ -1,6 +1,18 @@
-import json
-import math
-import os
+"""Pad sampler: chopar um audio e distribuir pedacos em 16 pads, tocaveis pelo teclado.
+
+Tela separada do Loop Sampler (main.py) e do Drum Machine (drum_prototype.py) -
+reaproveita a estetica e os padroes ja validados (waveform com zoom/drag do
+main.py, fila de comandos + mixer de vozes do drum_prototype.py) mas e um
+modulo proprio, com seu proprio motor de audio (nao compartilha stream com
+os outros dois).
+
+Fluxo: carregar/gravar um audio -> chopar um trecho na waveform -> "Atribuir
+ao pad selecionado" grava aquele trecho (ja com pitch aplicado) no pad -> o
+pad toca pelo mouse ou pela tecla mapeada, no modo escolhido (oneshot / hold
+/ loop).
+"""
+
+import queue
 import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -8,6 +20,12 @@ from tkinter import filedialog, messagebox
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
+
+from main import (
+    CREAM, CREAM_DARK, INK, GRAY_TXT, ORANGE, FONT_UI, FONT_UI_BOLD,
+    BG_COLOR, GRID_COLOR, GRID_COLOR_MID, WAVE_COLOR, START_COLOR, END_COLOR,
+    Knob, IconButton,
+)
 
 if sys.platform == "win32":
     try:
@@ -17,163 +35,89 @@ if sys.platform == "win32":
 else:
     pyaudio = None
 
-BG_COLOR = "#050a05"
-GRID_COLOR = "#123a12"
-GRID_COLOR_MID = "#1f5c1f"
-WAVE_COLOR = "#39FF14"
-START_COLOR = "#FF1744"
-END_COLOR = "#FF1744"
-PLAYHEAD_COLOR = "#FFFFFF"
-KNOB_ACCENT = "#FF5A1F"
-
-CREAM = "#EEE8D9"
-CREAM_DARK = "#DDD6C0"
-INK = "#1A1A18"
-GRAY_TXT = "#78766E"
-ORANGE = "#FF5A1F"
-FONT_UI = ("Consolas", 9)
-FONT_UI_BOLD = ("Consolas", 10, "bold")
+SR = 44100
+PAD_KEYS = ["1", "2", "3", "4", "q", "w", "e", "r", "a", "s", "d", "f", "z", "x", "c", "v"]
+MODES = ["oneshot", "hold", "loop"]
+MODE_LABELS = {"oneshot": "ONE-SHOT", "hold": "HOLD", "loop": "LOOP"}
+SELECT_COLOR = "#1E88E5"
+FADE_SAMPLES = int(0.005 * SR)
 
 
-class Knob(tk.Frame):
-    def __init__(self, parent, label, from_, to, value=0, resolution=1, command=None, size=56):
-        super().__init__(parent)
-        self.from_ = from_
-        self.to = to
-        self.resolution = resolution
-        self.value = value
-        self.command = command
-        self.size = size
-        self.label_text = label
-
-        self.configure(bg=CREAM)
-        self.canvas = tk.Canvas(self, width=size, height=size, highlightthickness=0, bg=CREAM)
-        self.canvas.pack()
-        self.value_label = tk.Label(self, text="", font=("Consolas", 8), bg=CREAM, fg=INK)
-        self.value_label.pack()
-
-        self.canvas.bind("<ButtonPress-1>", self._on_press)
-        self.canvas.bind("<B1-Motion>", self._on_drag)
-        self._redraw()
-
-    def _fmt(self, v):
-        if self.resolution == int(self.resolution) and float(v).is_integer():
-            return f"{self.label_text} {int(v):+d}" if self.from_ < 0 < self.to else f"{self.label_text} {int(v)}"
-        return f"{self.label_text} {v:+.2f}" if self.from_ < 0 < self.to else f"{self.label_text} {v:.2f}"
-
-    def _redraw(self):
-        c = self.canvas
-        c.delete("all")
-        s = self.size
-        pad = 4
-        c.create_oval(pad, pad, s - pad, s - pad, outline=INK, width=2)
-        span = self.to - self.from_
-        frac = 0.5 if span == 0 else (self.value - self.from_) / span
-        angle_deg = -135 + frac * 270
-        angle = math.radians(angle_deg)
-        cx, cy = s / 2, s / 2
-        r = (s - 2 * pad) / 2 * 0.75
-        x2 = cx + r * math.sin(angle)
-        y2 = cy - r * math.cos(angle)
-        c.create_line(cx, cy, x2, y2, fill=KNOB_ACCENT, width=3)
-        c.create_oval(cx - 2, cy - 2, cx + 2, cy + 2, fill=INK)
-        self.value_label.config(text=self._fmt(self.value))
-
-    def _on_press(self, event):
-        self._drag_start_y = event.y
-        self._drag_start_val = self.value
-
-    def _on_drag(self, event):
-        dy = self._drag_start_y - event.y
-        span = self.to - self.from_
-        sensitivity = span / 150.0
-        new_val = self._drag_start_val + dy * sensitivity
-        new_val = max(self.from_, min(self.to, new_val))
-        if self.resolution:
-            new_val = round(new_val / self.resolution) * self.resolution
-        if new_val != self.value:
-            self.value = new_val
-            self._redraw()
-            if self.command:
-                self.command(self.value)
-
-    def get(self):
-        return self.value
-
-    def set(self, value):
-        self.value = value
-        self._redraw()
+def _resample_rate(data, orig_sr, target_sr):
+    if orig_sr == target_sr:
+        return data.astype("float32")
+    n = len(data)
+    new_n = max(1, int(n * target_sr / orig_sr))
+    positions = np.linspace(0, n - 1, new_n)
+    if data.ndim == 1:
+        return np.interp(positions, np.arange(n), data).astype("float32")
+    out = np.empty((new_n, data.shape[1]), dtype="float32")
+    for ch in range(data.shape[1]):
+        out[:, ch] = np.interp(positions, np.arange(n), data[:, ch])
+    return out
 
 
-class IconButton(tk.Canvas):
-    def __init__(self, parent, kind, label, command, size=52, accent=False):
-        super().__init__(parent, width=size, height=size + 16, highlightthickness=0, bg=CREAM)
-        self.kind = kind
-        self.label = label
-        self.command = command
-        self.size = size
-        self.accent = accent
-        self.bind("<ButtonPress-1>", lambda e: self._flash())
-        self._draw()
-
-    def _flash(self):
-        self.command()
-        self._draw(pressed=True)
-        self.after(90, lambda: self._draw(pressed=False))
-
-    def _draw(self, pressed=False):
-        self.delete("all")
-        s = self.size
-        cx, cy, r = s / 2, s / 2, s / 2 - 5
-        outline = ORANGE if self.accent else INK
-        fill = CREAM_DARK if pressed else CREAM
-        self.create_oval(cx - r, cy - r, cx + r, cy + r, outline=outline, width=3, fill=fill)
-        glyph = INK if not self.accent else ORANGE
-        if self.kind == "play":
-            self.create_polygon(cx - 6, cy - 9, cx - 6, cy + 9, cx + 10, cy, fill=glyph)
-        elif self.kind == "stop":
-            self.create_rectangle(cx - 7, cy - 7, cx + 7, cy + 7, fill=glyph)
-        self.create_text(cx, s + 8, text=self.label, font=("Consolas", 8), fill=GRAY_TXT)
+def _resample_pitch(chunk, rate):
+    n = len(chunk)
+    new_n = max(1, int(n / rate))
+    positions = np.linspace(0, n - 1, new_n)
+    src_idx = np.arange(n)
+    out = np.empty((new_n, chunk.shape[1]), dtype="float32")
+    for ch in range(chunk.shape[1]):
+        out[:, ch] = np.interp(positions, src_idx, chunk[:, ch])
+    return out
 
 
-class LoopApp:
+def _make_seamless_edges(chunk, sr):
+    n = len(chunk)
+    fade_len = min(int(0.008 * sr), n // 4)
+    if fade_len < 8:
+        return chunk
+    tail = chunk[-fade_len:]
+    head = chunk[:fade_len]
+    ramp = np.linspace(0.0, 1.0, fade_len, dtype="float32").reshape(-1, 1)
+    blended = tail * (1.0 - ramp) + head * ramp
+    looped = chunk[:-fade_len].copy()
+    looped[:fade_len] = blended
+    return looped
+
+
+class PadSlot:
+    def __init__(self, key):
+        self.key = key
+        self.buffer = None
+        self.mode = "oneshot"
+        self.volume = 1.0
+        self.label = ""
+
+    @property
+    def assigned(self):
+        return self.buffer is not None
+
+
+class PadSamplerApp:
     def __init__(self, root, container=None):
         self.root = root
         parent = container if container is not None else root
         if container is None:
-            self.root.title("Loop Sampler - MVP")
+            self.root.title("Pad Sampler - Prototipo")
             self.root.configure(bg=CREAM)
 
         self.data = None
         self.mono = None
-        self.samplerate = 44100
+        self.samplerate = SR
         self.duration = 0.0
         self.view_start = 0.0
         self.view_end = 1.0
-        self.loop_buffer = None
-        self.pos = 0
-        self.stream = None
         self.envelope_mins = None
         self.envelope_maxs = None
         self.drag_anchor_sec = None
         self.drag_mode = None
-        self.bar_buttons = {}
 
-        self.canvas_width = 640
-        self.canvas_height = 160
-
-        outer = tk.Frame(parent, bg=CREAM, highlightthickness=3, highlightbackground=INK)
-        outer.pack(padx=14, pady=14)
-
-        header = tk.Canvas(outer, width=self.canvas_width, height=54, bg=CREAM, highlightthickness=0)
-        header.pack(pady=(12, 4), padx=12)
-        self._draw_screw(header, 16, 27)
-        self._draw_screw(header, self.canvas_width - 16, 27)
-        header.create_text(36, 12, text="LOOP//1", anchor="nw", font=("Arial", 18, "bold"), fill=INK)
-        header.create_text(36, 36, text="personal sampler — concept", anchor="nw", font=("Consolas", 8), fill=GRAY_TXT)
-        badge_x0, badge_x1 = self.canvas_width - 156, self.canvas_width - 36
-        header.create_rectangle(badge_x0, 16, badge_x1, 38, outline=ORANGE, width=2)
-        header.create_text((badge_x0 + badge_x1) / 2, 27, text="MODE: LOOP", font=("Consolas", 8, "bold"), fill=ORANGE)
+        self.pads = {key: PadSlot(key) for key in PAD_KEYS}
+        self.selected_pad_key = PAD_KEYS[0]
+        self.pad_buttons = {}
+        self.mode_buttons = {}
 
         self.recording = False
         self._record_frames = []
@@ -183,18 +127,35 @@ class LoopApp:
         self._pa_stream = None
         self._sd_record_stream = None
 
+        self.voices = []
+        self.cmd_queue = queue.Queue()
+        self._held_keys = set()
+        self._looping_keys = set()
+        self._pressed_keys = set()
+
+        self.canvas_width = 640
+        self.canvas_height = 140
+
+        outer = tk.Frame(parent, bg=CREAM, highlightthickness=3, highlightbackground=INK)
+        outer.pack(padx=14, pady=14)
+
+        header = tk.Canvas(outer, width=self.canvas_width, height=54, bg=CREAM, highlightthickness=0)
+        header.pack(pady=(12, 4), padx=12)
+        self._draw_screw(header, 16, 27)
+        self._draw_screw(header, self.canvas_width - 16, 27)
+        header.create_text(36, 12, text="LOOP//1", anchor="nw", font=("Arial", 18, "bold"), fill=INK)
+        header.create_text(36, 36, text="pad sampler — prototipo", anchor="nw", font=("Consolas", 8), fill=GRAY_TXT)
+        badge_x0, badge_x1 = self.canvas_width - 150, self.canvas_width - 36
+        header.create_rectangle(badge_x0, 16, badge_x1, 38, outline=ORANGE, width=2)
+        header.create_text((badge_x0 + badge_x1) / 2, 27, text="MODE: PADS", font=("Consolas", 8, "bold"), fill=ORANGE)
+
         top_row = tk.Frame(outer, bg=CREAM)
         top_row.pack(pady=(0, 6), padx=12, fill="x")
         self._make_button(top_row, "Carregar áudio", self.load_file).pack(side="left")
         self.record_btn = self._make_button(top_row, "🔴 Gravar do PC", self.toggle_record_pc)
         self.record_btn.pack(side="left", padx=(8, 0))
-        self.info_label = tk.Label(top_row, text="Nenhum arquivo carregado", bg=CREAM, fg=GRAY_TXT, font=FONT_UI)
+        self.info_label = tk.Label(top_row, text="Nenhum áudio carregado", bg=CREAM, fg=GRAY_TXT, font=FONT_UI)
         self.info_label.pack(side="left", padx=10)
-
-        kit_row = tk.Frame(outer, bg=CREAM)
-        kit_row.pack(pady=(0, 6), padx=12, fill="x")
-        self._make_button(kit_row, "💾 Salvar", self.save_kit).pack(side="left")
-        self._make_button(kit_row, "📂 Carregar kit", self.load_kit).pack(side="left", padx=(8, 0))
 
         self.canvas = tk.Canvas(
             outer, width=self.canvas_width, height=self.canvas_height,
@@ -202,7 +163,6 @@ class LoopApp:
         )
         self.canvas.pack(pady=5, padx=12)
         self.draw_grid()
-        self.root.after(40, self._update_playhead)
         self.canvas.bind("<ButtonPress-1>", self.on_canvas_press)
         self.canvas.bind("<B1-Motion>", self.on_canvas_drag)
         self.canvas.bind("<Control-MouseWheel>", self.on_mousewheel)
@@ -213,66 +173,81 @@ class LoopApp:
         self.canvas.bind("<Shift-Button-5>", lambda e: self.on_shift_wheel(e, delta=-120))
 
         zoom_bar = tk.Frame(outer, bg=CREAM)
-        zoom_bar.pack(pady=(0, 8))
-        self._make_button(zoom_bar, "🔎 −", lambda: self.zoom_step(1.4), width=6).grid(row=0, column=0, padx=3)
-        self._make_button(zoom_bar, "🔎 +", lambda: self.zoom_step(1 / 1.4), width=6).grid(row=0, column=1, padx=3)
-        self._make_button(zoom_bar, "Ver tudo", self.zoom_reset, width=10).grid(row=0, column=2, padx=3)
+        zoom_bar.pack(pady=(0, 6))
+        self._make_button(zoom_bar, "🔎 −", lambda: self.zoom_step(1.4)).grid(row=0, column=0, padx=3)
+        self._make_button(zoom_bar, "🔎 +", lambda: self.zoom_step(1 / 1.4)).grid(row=0, column=1, padx=3)
+        self._make_button(zoom_bar, "Ver tudo", self.zoom_reset).grid(row=0, column=2, padx=3)
 
         bounds = tk.Frame(outer, bg=CREAM)
         bounds.pack(pady=5, padx=12, fill="x")
-
         tk.Label(bounds, text="Início (s)", bg=CREAM, fg=INK, font=FONT_UI).grid(row=0, column=0, sticky="w")
         self.start_var = tk.DoubleVar(value=0.0)
         self.start_scale = self._make_scale(bounds, self.start_var, 0, 1, 0.01, self.on_bounds_change)
         self.start_scale.grid(row=0, column=1)
-
         tk.Label(bounds, text="Fim (s)", bg=CREAM, fg=INK, font=FONT_UI).grid(row=1, column=0, sticky="w")
         self.end_var = tk.DoubleVar(value=1.0)
         self.end_scale = self._make_scale(bounds, self.end_var, 0, 1, 0.01, self.on_bounds_change)
         self.end_scale.grid(row=1, column=1)
 
         pitch_frame = tk.Frame(outer, bg=CREAM)
-        pitch_frame.pack(pady=5, padx=12)
-        self.pitch_knob = Knob(
-            pitch_frame, "PITCH", -24, 24, value=0, resolution=0.1, command=self.on_pitch_change,
-        )
+        pitch_frame.pack(pady=5)
+        self.pitch_knob = Knob(pitch_frame, "PITCH", -24, 24, value=0, resolution=1, command=lambda v: None, size=44)
         self.pitch_knob.pack()
 
-        bpm_frame = tk.Frame(outer, bg=CREAM)
-        bpm_frame.pack(pady=5, padx=12, fill="x")
-        tk.Label(bpm_frame, text="Compassos no loop:", bg=CREAM, fg=INK, font=FONT_UI).grid(row=0, column=0, sticky="w")
-        self.bars_var = tk.IntVar(value=4)
-        for i, bars in enumerate([1, 2, 4, 8]):
+        assign_frame = tk.Frame(outer, bg=CREAM)
+        assign_frame.pack(pady=(0, 10))
+        self._make_button(assign_frame, "▶ Testar corte", self.preview_staging).pack(side="left", padx=(0, 8))
+        self._make_button(
+            assign_frame, "➜ Atribuir ao pad selecionado", self.assign_to_selected_pad, accent=True,
+        ).pack(side="left")
+
+        tk.Frame(outer, bg=INK, height=2).pack(fill="x", padx=12, pady=(4, 10))
+
+        pad_grid_frame = tk.Frame(outer, bg=CREAM)
+        pad_grid_frame.pack(padx=12)
+        for i, key in enumerate(PAD_KEYS):
+            row, col = divmod(i, 4)
             btn = tk.Button(
-                bpm_frame, text=str(bars), width=3, relief="flat", bd=0, font=FONT_UI_BOLD,
-                command=lambda b=bars: self.set_bars(b),
+                pad_grid_frame, width=7, height=3, relief="flat", bd=1, takefocus=0, font=FONT_UI_BOLD,
             )
-            btn.grid(row=0, column=1 + i, padx=2)
-            self.bar_buttons[bars] = btn
-        self._style_bar_buttons()
-        self.bpm_label = tk.Label(bpm_frame, text="BPM: -", font=FONT_UI_BOLD, bg=CREAM, fg=ORANGE)
-        self.bpm_label.grid(row=0, column=5, padx=(15, 0))
+            btn.bind("<ButtonPress-1>", lambda e, k=key: self._on_pad_press(k))
+            btn.bind("<ButtonRelease-1>", lambda e, k=key: self._on_pad_release(k))
+            btn.grid(row=row, column=col, padx=3, pady=3)
+            self.pad_buttons[key] = btn
 
-        sync_frame = tk.Frame(outer, bg=CREAM)
-        sync_frame.pack(pady=5, padx=12, fill="x")
-        tk.Label(sync_frame, text="BPM do projeto:", bg=CREAM, fg=INK, font=FONT_UI).grid(row=0, column=0, sticky="w")
-        self.target_bpm_var = tk.StringVar(value="90")
-        tk.Entry(
-            sync_frame, textvariable=self.target_bpm_var, width=6, font=FONT_UI,
-            bg="white", fg=INK, relief="solid", bd=1, insertbackground=INK,
-        ).grid(row=0, column=1, padx=(4, 10))
-        self._make_button(sync_frame, "Sincronizar pitch", self.sync_to_bpm, accent=True).grid(row=0, column=2)
-        self.sync_result_label = tk.Label(sync_frame, text="", font=FONT_UI, bg=CREAM, fg=INK)
-        self.sync_result_label.grid(row=0, column=3, padx=(10, 0))
+        inspector = tk.Frame(outer, bg=CREAM)
+        inspector.pack(pady=(10, 4))
+        self.pad_label = tk.Label(inspector, text="", font=FONT_UI_BOLD, bg=CREAM, fg=INK)
+        self.pad_label.pack(side="left", padx=(0, 14))
+        for mode in MODES:
+            btn = tk.Button(
+                inspector, text=MODE_LABELS[mode], font=FONT_UI, relief="flat", bd=0, takefocus=0,
+                padx=8, pady=3, command=lambda m=mode: self.set_pad_mode(m),
+            )
+            btn.pack(side="left", padx=2)
+            self.mode_buttons[mode] = btn
+        self.pad_volume_knob = Knob(
+            inspector, "VOL", 0.2, 1.5, value=1.0, resolution=0.05, command=self.on_pad_volume_change, size=40,
+        )
+        self.pad_volume_knob.pack(side="left", padx=(14, 0))
 
-        buttons = tk.Frame(outer, bg=CREAM)
-        buttons.pack(pady=(10, 4))
-        IconButton(buttons, "play", "PLAY", self.play_loop, accent=True).grid(row=0, column=0, padx=10)
-        IconButton(buttons, "stop", "STOP", self.stop).grid(row=0, column=1, padx=10)
+        tk.Label(
+            outer, text="teclas 1234 / qwer / asdf / zxcv tocam os pads (clique também funciona)",
+            font=("Consolas", 7), bg=CREAM, fg=GRAY_TXT,
+        ).pack(pady=(0, 12))
 
-        export_frame = tk.Frame(outer, bg=CREAM)
-        export_frame.pack(pady=(4, 14))
-        self._make_button(export_frame, "💾 Exportar WAV", self.export_wav).pack()
+        self.stream = sd.OutputStream(
+            samplerate=SR, channels=2, dtype="float32", blocksize=512, callback=self._audio_callback,
+        )
+        self.stream.start()
+
+        self.root.bind("<KeyPress>", self._on_keydown)
+        self.root.bind("<KeyRelease>", self._on_keyup)
+
+        self._refresh_pad_buttons()
+        self.select_pad(self.selected_pad_key)
+
+    # ---------- estilo / widgets utilitarios ----------
 
     @staticmethod
     def _draw_screw(canvas, cx, cy, r=7):
@@ -280,13 +255,11 @@ class LoopApp:
         canvas.create_line(cx - r * 0.6, cy, cx + r * 0.6, cy, fill=INK, width=1)
 
     @staticmethod
-    def _make_button(parent, text, command, width=None, accent=False):
+    def _make_button(parent, text, command, accent=False):
         kwargs = dict(
             text=text, command=command, relief="flat", bd=0, font=FONT_UI_BOLD,
-            padx=10, pady=4, cursor="hand2",
+            padx=10, pady=4, cursor="hand2", takefocus=0,
         )
-        if width:
-            kwargs["width"] = width
         if accent:
             kwargs.update(bg=ORANGE, fg="white", activebackground="#e64f18", activeforeground="white")
         else:
@@ -302,17 +275,7 @@ class LoopApp:
             activebackground=ORANGE, font=FONT_UI, bd=0,
         )
 
-    def set_bars(self, bars):
-        self.bars_var.set(bars)
-        self._style_bar_buttons()
-        self.update_bpm_label()
-
-    def _style_bar_buttons(self):
-        for bars, btn in self.bar_buttons.items():
-            if bars == self.bars_var.get():
-                btn.config(bg=ORANGE, fg="white", activebackground=ORANGE, activeforeground="white")
-            else:
-                btn.config(bg=CREAM_DARK, fg=INK, activebackground=CREAM, activeforeground=INK)
+    # ---------- carregar / gravar ----------
 
     def load_file(self):
         path = filedialog.askopenfilename(
@@ -323,16 +286,12 @@ class LoopApp:
         try:
             data, sr = sf.read(path, always_2d=True, dtype="float32")
         except Exception as exc:
-            messagebox.showerror(
-                "Erro ao carregar áudio",
-                f"Não consegui ler este arquivo:\n{exc}",
-            )
+            messagebox.showerror("Erro ao carregar áudio", f"Não consegui ler este arquivo:\n{exc}")
             return
         name = path.replace("\\", "/").rsplit("/", 1)[-1]
-        self._use_audio_data(data, sr, f"{name}")
+        self._use_audio_data(data, sr, name)
 
     def _use_audio_data(self, data, sr, label):
-        self.stop()
         if data.ndim == 1:
             data = data.reshape(-1, 1)
         self.data = data
@@ -342,18 +301,13 @@ class LoopApp:
         self.duration = duration
         self.view_start = 0.0
         self.view_end = duration
-
         self.start_scale.config(to=duration)
         self.end_scale.config(to=duration)
         self.start_var.set(0.0)
         self.end_var.set(duration)
-
         self.info_label.config(text=f"{label} — {duration:.2f}s, {sr}Hz")
-
         self.compute_envelope()
         self.draw_waveform()
-        self.update_loop_buffer()
-        self.update_bpm_label()
 
     def toggle_record_pc(self):
         if self.recording:
@@ -362,7 +316,6 @@ class LoopApp:
             self._start_record_pc()
 
     def _start_record_pc(self):
-        self.stop()
         self._record_frames = []
         ok = self._start_record_pc_windows() if sys.platform == "win32" else self._start_record_pc_linux()
         if not ok:
@@ -430,9 +383,8 @@ class LoopApp:
                 messagebox.showwarning(
                     "Sem monitor encontrado",
                     "Não achei automaticamente um dispositivo 'monitor' (loopback) do PipeWire — "
-                    "gravando da entrada padrão (provavelmente microfone). Selecione manualmente o "
-                    "monitor da saída nas configurações de som do sistema se quiser capturar o "
-                    "que está tocando no PC.",
+                    "gravando da entrada padrão. Selecione manualmente o monitor da saída nas "
+                    "configurações de som se quiser capturar o que está tocando no PC.",
                 )
         except Exception as exc:
             messagebox.showerror("Erro ao gravar do PC", f"Não consegui abrir a captura do sistema:\n{exc}")
@@ -460,13 +412,18 @@ class LoopApp:
                 self._sd_record_stream.stop()
                 self._sd_record_stream.close()
                 self._sd_record_stream = None
-            data = np.concatenate(self._record_frames, axis=0) if self._record_frames else np.zeros((0, self._record_channels), dtype="float32")
+            data = (
+                np.concatenate(self._record_frames, axis=0)
+                if self._record_frames else np.zeros((0, self._record_channels), dtype="float32")
+            )
 
         self._record_frames = []
         if len(data) == 0:
             messagebox.showinfo("Nada gravado", "Não capturei áudio nenhum durante a gravação.")
             return
         self._use_audio_data(data, self._record_sr, "gravado do PC")
+
+    # ---------- waveform: envelope, grade, zoom, drag ----------
 
     def compute_envelope(self):
         width = self.canvas_width
@@ -532,7 +489,9 @@ class LoopApp:
         start_x = ((self.start_var.get() - self.view_start) / view_span) * self.canvas_width
         end_x = ((self.end_var.get() - self.view_start) / view_span) * self.canvas_width
         self.canvas.create_line(start_x, 0, start_x, self.canvas_height, fill=START_COLOR, width=2, tags="marker")
-        self.canvas.create_line(end_x, 0, end_x, self.canvas_height, fill=END_COLOR, width=2, tags="marker", dash=(4, 2))
+        self.canvas.create_line(
+            end_x, 0, end_x, self.canvas_height, fill=END_COLOR, width=2, tags="marker", dash=(4, 2),
+        )
         self.canvas.create_rectangle(
             start_x, 0, end_x, self.canvas_height, outline="", fill=WAVE_COLOR, stipple="gray12", tags="marker",
         )
@@ -571,60 +530,14 @@ class LoopApp:
             lo, hi = sorted((self.drag_anchor_sec, current_sec))
             self.start_var.set(lo)
             self.end_var.set(hi)
-        self.update_loop_buffer()
         self.draw_markers()
-        self.update_bpm_label()
 
     def _x_to_sec(self, x):
         x = min(max(x, 0), self.canvas_width)
         return self.view_start + (x / self.canvas_width) * (self.view_end - self.view_start)
 
     def on_bounds_change(self, _evt=None):
-        self.update_loop_buffer()
         self.draw_markers()
-        self.update_bpm_label()
-
-    def on_pitch_change(self, _value):
-        self.update_loop_buffer()
-
-    def update_bpm_label(self):
-        duration = self.end_var.get() - self.start_var.get()
-        if duration <= 0:
-            self.bpm_label.config(text="BPM: -")
-            return
-        bars = self.bars_var.get()
-        beats = bars * 4  # assume 4/4
-        bpm = beats * 60.0 / duration
-        self.bpm_label.config(text=f"BPM: {bpm:.1f}")
-
-    def sync_to_bpm(self):
-        duration = self.end_var.get() - self.start_var.get()
-        if duration <= 0:
-            return
-        try:
-            target_bpm = float(self.target_bpm_var.get())
-        except ValueError:
-            messagebox.showerror("BPM inválido", "Digite um número válido de BPM.")
-            return
-        if target_bpm <= 0:
-            return
-
-        bars = self.bars_var.get()
-        beats = bars * 4
-        current_bpm = beats * 60.0 / duration
-        rate = target_bpm / current_bpm
-        semitones = 12 * math.log2(rate)
-
-        if not (self.pitch_knob.from_ <= semitones <= self.pitch_knob.to):
-            self.sync_result_label.config(
-                text=f"fora do alcance do knob ({semitones:+.2f} st)", fg="#FF1744",
-            )
-            semitones = max(self.pitch_knob.from_, min(self.pitch_knob.to, semitones))
-        else:
-            self.sync_result_label.config(text=f"ok ({semitones:+.2f} st)", fg=INK)
-
-        self.pitch_knob.set(round(semitones, 1))
-        self.update_loop_buffer()
 
     def refresh_view(self):
         self.compute_envelope()
@@ -690,179 +603,192 @@ class LoopApp:
         direction = -1 if delta > 0 else 1
         self.pan_view(direction)
 
-    def update_loop_buffer(self):
+    # ---------- pads: atribuir, selecionar, disparar ----------
+
+    def preview_staging(self):
         if self.data is None:
             return
+        chunk = self._build_chunk_from_staging()
+        if chunk is None:
+            return
+        self.cmd_queue.put(("start", "__preview__", chunk, "oneshot"))
+
+    def _build_chunk_from_staging(self):
         start = int(self.start_var.get() * self.samplerate)
         end = int(self.end_var.get() * self.samplerate)
         if end - start < 100:
-            return
-
+            messagebox.showwarning("Corte inválido", "Marque um trecho maior na waveform.")
+            return None
         chunk = self.data[start:end].copy()
-
         semitones = self.pitch_knob.get()
         if semitones != 0:
             rate = 2 ** (semitones / 12)
-            chunk = self._resample_pitch(chunk, rate)
+            chunk = _resample_pitch(chunk, rate)
+        if self.samplerate != SR:
+            chunk = _resample_rate(chunk, self.samplerate, SR)
+        return _make_seamless_edges(chunk, SR)
 
-        self.loop_buffer = self._make_seamless_loop(chunk)
-        self.pos = 0
-
-    def _resample_pitch(self, chunk, rate):
-        n = len(chunk)
-        new_n = max(1, int(n / rate))
-        positions = np.linspace(0, n - 1, new_n)
-        src_idx = np.arange(n)
-        out = np.empty((new_n, chunk.shape[1]), dtype="float32")
-        for ch in range(chunk.shape[1]):
-            out[:, ch] = np.interp(positions, src_idx, chunk[:, ch])
-        return out
-
-    def _make_seamless_loop(self, chunk):
-        n = len(chunk)
-        fade_len = min(int(0.008 * self.samplerate), n // 4)
-        if fade_len < 8:
-            return chunk
-        tail = chunk[-fade_len:]
-        head = chunk[:fade_len]
-        ramp = np.linspace(0.0, 1.0, fade_len, dtype="float32").reshape(-1, 1)
-        blended = tail * (1.0 - ramp) + head * ramp
-        looped = chunk[:-fade_len].copy()
-        looped[:fade_len] = blended
-        return looped
-
-    def play_loop(self):
-        if self.loop_buffer is None or self.stream is not None:
+    def assign_to_selected_pad(self):
+        if self.data is None:
+            messagebox.showwarning("Nada carregado", "Carregue ou grave um áudio primeiro.")
             return
+        chunk = self._build_chunk_from_staging()
+        if chunk is None:
+            return
+        pad = self.pads[self.selected_pad_key]
+        pad.buffer = chunk.astype("float32")
+        pad.label = f"{self.start_var.get():.2f}-{self.end_var.get():.2f}s"
+        self._refresh_pad_buttons()
+        self._refresh_pad_label()
 
-        self.pos = 0
-        channels = self.loop_buffer.shape[1]
+    def select_pad(self, key):
+        self.selected_pad_key = key
+        pad = self.pads[key]
+        self._refresh_pad_buttons()
+        self._refresh_pad_label()
+        for mode, btn in self.mode_buttons.items():
+            active = mode == pad.mode
+            btn.config(bg=ORANGE if active else CREAM_DARK, fg="white" if active else INK)
+        self.pad_volume_knob.set(pad.volume)
 
-        def callback(outdata, frames, time_info, status):
-            buf = self.loop_buffer
+    def _refresh_pad_label(self):
+        pad = self.pads[self.selected_pad_key]
+        status = pad.label if pad.assigned else "vazio"
+        self.pad_label.config(text=f"Pad [{self.selected_pad_key.upper()}] — {status}")
+
+    def _refresh_pad_buttons(self):
+        for key, btn in self.pad_buttons.items():
+            pad = self.pads[key]
+            is_selected = key == self.selected_pad_key
+            btn.config(
+                text=f"{key.upper()}\n{pad.label if pad.assigned else '—'}",
+                bg=ORANGE if pad.assigned else CREAM_DARK,
+                fg="white" if pad.assigned else INK,
+                highlightthickness=3,
+                highlightbackground=(SELECT_COLOR if is_selected else INK),
+            )
+
+    def set_pad_mode(self, mode):
+        pad = self.pads[self.selected_pad_key]
+        pad.mode = mode
+        for m, btn in self.mode_buttons.items():
+            active = m == mode
+            btn.config(bg=ORANGE if active else CREAM_DARK, fg="white" if active else INK)
+
+    def on_pad_volume_change(self, value):
+        pad = self.pads[self.selected_pad_key]
+        pad.volume = value
+
+    def _on_pad_press(self, key):
+        self.select_pad(key)
+        self._trigger_key_on(key)
+
+    def _on_pad_release(self, key):
+        self._trigger_key_off(key)
+
+    def _on_keydown(self, event):
+        key = event.keysym.lower()
+        if key not in self.pads or key in self._pressed_keys:
+            return
+        self._pressed_keys.add(key)
+        self.select_pad(key)
+        self._trigger_key_on(key)
+
+    def _on_keyup(self, event):
+        key = event.keysym.lower()
+        if key not in self.pads:
+            return
+        self._pressed_keys.discard(key)
+        self._trigger_key_off(key)
+
+    def _trigger_key_on(self, key):
+        pad = self.pads[key]
+        if not pad.assigned:
+            return
+        buf = pad.buffer * pad.volume
+        if pad.mode == "hold":
+            self.cmd_queue.put(("start", key, buf, "hold"))
+            self._held_keys.add(key)
+        elif pad.mode == "loop":
+            if key in self._looping_keys:
+                self.cmd_queue.put(("stop", key))
+                self._looping_keys.discard(key)
+            else:
+                self.cmd_queue.put(("start", key, buf, "loop"))
+                self._looping_keys.add(key)
+        else:
+            self.cmd_queue.put(("start", key, buf, "oneshot"))
+
+    def _trigger_key_off(self, key):
+        pad = self.pads.get(key)
+        if pad is None:
+            return
+        if pad.mode == "hold" and key in self._held_keys:
+            self.cmd_queue.put(("stop", key))
+            self._held_keys.discard(key)
+
+    # ---------- motor de audio ----------
+
+    def _audio_callback(self, outdata, frames, time_info, status):
+        while True:
+            try:
+                cmd = self.cmd_queue.get_nowait()
+            except queue.Empty:
+                break
+            if cmd[0] == "start":
+                _, key, buf, mode = cmd
+                self.voices.append({"key": key, "mode": mode, "buf": buf, "pos": 0, "stopping": False})
+            elif cmd[0] == "stop":
+                _, key = cmd
+                for v in self.voices:
+                    if v["key"] == key and v["mode"] in ("hold", "loop") and not v["stopping"]:
+                        n = len(v["buf"])
+                        pos = v["pos"]
+                        fade_len = min(FADE_SAMPLES, n - pos)
+                        if fade_len > 0:
+                            tail = v["buf"][pos:pos + fade_len].copy()
+                            ramp = np.linspace(1.0, 0.0, fade_len, dtype="float32").reshape(-1, 1)
+                            tail *= ramp
+                            v["buf"] = np.concatenate([v["buf"][:pos], tail])
+                        v["stopping"] = True
+
+        out = np.zeros((frames, 2), dtype="float32")
+        still_alive = []
+        for v in self.voices:
+            buf = v["buf"]
             n = len(buf)
-            pos = self.pos
+            pos = v["pos"]
             idx = 0
+            keep = True
             while idx < frames:
                 take = min(n - pos, frames - idx)
-                outdata[idx:idx + take] = buf[pos:pos + take]
+                if take <= 0:
+                    if v["mode"] == "loop" and not v["stopping"]:
+                        pos = 0
+                        continue
+                    keep = False
+                    break
+                out[idx:idx + take] += buf[pos:pos + take]
                 idx += take
                 pos += take
                 if pos >= n:
-                    pos = 0
-            self.pos = pos
+                    if v["mode"] == "loop" and not v["stopping"]:
+                        pos = 0
+                    else:
+                        keep = False
+                        break
+            v["pos"] = pos
+            if keep:
+                still_alive.append(v)
+        self.voices = still_alive[-64:]
 
-        self.stream = sd.OutputStream(
-            samplerate=self.samplerate, channels=channels, dtype="float32", callback=callback,
-        )
-        self.stream.start()
-
-    def stop(self):
-        if self.stream is not None:
-            self.stream.stop()
-            self.stream.close()
-            self.stream = None
-
-    def export_wav(self):
-        if self.loop_buffer is None:
-            messagebox.showwarning("Nada pra exportar", "Carregue um áudio e marque um loop primeiro.")
-            return
-        path = filedialog.asksaveasfilename(
-            defaultextension=".wav",
-            filetypes=[("WAV", "*.wav")],
-            initialfile="loop.wav",
-        )
-        if not path:
-            return
-        try:
-            sf.write(path, self.loop_buffer, self.samplerate)
-        except Exception as exc:
-            messagebox.showerror("Erro ao exportar", f"Não consegui salvar o arquivo:\n{exc}")
-            return
-        messagebox.showinfo("Exportado", f"Loop salvo em:\n{path}")
-
-    def save_kit(self):
-        if self.data is None:
-            messagebox.showwarning("Nada pra salvar", "Carregue ou grave um áudio primeiro.")
-            return
-        path = filedialog.asksaveasfilename(
-            defaultextension=".json", filetypes=[("Kit JSON", "*.json")], initialfile="loop_kit.json",
-        )
-        if not path:
-            return
-        audio_path = os.path.splitext(path)[0] + "_audio.wav"
-        try:
-            sf.write(audio_path, self.data, self.samplerate)
-        except Exception as exc:
-            messagebox.showerror("Erro ao salvar", f"Não consegui salvar o áudio do kit:\n{exc}")
-            return
-
-        state = {
-            "version": 1,
-            "audio_file": os.path.basename(audio_path),
-            "start": self.start_var.get(),
-            "end": self.end_var.get(),
-            "pitch_semitones": self.pitch_knob.get(),
-            "bars": self.bars_var.get(),
-            "target_bpm": self.target_bpm_var.get(),
-        }
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(state, f, indent=2)
-        except Exception as exc:
-            messagebox.showerror("Erro ao salvar", f"Não consegui salvar o kit:\n{exc}")
-            return
-        messagebox.showinfo("Salvo", f"Kit salvo em:\n{path}")
-
-    def load_kit(self):
-        path = filedialog.askopenfilename(filetypes=[("Kit JSON", "*.json"), ("Todos", "*.*")])
-        if not path:
-            return
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                state = json.load(f)
-        except Exception as exc:
-            messagebox.showerror("Erro ao carregar", f"Não consegui ler o kit:\n{exc}")
-            return
-
-        audio_path = os.path.join(os.path.dirname(path), state.get("audio_file", ""))
-        try:
-            data, sr = sf.read(audio_path, always_2d=True, dtype="float32")
-        except Exception as exc:
-            messagebox.showerror(
-                "Erro ao carregar",
-                f"Não consegui ler o áudio do kit (esperado em {audio_path}):\n{exc}",
-            )
-            return
-
-        self._use_audio_data(data, sr, os.path.basename(audio_path))
-        self.start_var.set(state.get("start", 0.0))
-        self.end_var.set(state.get("end", self.duration))
-        self.pitch_knob.set(state.get("pitch_semitones", 0))
-        self.set_bars(state.get("bars", 4))
-        self.target_bpm_var.set(str(state.get("target_bpm", "90")))
-        self.update_loop_buffer()
-        self.draw_markers()
-        self.update_bpm_label()
-        messagebox.showinfo("Carregado", f"Kit carregado de:\n{path}")
-
-    def _update_playhead(self):
-        self.canvas.delete("playhead")
-        if self.stream is not None and self.loop_buffer is not None and len(self.loop_buffer) > 0:
-            fraction = self.pos / len(self.loop_buffer)
-            t = self.start_var.get() + fraction * (self.end_var.get() - self.start_var.get())
-            view_span = self.view_end - self.view_start
-            if view_span > 0 and self.view_start <= t <= self.view_end:
-                x = ((t - self.view_start) / view_span) * self.canvas_width
-                self.canvas.create_line(
-                    x, 0, x, self.canvas_height, fill=PLAYHEAD_COLOR, width=2, tags="playhead",
-                )
-        self.root.after(40, self._update_playhead)
+        np.clip(out, -1.0, 1.0, out=out)
+        outdata[:] = out
 
 
 def main():
     root = tk.Tk()
-    LoopApp(root)
+    PadSamplerApp(root)
     root.mainloop()
 
 
