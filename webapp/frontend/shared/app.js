@@ -161,15 +161,8 @@ const LifeOS = (() => {
   }
 
   const MODULES = [
+    { key: 'voltar', label: 'Voltar a ter orgulho de mim', href: '/voltar/voltar.html' },
     { key: 'musica', label: 'Música', href: '/musica/estatisticas.html' },
-    { key: 'livros', label: 'Livros', href: '/livros/estante.html' },
-    { key: 'habitos', label: 'Hábitos', href: '/habitos/habitos.html' },
-    { key: 'beatforge', label: 'Beat Forge', href: '/beatforge/beatforge.html' },
-    { key: 'humor', label: 'Humor', href: '/humor/humor.html' },
-    { key: 'timeline', label: 'Timeline', href: '/timeline/timeline.html' },
-    { key: 'analytics', label: 'Analytics', href: '/analytics/analytics.html' },
-    { key: 'financeiro', label: 'Financeiro', href: '/financeiro/gastos.html' },
-    { key: 'revisao', label: 'Revisão Semanal', href: '/revisao/revisao.html' },
   ];
 
   /* Transforma o primeiro ".id" do .topbar (o rótulo "LIFEOS · MÓDULO X")

@@ -24,6 +24,7 @@ from livros import repo as livros_repo
 from momentos import repo as momentos_repo
 from musica import repo as musica_repo
 from projetos import repo as projetos_repo
+from voltar import repo as voltar_repo
 
 STATUS_LEITURA_VERBO = {
     "Lendo": "Começou a ler",
@@ -168,6 +169,25 @@ def eventos_momentos(data_inicio: str, data_fim: str) -> list[dict]:
     ]
 
 
+def eventos_voltar(data_inicio: str, data_fim: str) -> list[dict]:
+    registros = voltar_repo.listar_registros(data_inicio, data_fim)
+    if registros.empty:
+        return []
+    eventos = []
+    for _, r in registros.iterrows():
+        if r["coisa_boa_texto"]:
+            eventos.append({
+                "data": r["data"], "hora": "", "modulo": "voltar", "icone": "💛",
+                "texto": f"Coisa boa do dia: {r['coisa_boa_texto']}", "href": "/voltar/voltar.html",
+            })
+        else:
+            eventos.append({
+                "data": r["data"], "hora": "", "modulo": "voltar", "icone": "🌅",
+                "texto": "Registrou o dia em Voltar a ter orgulho de mim", "href": "/voltar/voltar.html",
+            })
+    return eventos
+
+
 def _seguro(fn, data_inicio: str, data_fim: str) -> list[dict]:
     """Chama uma eventos_* isolando falha de módulo (ex.: TURSO_<MODULO>_*
     ainda não configurado) — um módulo sem credencial vira lista vazia,
@@ -187,6 +207,7 @@ def timeline(data_inicio: str, data_fim: str) -> list[dict]:
         *_seguro(eventos_musica, data_inicio, data_fim),
         *_seguro(eventos_projetos, data_inicio, data_fim),
         *_seguro(eventos_momentos, data_inicio, data_fim),
+        *_seguro(eventos_voltar, data_inicio, data_fim),
     ]
     eventos.sort(key=lambda e: (e["data"], e["hora"]), reverse=True)
     return eventos

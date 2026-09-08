@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
 <title>Álbuns · Música · lifeOS</title>
-<link rel="stylesheet" href="/static/tokens.css" />
-<link rel="stylesheet" href="/static/effects.css" />
+<link rel="stylesheet" href="/static/tokens.css?v=20260908" />
+<link rel="stylesheet" href="/static/effects.css?v=20260908" />
 <style>
 .album-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:1rem; margin-top:1rem; align-items:stretch; }
 .album-card{ background:var(--panel-raised); border:1px solid var(--hair); border-radius:var(--radius); overflow:hidden; transition:border-color .18s ease; display:flex; flex-direction:column; height:100%; }
 .album-card:hover{ border-color:var(--hair-bright); }
 .album-cover-wrap{ position:relative; flex:none; }
-.album-cover-wrap .card-cover{ display:block; }
+.album-cover-wrap .card-cover{ display:block; border-radius:0; }
 .album-fav{ position:absolute; top:.4rem; right:.4rem; width:26px; height:26px; display:flex; align-items:center; justify-content:center;
   background:rgba(11,13,9,.7); border:1px solid var(--hair-bright); border-radius:2px; cursor:pointer; font-size:1rem; line-height:1; color:var(--ink-dim); backdrop-filter:blur(2px); }
 .album-fav.on{ color:var(--accent-bright); border-color:var(--accent); }
@@ -66,7 +66,7 @@
 
   <div class="hero boot-flicker">
     <div class="eyebrow">álbuns — dados reais</div>
-    <h1 class="title">$ albuns<span class="cursor"></span></h1>
+    <h1 class="title">Álbuns</h1>
     <p>Catálogo dos álbuns cadastrados — favoritar, editar e excluir gravam direto no banco.</p>
   </div>
 
@@ -183,7 +183,7 @@ let modalAlbumId = null;
 let modalSpotifyId = null;
 
 function placeholderCapa() {
-  return 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72"><rect width="72" height="72" fill="#191C13"/></svg>`);
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72"><rect width="72" height="72" fill="#2E271E"/></svg>`);
 }
 
 function abrirModal(a) {

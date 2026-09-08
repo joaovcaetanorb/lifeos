@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
 <title>Estatísticas · Música · lifeOS</title>
-<link rel="stylesheet" href="/static/tokens.css" />
-<link rel="stylesheet" href="/static/effects.css" />
+<link rel="stylesheet" href="/static/tokens.css?v=20260908" />
+<link rel="stylesheet" href="/static/effects.css?v=20260908" />
 </head>
 <body>
 
@@ -21,7 +21,7 @@
 
   <div class="hero boot-flicker">
     <div class="eyebrow">estatísticas — dados reais</div>
-    <h1 class="title">$ estatísticas<span class="cursor"></span></h1>
+    <h1 class="title">Estatísticas</h1>
     <p>Mesmos números do módulo Streamlit, servidos por um backend próprio (FastAPI) direto do banco de verdade.</p>
   </div>
 
@@ -394,7 +394,7 @@ function renderLollipopV(svgId, ttId, tblId, cats, vals, formatVal) {
   document.querySelector(`#${tblId} tbody`).innerHTML = cats.map((c, i) => `<tr><td>${c}</td><td>${formatVal(vals[i])}</td></tr>`).join('');
 }
 
-const DONUT_COLORS = ['#2E9E63', '#7A63C9', '#B87A28', '#2E93B8', '#C25578'];
+const DONUT_COLORS = ['#DD8449', '#7A63C9', '#3E9A6B', '#2E93B8', '#C25578'];
 function renderDonut(svgId, ttId, tblId, legendId, items) {
   const svg = document.getElementById(svgId), tt = document.getElementById(ttId), legend = document.getElementById(legendId);
   const total = items.reduce((a, b) => a + b[1], 0);

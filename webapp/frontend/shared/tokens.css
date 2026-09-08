@@ -1,7 +1,10 @@
-/* Design tokens da identidade "ledger/terminal" do LifeOS — mesma paleta e
-   tipografia usadas no Streamlit (ver modules/*/ui.py), extraídas aqui pra
-   serem compartilhadas por todos os módulos do frontend novo (fora do
-   Streamlit). Fontes servidas como arquivo estático de verdade (não mais
+/* Design tokens do LifeOS. Paleta quente e calma (2026-09-08) — trocada a
+   pedido do usuário depois que gostou muito da estética criada pro módulo
+   "voltar" (terracota sobre marrom escuro, cantos redondos, sem efeitos
+   "hacker") e pediu pra aplicar em tudo. Antes disso era uma estética
+   "ledger/terminal" verde-sobre-preto (mesma do Streamlit, ver
+   modules/*/ui.py) — substituída por completo, não é mais usada em
+   lugar nenhum. Fontes servidas como arquivo estático de verdade (não mais
    base64 embutido — esse truque só existia por causa do CSP do preview em
    Artifact; um servidor próprio não tem essa restrição). */
 
@@ -13,23 +16,24 @@
 
 :root{
   color-scheme: dark;
-  --bg:#0B0D09;
-  --panel:#14170F;
-  --panel-raised:#191C13;
-  --hair:#262920;
-  --hair-bright:#3a4030;
-  --ink:#E9E7DC;
-  --ink-muted:#8B8A82;
-  --ink-dim:#57564f;
-  --accent:#2E9E63;
-  --accent-bright:#4ADE94;
-  --accent-soft:rgba(46,158,99,.14);
-  --accent-glow:rgba(46,158,99,.5);
+  --bg:#1C1712;
+  --panel:#26201A;
+  --panel-raised:#2E271E;
+  --hair:#3A3026;
+  --hair-bright:#514434;
+  --ink:#F3E9DC;
+  --ink-muted:#B7A794;
+  --ink-dim:#83725F;
+  --accent:#DD8449;
+  --accent-bright:#F3A96E;
+  --accent-soft:rgba(221,132,73,.16);
+  --accent-glow:rgba(221,132,73,.4);
   --neutral:#c3c2b7;
   --danger:#C25578;
   --font-data:'JBM', ui-monospace, 'JetBrains Mono', 'Courier New', monospace;
   --font-label:'CP', ui-monospace, 'Courier Prime', monospace;
-  --radius:3px;
+  --radius:14px;
+  --radius-sm:10px;
 }
 
 *{ box-sizing:border-box; }
@@ -61,16 +65,14 @@ h1.title{
   font-family:var(--font-data); font-weight:700; font-size:clamp(1.7rem,4vw,2.5rem);
   margin:0; letter-spacing:-.01em; text-wrap:balance;
 }
-h1.title .cursor{ display:inline-block; width:.5em; height:.9em; background:var(--accent); margin-left:.15em; transform:translateY(.12em); }
-@media (prefers-reduced-motion: no-preference){ h1.title .cursor{ animation:blink .75s steps(1) infinite; } }
-@keyframes blink{ 0%,49%{ opacity:1; } 50%,100%{ opacity:0; } }
+h1.title .cursor{ display:none; }
 .hero p{ color:var(--ink-muted); max-width:58ch; margin:.6rem 0 0; }
 
 /* navegação entre páginas do módulo */
 .modnav{ display:flex; gap:.4rem; flex-wrap:wrap; margin:1.2rem 0 1.6rem; }
 .modnav a{
   text-decoration:none; font-family:var(--font-label); font-size:.72rem; letter-spacing:.06em; text-transform:uppercase;
-  color:var(--ink-muted); border:1px solid var(--hair); padding:.4rem .8rem; border-radius:2px;
+  color:var(--ink-muted); border:1px solid var(--hair); padding:.4rem .8rem; border-radius:var(--radius-sm);
   transition:border-color .18s ease, color .18s ease;
 }
 .modnav a:hover{ border-color:var(--hair-bright); color:var(--ink); }

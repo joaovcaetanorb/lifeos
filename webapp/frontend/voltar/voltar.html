@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+<title>Voltar a ter orgulho de mim · lifeOS</title>
+<link rel="stylesheet" href="/static/tokens.css?v=20260908" />
+<link rel="stylesheet" href="/static/effects.css?v=20260908" />
+<style>
+/* A paleta calma/quente e a remoção dos efeitos "hacker" (scanlines,
+   vignette, grain, glow, cursor piscando) já são o padrão global agora
+   (ver tokens.css/effects.css) — só o que é específico desta página
+   fica aqui. */
+.wrap{ max-width:820px; }
+.hero p{ max-width:64ch; }
+
+.fase-linha{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-top:.9rem; font-size:.86rem; color:var(--ink-muted); }
+.fase-tag{ font-family:var(--font-label); font-size:.68rem; letter-spacing:.06em; text-transform:uppercase; color:var(--accent-bright); background:var(--accent-soft); border:1px solid var(--hair-bright); padding:.3rem .7rem; border-radius:20px; }
+
+.hoje-card{ border-color:var(--hair-bright); }
+.hoje-item{ display:flex; gap:.7rem; align-items:flex-start; padding:.55rem 0; }
+.hoje-item:not(:last-child){ border-bottom:1px dashed var(--hair); }
+.hoje-item .ic{ font-size:1.3rem; flex:none; line-height:1.3; }
+.hoje-item .tx b{ display:block; font-family:var(--font-label); font-size:.66rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:.15rem; }
+.hoje-item .tx span{ font-size:.95rem; }
+
+.toggle-row{ display:flex; gap:.4rem; flex-wrap:wrap; }
+.toggle-btn{ background:var(--panel-raised); border:1px solid var(--hair); color:var(--ink-muted); padding:.5rem .9rem; border-radius:10px; cursor:pointer; font-size:.86rem; transition:all .15s ease; }
+.toggle-btn:hover{ border-color:var(--hair-bright); color:var(--ink); }
+.toggle-btn.active{ border-color:var(--accent); background:var(--accent-soft); color:var(--accent-bright); font-weight:600; }
+
+.painel-grid{ display:grid; grid-template-columns:1fr 1fr; gap:1.1rem 1.6rem; }
+@media (max-width:640px){ .painel-grid{ grid-template-columns:1fr; } }
+.field-hint{ margin:.4rem 0 0; font-size:.76rem; color:var(--ink-dim); line-height:1.4; }
+.field-eyebrow{ font-family:var(--font-label); font-size:.66rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:.3rem; }
+.field-question{ font-size:.95rem; color:var(--ink); margin-bottom:.55rem; font-weight:500; }
+
+.chip-row{ display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.55rem; }
+.chip{ font-size:.78rem; padding:.35rem .7rem; border-radius:20px; border:1px solid var(--hair); color:var(--ink-muted); cursor:pointer; background:var(--panel-raised); transition:all .15s ease; }
+.chip:hover{ border-color:var(--hair-bright); color:var(--ink); }
+.chip.selected{ border-color:var(--accent); background:var(--accent-soft); color:var(--accent-bright); }
+
+.badge-lista{ display:flex; flex-direction:column; gap:.5rem; }
+.badge-item{ display:flex; gap:.6rem; align-items:center; padding:.65rem .9rem; border:1px solid var(--hair-bright); border-radius:12px; background:var(--accent-soft); font-size:.9rem; }
+.badge-item .ic{ font-size:1.1rem; }
+
+.dia-row{ padding:.75rem 0; border-bottom:1px solid var(--hair); cursor:pointer; transition:opacity .15s ease; }
+.dia-row:last-child{ border-bottom:none; }
+.dia-row:hover{ opacity:.8; }
+.dia-row .data{ font-family:var(--font-label); font-size:.7rem; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:.3rem; }
+.dia-row .resumo{ display:flex; flex-wrap:wrap; gap:.4rem .6rem; font-size:.88rem; }
+.dia-row .resumo span{ white-space:nowrap; }
+.dia-row .coisa-boa{ margin-top:.3rem; font-size:.86rem; color:var(--ink-muted); }
+
+.reduzir-nota{ margin-top:.6rem; font-size:.84rem; color:var(--ink-muted); background:var(--panel-raised); border:1px dashed var(--hair-bright); padding:.65rem .8rem; border-radius:12px; }
+
+.frase-momento{ font-size:1.02rem; color:var(--ink); margin:0 0 1rem; padding-bottom:.9rem; border-bottom:1px dashed var(--hair); }
+.coisa-boa-convite{ margin-top:.3rem; font-size:.82rem; color:var(--ink-muted); }
+.lembrete-descanso{ margin-top:1rem; font-size:.8rem; color:var(--ink-muted); line-height:1.5; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="id"><span class="led-dot"></span> LIFEOS · VOLTAR A TER ORGULHO DE MIM</div>
+    <div class="id"><span class="clock" id="clock">--:--:--</span></div>
+  </div>
+
+  <div class="hero">
+    <div class="eyebrow">todo dia é uma chance de voltar</div>
+    <h1 class="title">Voltar a ter orgulho de mim</h1>
+    <p>Pequenas promessas cumpridas valem mais que grandes planos abandonados. Se um dia não rolar, tudo bem — amanhã dá pra voltar. Não tem streak, não tem nota, não tem cobrança.</p>
+    <div class="fase-linha">
+      <span class="fase-tag" id="faseTag">carregando…</span>
+      <span id="faseFoco"></span>
+    </div>
+  </div>
+
+  <section class="module hoje-card" data-reveal style="margin-top:1.3rem;">
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">hoje</div><h3>O que eu faço hoje?</h3></div></div>
+    <p class="frase-momento" id="fraseMomento"></p>
+    <div id="hojeConteudo">
+      <p class="empty-state">Carregando…</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="btnSemVontade">hoje eu tô sem vontade</button>
+      <button class="btn" id="btnOutraCoisaBoa">sugerir outra coisa boa</button>
+    </div>
+    <div class="reduzir-nota" id="reduzirNota" hidden></div>
+  </section>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">painel diário</div><h3>🌱 Como cuidei de mim hoje?</h3></div></div>
+    <div class="field" style="max-width:220px;margin-bottom:1.4rem;">
+      <label>Dia</label>
+      <input type="date" id="frData" />
+    </div>
+    <div class="painel-grid">
+      <div class="field">
+        <div class="field-eyebrow">😴 Sono</div>
+        <div class="field-question">Que horas fui dormir na noite anterior?</div>
+        <input type="time" id="frHoraDormir" />
+        <p class="field-hint">Meta: tentar estar na cama até 23h. Não precisa acertar sempre — é uma direção, não uma cobrança.</p>
+      </div>
+      <div class="field">
+        <div class="field-eyebrow">💧 Água</div>
+        <div class="field-question">Bebi água ao longo do dia?</div>
+        <div class="toggle-row" data-campo="agua" data-tipo="bool"><button class="toggle-btn" data-val="1">sim</button><button class="toggle-btn" data-val="0">não</button></div>
+        <p class="field-hint">Não precisa contar litros. A ideia é simplesmente lembrar de beber água.</p>
+      </div>
+      <div class="field">
+        <div class="field-eyebrow">🏋️ Academia</div>
+        <div class="field-question">Fui à academia?</div>
+        <div class="toggle-row" data-campo="academia" data-tipo="str"><button class="toggle-btn" data-val="sim">sim</button><button class="toggle-btn" data-val="nao">não</button><button class="toggle-btn" data-val="nao_era_dia">não era dia</button></div>
+        <p class="field-hint">Segunda, quarta e sexta. Só ir já conta. O treino não precisa ser perfeito.</p>
+      </div>
+      <div class="field">
+        <div class="field-eyebrow">📖 Leitura</div>
+        <div class="field-question">Li alguma coisa?</div>
+        <div class="toggle-row" data-campo="leitura" data-tipo="bool"><button class="toggle-btn" data-val="1">sim</button><button class="toggle-btn" data-val="0">não</button></div>
+        <p class="field-hint">15 minutos já contam. Nem precisa ser mais.</p>
+      </div>
+      <div class="field">
+        <div class="field-eyebrow">🏠 Responsabilidades</div>
+        <div class="field-question">Cuidei de alguma responsabilidade?</div>
+        <div class="toggle-row" data-campo="responsabilidades" data-tipo="bool"><button class="toggle-btn" data-val="1">sim</button><button class="toggle-btn" data-val="0">não</button></div>
+        <p class="field-hint">Uma tarefa de casa ou uma pendência que estava acumulando já conta.</p>
+      </div>
+      <div class="field">
+        <div class="field-eyebrow">💰 Dinheiro</div>
+        <div class="field-question">Como foram meus gastos hoje?</div>
+        <div class="toggle-row" data-campo="dinheiro" data-tipo="str"><button class="toggle-btn" data-val="dentro">dentro do planejado</button><button class="toggle-btn" data-val="fora">fora do planejado</button></div>
+        <p class="field-hint">Registrei meus gastos e fiquei dentro do limite que eu mesmo defini?</p>
+      </div>
+      <div class="field">
+        <div class="field-eyebrow">🌿 Maconha</div>
+        <div class="field-question">Como foi hoje?</div>
+        <div class="toggle-row" data-campo="maconha" data-tipo="str"><button class="toggle-btn" data-val="nao_usei">não usei</button><button class="toggle-btn" data-val="usei_cuidei">usei, cuidei antes</button><button class="toggle-btn" data-val="usei_sem_cuidar">usei antes de cuidar</button></div>
+        <p class="field-hint">Não é sobre ser perfeito ou fracassar — é sobre perceber como estou usando.</p>
+      </div>
+      <div class="field">
+        <div class="field-eyebrow">🚬 Cigarros</div>
+        <div class="field-question">Quantos fumei hoje?</div>
+        <input type="number" id="frCigarros" min="0" placeholder="quantos hoje" />
+        <p class="field-hint">Meta: atrasar progressivamente o primeiro cigarro do dia. Não preciso zerar de uma vez.</p>
+      </div>
+    </div>
+    <div class="field" style="margin-top:1.4rem;">
+      <div class="field-eyebrow">❤️ Uma coisa boa para mim</div>
+      <div class="field-question">Fiz ou vou fazer alguma coisa que me faz bem hoje?</div>
+      <input type="text" id="frCoisaBoa" placeholder="pode escolher uma ou escrever outra" />
+      <div class="chip-row" id="chipsCoisaBoa"></div>
+      <p class="lembrete-descanso">Lazer não precisa ser merecido depois de um dia produtivo. Só não pode virar a forma de fugir da sua vida. Fazer um beat, jogar, descansar deitado: se não é fuga, já é um dia válido.</p>
+    </div>
+    <div class="btn-row"><button class="btn btn-primary" id="btnSalvar">guardar o dia</button></div>
+  </section>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">quem você está se tornando</div><h3>Identidade</h3></div></div>
+    <div id="badgesLista"><p class="empty-state">Carregando…</p></div>
+  </section>
+
+  <section class="module" data-reveal style="margin-top:1rem;">
+    <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">histórico</div><h3>Últimos dias registrados</h3></div></div>
+    <p id="semanaTxt" style="color:var(--ink-muted);font-size:.86rem;margin:0 0 .8rem;"></p>
+    <div id="historicoLista"><p class="empty-state">Carregando…</p></div>
+  </section>
+
+  <footer><span>backend FastAPI próprio · escreve no banco de verdade</span><span id="genTime"></span></footer>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+(function(){
+"use strict";
+const L = LifeOS;
+
+const CATEGORIAS = {
+  album: "🎵 Ouvir um álbum inteiro", basquete: "🏀 Jogar basquete", jogo: "🎮 Jogar sem culpa",
+  leitura: "📖 Ler algumas páginas", caminhada: "🚶 Dar uma caminhada", amor: "❤️ Fazer algo legal com quem você gosta",
+  quarto: "🧹 Arrumar seu quarto", beat: "🎹 Fazer um beat", cafe: "☕ Sair para tomar um café",
+  unhas: "🧼 Cuidar das unhas", dormir: "😴 Dormir mais cedo", filme: "🎬 Assistir um filme",
+  descansar: "🛋️ Simplesmente descansar", cozinhar: "🍳 Cozinhar algo gostoso",
+  amigo: "📱 Mandar mensagem pra um amigo", familia: "👨‍👩‍👧 Passar um tempo com a família",
+};
+const ICONE = { sono: "😴", agua: "💧", academia: "🏋️", leitura: "📖", responsabilidades: "✅", cigarros: "🚬", dinheiro: "💰", maconha: "🌿" };
+
+let form = {}; // campo -> valor selecionado no painel do dia
+
+function montarToggles() {
+  document.querySelectorAll('.toggle-row').forEach(row => {
+    const campo = row.dataset.campo;
+    row.querySelectorAll('.toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const jaAtivo = btn.classList.contains('active');
+        row.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+        if (jaAtivo) { delete form[campo]; return; }
+        btn.classList.add('active');
+        form[campo] = row.dataset.tipo === 'bool' ? (btn.dataset.val === '1') : btn.dataset.val;
+      });
+    });
+  });
+}
+
+function limparForm() {
+  form = {};
+  document.querySelectorAll('.toggle-btn.active').forEach(b => b.classList.remove('active'));
+  document.getElementById('frHoraDormir').value = '';
+  document.getElementById('frCigarros').value = '';
+  document.getElementById('frCoisaBoa').value = '';
+  document.querySelectorAll('#chipsCoisaBoa .chip.selected').forEach(c => c.classList.remove('selected'));
+}
+
+function carregarDiaNoForm(r) {
+  limparForm();
+  document.getElementById('frData').value = r.data;
+  document.getElementById('frHoraDormir').value = r.hora_dormir || '';
+  ['agua', 'leitura', 'responsabilidades'].forEach(campo => {
+    if (r[campo] === null || r[campo] === undefined) return;
+    const val = r[campo] ? '1' : '0';
+    const btn = document.querySelector(`.toggle-row[data-campo="${campo}"] .toggle-btn[data-val="${val}"]`);
+    if (btn) { btn.classList.add('active'); form[campo] = !!r[campo]; }
+  });
+  ['academia', 'dinheiro', 'maconha'].forEach(campo => {
+    if (!r[campo]) return;
+    const btn = document.querySelector(`.toggle-row[data-campo="${campo}"] .toggle-btn[data-val="${r[campo]}"]`);
+    if (btn) { btn.classList.add('active'); form[campo] = r[campo]; }
+  });
+  if (r.cigarros !== null && r.cigarros !== undefined) document.getElementById('frCigarros').value = r.cigarros;
+  if (r.coisa_boa_texto) document.getElementById('frCoisaBoa').value = r.coisa_boa_texto;
+  if (r.coisa_boa_categoria) {
+    const chip = document.querySelector(`#chipsCoisaBoa .chip[data-cat="${r.coisa_boa_categoria}"]`);
+    if (chip) chip.classList.add('selected');
+  }
+  window.scrollTo({ top: document.querySelector('.painel-grid').closest('.module').offsetTop - 20, behavior: 'smooth' });
+}
+
+function montarChipsCoisaBoa() {
+  const wrap = document.getElementById('chipsCoisaBoa');
+  wrap.innerHTML = Object.entries(CATEGORIAS).map(([chave, label]) => `<button type="button" class="chip" data-cat="${chave}">${label}</button>`).join('');
+  wrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      wrap.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      document.getElementById('frCoisaBoa').value = CATEGORIAS[chip.dataset.cat].replace(/^\S+\s/, '');
+    });
+  });
+}
+
+async function carregarPainel() {
+  const p = await L.api('/api/voltar/painel');
+  document.getElementById('faseTag').textContent = `fase ${p.fase.numero} · ${p.fase.nome} · dia ${p.fase.dia_do_projeto}`;
+  document.getElementById('faseFoco').textContent = p.fase.foco;
+  document.getElementById('fraseMomento').textContent = p.frase;
+
+  document.getElementById('hojeConteudo').innerHTML = `
+    <div class="hoje-item"><div class="ic">🎯</div><div class="tx"><b>prioridade</b><span>${p.sugestao.prioridade}</span></div></div>
+    <div class="hoje-item"><div class="ic">🌱</div><div class="tx"><b>pequeno</b><span>${p.sugestao.pequeno}</span></div></div>
+    <div class="hoje-item"><div class="ic">❤️</div><div class="tx"><b>o que seria legal fazer hoje?</b><span id="coisaBoaSugerida">${p.sugestao.coisa_boa}</span><div class="coisa-boa-convite">Você merece fazer algo que te faça bem — escolhe essa, outra ou escreve a sua aí embaixo.</div></div></div>
+  `;
+  document.getElementById('reduzirNota').hidden = true;
+
+  if (!document.getElementById('frData').value) {
+    document.getElementById('frData').value = p.hoje;
+    if (p.registro_hoje) carregarDiaNoForm(p.registro_hoje);
+  }
+
+  const badgesEl = document.getElementById('badgesLista');
+  badgesEl.innerHTML = p.badges.length
+    ? `<div class="badge-lista">${p.badges.map(b => `<div class="badge-item"><span class="ic">🌟</span>${b}</div>`).join('')}</div>`
+    : '<p class="empty-state">Ainda não desbloqueou nenhuma — vai aparecendo aos poucos, sem pressa.</p>';
+
+  document.getElementById('semanaTxt').textContent =
+    `Essa semana você já apareceu ${p.semana.registrados} de ${p.semana.total} dia(s). Isso conta.`;
+}
+
+document.getElementById('btnSemVontade').addEventListener('click', () => {
+  const el = document.getElementById('reduzirNota');
+  const pequeno = document.querySelector('#hojeConteudo .hoje-item:nth-child(2) span').textContent;
+  el.textContent = `Então hoje não precisa ser o dia perfeito. Só isso já tá valendo: ${pequeno.toLowerCase()}`;
+  el.hidden = false;
+});
+
+document.getElementById('btnOutraCoisaBoa').addEventListener('click', () => {
+  const chaves = Object.keys(CATEGORIAS);
+  const chave = chaves[Math.floor(Math.random() * chaves.length)];
+  document.getElementById('coisaBoaSugerida').textContent = CATEGORIAS[chave];
+});
+
+document.getElementById('btnSalvar').addEventListener('click', async () => {
+  const btn = document.getElementById('btnSalvar');
+  const data = document.getElementById('frData').value;
+  if (!data) { L.toast('Escolhe o dia primeiro.', true); return; }
+  const cigarrosVal = document.getElementById('frCigarros').value;
+  const chipSelecionado = document.querySelector('#chipsCoisaBoa .chip.selected');
+  const body = {
+    data,
+    hora_dormir: document.getElementById('frHoraDormir').value || null,
+    agua: form.agua ?? null,
+    academia: form.academia ?? null,
+    leitura: form.leitura ?? null,
+    responsabilidades: form.responsabilidades ?? null,
+    dinheiro: form.dinheiro ?? null,
+    maconha: form.maconha ?? null,
+    cigarros: cigarrosVal === '' ? null : parseInt(cigarrosVal, 10),
+    coisa_boa_texto: document.getElementById('frCoisaBoa').value.trim(),
+    coisa_boa_categoria: chipSelecionado ? chipSelecionado.dataset.cat : null,
+  };
+  btn.disabled = true;
+  try {
+    await L.api('/api/voltar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    L.toast('Dia guardado. Isso já conta.');
+    carregarPainel();
+    carregarHistorico();
+  } catch (e) { L.toast(e.message, true); } finally { btn.disabled = false; }
+});
+
+function resumoDia(r) {
+  const partes = [];
+  if (r.hora_dormir) partes.push(`${ICONE.sono} dormiu às ${r.hora_dormir}`);
+  if (r.agua) partes.push(`${ICONE.agua} água`);
+  if (r.academia === 'sim') partes.push(`${ICONE.academia} academia`);
+  if (r.leitura) partes.push(`${ICONE.leitura} leu`);
+  if (r.responsabilidades) partes.push(`${ICONE.responsabilidades} responsabilidade`);
+  if (r.cigarros !== null && r.cigarros !== undefined) partes.push(`${ICONE.cigarros} ${r.cigarros}`);
+  if (r.dinheiro) partes.push(`${ICONE.dinheiro} ${r.dinheiro === 'dentro' ? 'dentro do planejado' : 'fora do planejado'}`);
+  if (r.maconha === 'usei_cuidei') partes.push(`${ICONE.maconha} usei, obrigações em dia`);
+  else if (r.maconha === 'usei_sem_cuidar') partes.push(`${ICONE.maconha} usei antes de cuidar`);
+  return partes;
+}
+
+async function carregarHistorico() {
+  const lista = document.getElementById('historicoLista');
+  const registros = await L.api('/api/voltar/registros?limite=30');
+  if (!registros.length) { lista.innerHTML = '<p class="empty-state">Nenhum dia registrado ainda — o de hoje pode ser o primeiro.</p>'; return; }
+  lista.innerHTML = registros.map(r => `
+    <div class="dia-row" data-data="${r.data}">
+      <div class="data">${r.data.split('-').reverse().join('/')}</div>
+      <div class="resumo">${resumoDia(r).map(p => `<span>${p}</span>`).join('') || '<span style="color:var(--ink-dim);">dia registrado</span>'}</div>
+      ${r.coisa_boa_texto ? `<div class="coisa-boa">❤️ ${r.coisa_boa_texto}</div>` : ''}
+    </div>
+  `).join('');
+  lista.querySelectorAll('.dia-row').forEach(row => {
+    const r = registros.find(x => x.data === row.dataset.data);
+    row.addEventListener('click', () => carregarDiaNoForm(r));
+  });
+}
+
+montarToggles();
+montarChipsCoisaBoa();
+L.initReveal();
+L.initClock();
+L.initModuleSwitcher('voltar');
+document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
+
+(async function boot() {
+  await carregarPainel();
+  carregarHistorico();
+})();
+})();
+</script>
+</body>
+</html>
