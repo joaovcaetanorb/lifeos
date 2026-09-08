@@ -391,7 +391,11 @@ async function salvarAgora(afirmativo) {
     L.toast(afirmativo ? 'Dia guardado. Isso já conta.' : '✓ salvo');
     atualizarStatusSalvo(salvo, data);
     carregarHistorico();
-    if (afirmativo && data === hojeIso) carregarPainel();
+    // sempre reatualiza o painel (não só no botão manual) — senão a linha
+    // "essa semana você já apareceu X de 7" e as badges de identidade
+    // ficam presas no valor de quando a página abriu, mesmo depois de
+    // autosalvar algo novo.
+    if (data === hojeIso) carregarPainel();
   } catch (e) {
     L.toast(e.message, true);
   }
@@ -404,7 +408,7 @@ document.getElementById('frCoisaBoa').addEventListener('blur', () => salvarAgora
 
 function resumoDia(r) {
   const partes = [];
-  if (r.hora_dormir) partes.push(`${ICONE.sono} dormiu às ${r.hora_dormir}`);
+  if (r.hora_dormir) partes.push(`${ICONE.sono} foi dormir (noite anterior) às ${r.hora_dormir}`);
   if (r.agua) partes.push(`${ICONE.agua} água`);
   if (r.academia === 'sim') partes.push(`${ICONE.academia} academia`);
   if (r.leitura) partes.push(`${ICONE.leitura} leu`);
