@@ -2,31 +2,49 @@
 (upsert por `data`, mesmo padrão de webapp/revisao/repo.py::upsert_revisao —
 uma semana lá, um dia aqui)."""
 
+import re
+import unicodedata
 from datetime import date, datetime
 
 import pandas as pd
 
 from .db import get_connection, linha_para_dict
 
-CATEGORIAS_COISA_BOA = {
-    "album": "🎵 Ouvir um álbum inteiro",
-    "basquete": "🏀 Jogar basquete",
-    "jogo": "🎮 Jogar sem culpa",
-    "leitura": "📖 Ler algumas páginas",
-    "caminhada": "🚶 Dar uma caminhada",
-    "amor": "❤️ Fazer algo legal com quem você gosta",
-    "quarto": "🧹 Arrumar seu quarto",
-    "beat": "🎹 Fazer um beat",
-    "cafe": "☕ Sair para tomar um café",
-    "unhas": "🧼 Cuidar das unhas",
-    "dormir": "😴 Dormir mais cedo",
-    "filme": "🎬 Assistir um filme",
-    "descansar": "🛋️ Simplesmente descansar",
-    "cozinhar": "🍳 Cozinhar algo gostoso",
-    "amigo": "📱 Mandar mensagem pra um amigo",
-    "familia": "👨‍👩‍👧 Passar um tempo com a família",
-    "outro": "📝 Outra coisa",
-}
+
+def _slugificar(texto: str) -> str:
+    """'❤️ Fazer algo legal' -> 'fazer_algo_legal' — tira emoji/acento,
+    vira snake_case. Usado só pra gerar a chave de uma tag nova."""
+    sem_acento = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-z0-9]+", "_", sem_acento.lower()).strip("_")
+    return slug or "tag"
+
+
+def listar_tags_coisa_boa() -> pd.DataFrame:
+    conn = get_connection()
+    return pd.read_sql_query("SELECT * FROM tags_coisa_boa ORDER BY ordem ASC, rotulo ASC", conn)
+
+
+def criar_tag_coisa_boa(rotulo: str) -> dict:
+    conn = get_connection()
+    base = _slugificar(rotulo)
+    chave = base
+    n = 1
+    while conn.execute("SELECT 1 FROM tags_coisa_boa WHERE chave = ?", (chave,)).fetchone():
+        n += 1
+        chave = f"{base}_{n}"
+    maior_ordem = conn.execute("SELECT COALESCE(MAX(ordem), -1) FROM tags_coisa_boa").fetchone()[0]
+    conn.execute(
+        "INSERT INTO tags_coisa_boa (chave, rotulo, ordem) VALUES (?, ?, ?)",
+        (chave, rotulo, maior_ordem + 1),
+    )
+    conn.commit()
+    return {"chave": chave, "rotulo": rotulo, "ordem": maior_ordem + 1}
+
+
+def excluir_tag_coisa_boa(chave: str) -> None:
+    conn = get_connection()
+    conn.execute("DELETE FROM tags_coisa_boa WHERE chave = ?", (chave,))
+    conn.commit()
 
 
 def obter_meta() -> dict:
@@ -69,7 +87,7 @@ def upsert_registro(
     cigarros: int | None,
     responsabilidades: bool | None,
     coisa_boa_texto: str,
-    coisa_boa_categoria: str | None,
+    coisa_boa_chaves: list[str],
     dinheiro: str | None,
     maconha: str | None,
 ) -> dict:
@@ -78,7 +96,7 @@ def upsert_registro(
         """
         INSERT INTO registros_diarios
             (data, hora_dormir, agua, academia, leitura, cigarros, responsabilidades,
-             coisa_boa_texto, coisa_boa_categoria, dinheiro, maconha, updated_at)
+             coisa_boa_texto, coisa_boa_chaves, dinheiro, maconha, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(data) DO UPDATE SET
             hora_dormir = excluded.hora_dormir,
@@ -88,7 +106,7 @@ def upsert_registro(
             cigarros = excluded.cigarros,
             responsabilidades = excluded.responsabilidades,
             coisa_boa_texto = excluded.coisa_boa_texto,
-            coisa_boa_categoria = excluded.coisa_boa_categoria,
+            coisa_boa_chaves = excluded.coisa_boa_chaves,
             dinheiro = excluded.dinheiro,
             maconha = excluded.maconha,
             updated_at = CURRENT_TIMESTAMP
@@ -102,7 +120,7 @@ def upsert_registro(
             cigarros,
             None if responsabilidades is None else int(responsabilidades),
             coisa_boa_texto,
-            coisa_boa_categoria,
+            ",".join(coisa_boa_chaves) if coisa_boa_chaves else None,
             dinheiro,
             maconha,
         ),

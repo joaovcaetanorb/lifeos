@@ -95,7 +95,13 @@
     <div class="field"><label>Nome</label><input type="text" id="edNome" /></div>
     <div class="field-row" style="margin-top:.6rem;">
       <div class="field"><label>Ano</label><input type="number" id="edAno" /></div>
-      <div class="field"><label>Gênero</label><input type="text" id="edGenero" /></div>
+      <div class="field">
+        <label>Gênero</label>
+        <div style="display:flex;gap:.4rem;">
+          <input type="text" id="edGenero" style="flex:1;" />
+          <button type="button" class="btn" id="btnBuscarGenero" style="display:none;flex:none;font-size:.72rem;padding:.5rem .6rem;" title="buscar gênero do artista no Spotify">🔄 spotify</button>
+        </div>
+      </div>
     </div>
 
     <div class="field" style="margin-top:.8rem;">
@@ -181,6 +187,7 @@ function cardHtml(a) {
 let albunsCache = {};
 let modalAlbumId = null;
 let modalSpotifyId = null;
+let modalArtistaSpotifyId = null;
 
 function placeholderCapa() {
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72"><rect width="72" height="72" fill="#2E271E"/></svg>`);
@@ -189,6 +196,7 @@ function placeholderCapa() {
 function abrirModal(a) {
   modalAlbumId = a.id;
   modalSpotifyId = a.spotify_id || null;
+  modalArtistaSpotifyId = a.artista_spotify_id || null;
   document.getElementById('edNome').value = a.nome;
   document.getElementById('edAno').value = a.ano_lancamento || '';
   document.getElementById('edGenero').value = a.genero || '';
@@ -198,6 +206,7 @@ function abrirModal(a) {
   document.getElementById('edCapaResultados').innerHTML = '';
   document.getElementById('edCapaPreview').src = a.capa_url || placeholderCapa();
   document.getElementById('btnRecuperarSpotify').style.display = modalSpotifyId ? 'block' : 'none';
+  document.getElementById('btnBuscarGenero').style.display = modalArtistaSpotifyId ? 'inline-block' : 'none';
   document.getElementById('modalEditar').classList.add('open');
   document.getElementById('edNome').focus();
 }
@@ -205,7 +214,21 @@ function fecharModal() {
   document.getElementById('modalEditar').classList.remove('open');
   modalAlbumId = null;
   modalSpotifyId = null;
+  modalArtistaSpotifyId = null;
 }
+
+document.getElementById('btnBuscarGenero').addEventListener('click', async () => {
+  if (!modalArtistaSpotifyId) return;
+  const btn = document.getElementById('btnBuscarGenero');
+  btn.disabled = true;
+  try {
+    const g = await L.api(`/api/musica/spotify/genero?artista_spotify_id=${modalArtistaSpotifyId}`);
+    if (g.genero) document.getElementById('edGenero').value = g.genero;
+    else L.toast('O Spotify não tem gênero cadastrado pra esse artista.', true);
+  } catch (e) {
+    L.toast('Não consegui buscar o gênero agora.', true);
+  } finally { btn.disabled = false; }
+});
 document.getElementById('modalFechar').addEventListener('click', fecharModal);
 document.getElementById('btnCancelarEdicao').addEventListener('click', fecharModal);
 document.getElementById('modalEditar').addEventListener('click', e => { if (e.target.id === 'modalEditar') fecharModal(); });

@@ -34,7 +34,23 @@ CREATE TABLE IF NOT EXISTS registros_diarios (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS tags_coisa_boa (
+    chave TEXT PRIMARY KEY,
+    rotulo TEXT NOT NULL,
+    ordem INTEGER NOT NULL DEFAULT 0
+);
 """
+
+_TAGS_COISA_BOA_PADRAO = [
+    ("album", "🎵 Ouvir um álbum inteiro"), ("basquete", "🏀 Jogar basquete"), ("jogo", "🎮 Jogar sem culpa"),
+    ("leitura", "📖 Ler algumas páginas"), ("caminhada", "🚶 Dar uma caminhada"),
+    ("amor", "❤️ Fazer algo legal com quem você gosta"), ("quarto", "🧹 Arrumar seu quarto"),
+    ("beat", "🎹 Fazer um beat"), ("cafe", "☕ Sair para tomar um café"), ("unhas", "🧼 Cuidar das unhas"),
+    ("dormir", "😴 Dormir mais cedo"), ("filme", "🎬 Assistir um filme"), ("descansar", "🛋️ Simplesmente descansar"),
+    ("cozinhar", "🍳 Cozinhar algo gostoso"), ("amigo", "📱 Mandar mensagem pra um amigo"),
+    ("familia", "👨‍👩‍👧 Passar um tempo com a família"),
+]
 
 
 class _ConexaoComSyncNoCommit:
@@ -107,6 +123,20 @@ def _migrar_schema(conn) -> None:
     # campo academia.
     if "maconha" not in colunas:
         conn.execute("ALTER TABLE registros_diarios ADD COLUMN maconha TEXT")
+    # 2026-09-08: "coisa boa" virou tag multi-seleção (antes era 1 categoria
+    # só) — coisa_boa_categoria fica órfã, novo campo guarda as chaves
+    # selecionadas separadas por vírgula (mesmo padrão de tags-como-string
+    # já usado em música/humor).
+    if "coisa_boa_chaves" not in colunas:
+        conn.execute("ALTER TABLE registros_diarios ADD COLUMN coisa_boa_chaves TEXT")
+
+    tem_tags = conn.execute("SELECT COUNT(*) AS n FROM tags_coisa_boa").fetchone()[0] > 0
+    if not tem_tags:
+        for i, (chave, rotulo) in enumerate(_TAGS_COISA_BOA_PADRAO):
+            conn.execute(
+                "INSERT OR IGNORE INTO tags_coisa_boa (chave, rotulo, ordem) VALUES (?, ?, ?)",
+                (chave, rotulo, i),
+            )
 
     conn.commit()
 

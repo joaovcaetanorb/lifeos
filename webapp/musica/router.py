@@ -296,10 +296,13 @@ def excluir_escuta(escuta_id: int):
 
 
 @router.get("/diario")
-def diario():
+def diario(inicio: Optional[str] = None, fim: Optional[str] = None):
     """Timeline completa (todas as escutas + álbum/artista resolvidos) —
-    mesma fonte que modules/musica/pages/diario.py usa."""
-    registros = _df_records(models.listar_escutas_com_album())
+    mesma fonte que modules/musica/pages/diario.py usa. inicio/fim são
+    opcionais (sem eles, comportamento igual ao original) — usados pela
+    tabela de discos das Estatísticas pra filtrar pelo mesmo período
+    selecionado na página."""
+    registros = _df_records(models.listar_escutas_com_album(inicio, fim))
     for r in registros:
         r["capa_url"] = _capa_url(r["album_id"], r.get("capa_mime"))
         r["album_ano"] = _ano_valido(r.get("album_ano"))

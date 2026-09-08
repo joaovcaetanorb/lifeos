@@ -7,10 +7,18 @@
 <title>Estatísticas · Música · lifeOS</title>
 <link rel="stylesheet" href="/static/tokens.css?v=20260908" />
 <link rel="stylesheet" href="/static/effects.css?v=20260908" />
+<style>
+.secao-titulo{ font-family:var(--font-label); font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; color:var(--accent-bright); margin:1.8rem 0 .8rem; padding-top:1.5rem; border-top:1px dashed var(--hair); }
+.secao-titulo:first-child{ border-top:none; padding-top:0; margin-top:0; }
+
+.tabela-rolavel{ max-height:300px; overflow-y:auto; }
+.tabela-rolavel table.data-table{ margin-top:0; }
+.tabela-rolavel thead th{ position:sticky; top:0; background:var(--panel); }
+.disco-linha-album{ font-weight:600; }
+.disco-linha-artista{ color:var(--ink-muted); font-size:.78rem; }
+</style>
 </head>
 <body>
-
-<div class="scanlines"></div><div class="vignette"></div><div class="grain"></div><div class="glow-blob" id="glowBlob"></div>
 
 <div class="wrap">
 
@@ -19,10 +27,10 @@
     <div class="id"><span class="clock" id="clock">--:--:--</span></div>
   </div>
 
-  <div class="hero boot-flicker">
+  <div class="hero">
     <div class="eyebrow">estatísticas — dados reais</div>
     <h1 class="title">Estatísticas</h1>
-    <p>Mesmos números do módulo Streamlit, servidos por um backend próprio (FastAPI) direto do banco de verdade.</p>
+    <p>Como sua relação com a música tem evoluído — o que você mais ouviu, como avaliou, e os hábitos por trás disso.</p>
   </div>
 
   <nav class="modnav">
@@ -62,74 +70,97 @@
     <div class="kpi"><div class="k-label" id="k3-label">—</div><div class="k-value" id="k3-value" style="font-size:1.15rem;">—</div></div>
   </div>
 
-  <div class="modules" id="modulesDiario">
-    <section class="module span2" data-reveal>
-      <div class="module-head"><span class="led"></span>
-        <div class="grow"><div class="eyebrow" style="margin:0;">atividade</div><h3>Escutas por mês</h3></div>
-        <button class="tbl-toggle" data-target="tbl-area">tabela</button>
-      </div>
-      <div class="chart-wrap" id="chart-area"><svg id="svg-area" viewBox="0 0 1000 300" preserveAspectRatio="none"></svg><div class="tt" id="tt-area"></div></div>
-      <table class="data-table" id="tbl-area" hidden><thead><tr><th>Mês</th><th>Escutas</th></tr></thead><tbody></tbody></table>
-    </section>
-
-    <section class="module" data-reveal>
-      <div class="module-head"><span class="led"></span>
-        <div class="grow"><div class="eyebrow" style="margin:0;">avaliações</div><h3>Distribuição de notas</h3></div>
-        <button class="tbl-toggle" data-target="tbl-notas">tabela</button>
-      </div>
-      <div class="chart-wrap" id="chart-notas"><svg id="svg-notas" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-notas"></div></div>
-      <table class="data-table" id="tbl-notas" hidden><thead><tr><th>Nota</th><th>Escutas</th></tr></thead><tbody></tbody></table>
-    </section>
-
-    <section class="module" data-reveal>
-      <div class="module-head"><span class="led"></span>
-        <div class="grow"><div class="eyebrow" style="margin:0;">recorrência</div><h3>Artistas mais escutados</h3></div>
-        <button class="tbl-toggle" data-target="tbl-artistas-d">tabela</button>
-      </div>
-      <div class="chart-wrap" id="chart-artistas-d"><svg id="svg-artistas-d" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-artistas-d"></div></div>
-      <table class="data-table" id="tbl-artistas-d" hidden><thead><tr><th>Artista</th><th>Escutas</th></tr></thead><tbody></tbody></table>
-    </section>
-
-    <section class="module" data-reveal>
-      <div class="module-head"><span class="led"></span>
-        <div class="grow"><div class="eyebrow" style="margin:0;">linha do tempo musical</div><h3>Escutas por década de lançamento</h3></div>
-        <button class="tbl-toggle" data-target="tbl-decada-d">tabela</button>
-      </div>
-      <div class="chart-wrap" id="chart-decada-d"><svg id="svg-decada-d" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-decada-d"></div></div>
-      <table class="data-table" id="tbl-decada-d" hidden><thead><tr><th>Década</th><th>Escutas</th></tr></thead><tbody></tbody></table>
-    </section>
-
-    <section class="module" data-reveal>
-      <div class="module-head"><span class="led"></span>
-        <div class="grow"><div class="eyebrow" style="margin:0;">disco antigo ou novo?</div><h3>Nota média por década</h3></div>
-        <button class="tbl-toggle" data-target="tbl-nota-decada">tabela</button>
-      </div>
-      <div class="chart-wrap" id="chart-nota-decada"><svg id="svg-nota-decada" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-nota-decada"></div></div>
-      <table class="data-table" id="tbl-nota-decada" hidden><thead><tr><th>Década</th><th>Nota média</th></tr></thead><tbody></tbody></table>
-    </section>
-
-    <section class="module" data-reveal>
-      <div class="module-head"><span class="led"></span>
-        <div class="grow"><div class="eyebrow" style="margin:0;">gosto musical</div><h3>Gêneros mais escutados</h3></div>
-        <button class="tbl-toggle" data-target="tbl-generos-d">tabela</button>
-      </div>
-      <div id="chart-generos-d-wrap">
-        <div class="donut-row" style="display:flex;gap:1.4rem;align-items:center;flex-wrap:wrap;">
-          <div class="chart-wrap" style="width:170px;flex:none;"><svg id="svg-generos-d" viewBox="0 0 170 170"></svg><div class="tt" id="tt-generos-d"></div></div>
-          <div class="legend" id="legendGenerosD" style="flex:1;min-width:180px;"></div>
+  <div id="modulesDiario">
+    <div class="modules">
+      <section class="module span2" data-reveal>
+        <div class="module-head"><span class="led"></span>
+          <div class="grow"><div class="eyebrow" style="margin:0;">atividade</div><h3>Escutas por mês</h3></div>
+          <button class="tbl-toggle" data-target="tbl-area">tabela</button>
         </div>
-      </div>
-      <table class="data-table" id="tbl-generos-d" hidden><thead><tr><th>Gênero</th><th>Escutas</th></tr></thead><tbody></tbody></table>
-    </section>
+        <div class="chart-wrap" id="chart-area"><svg id="svg-area" viewBox="0 0 1000 300" preserveAspectRatio="none"></svg><div class="tt" id="tt-area"></div></div>
+        <table class="data-table" id="tbl-area" hidden><thead><tr><th>Mês</th><th>Escutas</th></tr></thead><tbody></tbody></table>
+      </section>
+    </div>
 
-    <section class="module" data-reveal>
-      <div class="module-head"><span class="led"></span>
-        <div class="grow"><div class="eyebrow" style="margin:0;">gosto musical</div><h3>Nota média por gênero</h3></div>
-        <button class="tbl-toggle" data-target="tbl-nota-genero">tabela</button>
-      </div>
-      <div class="chart-wrap" id="chart-nota-genero"><svg id="svg-nota-genero" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-nota-genero"></div></div>
-      <table class="data-table" id="tbl-nota-genero" hidden><thead><tr><th>Gênero</th><th>Nota média</th></tr></thead><tbody></tbody></table>
-    </section>
+    <div class="secao-titulo">🎨 gosto musical</div>
+    <div class="modules">
+      <section class="module" data-reveal>
+        <div class="module-head"><span class="led"></span>
+          <div class="grow"><div class="eyebrow" style="margin:0;">recorrência</div><h3>Artistas mais escutados</h3></div>
+          <button class="tbl-toggle" data-target="tbl-artistas-d">tabela</button>
+        </div>
+        <div class="chart-wrap" id="chart-artistas-d"><svg id="svg-artistas-d" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-artistas-d"></div></div>
+        <table class="data-table" id="tbl-artistas-d" hidden><thead><tr><th>Artista</th><th>Escutas</th></tr></thead><tbody></tbody></table>
+      </section>
+
+      <section class="module" data-reveal>
+        <div class="module-head"><span class="led"></span>
+          <div class="grow"><div class="eyebrow" style="margin:0;">gêneros</div><h3>Gêneros mais escutados</h3></div>
+          <button class="tbl-toggle" data-target="tbl-generos-d">tabela</button>
+        </div>
+        <div id="chart-generos-d-wrap">
+          <div class="donut-row" style="display:flex;gap:1.4rem;align-items:center;flex-wrap:wrap;">
+            <div class="chart-wrap" style="width:170px;flex:none;"><svg id="svg-generos-d" viewBox="0 0 170 170"></svg><div class="tt" id="tt-generos-d"></div></div>
+            <div class="legend" id="legendGenerosD" style="flex:1;min-width:180px;"></div>
+          </div>
+        </div>
+        <table class="data-table" id="tbl-generos-d" hidden><thead><tr><th>Gênero</th><th>Escutas</th></tr></thead><tbody></tbody></table>
+      </section>
+
+      <section class="module span2" data-reveal>
+        <div class="module-head"><span class="led"></span>
+          <div class="grow"><div class="eyebrow" style="margin:0;">gêneros</div><h3>Nota média por gênero</h3></div>
+          <button class="tbl-toggle" data-target="tbl-nota-genero">tabela</button>
+        </div>
+        <div class="chart-wrap" id="chart-nota-genero"><svg id="svg-nota-genero" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-nota-genero"></div></div>
+        <table class="data-table" id="tbl-nota-genero" hidden><thead><tr><th>Gênero</th><th>Nota média</th></tr></thead><tbody></tbody></table>
+      </section>
+    </div>
+
+    <div class="secao-titulo">📅 ao longo do tempo</div>
+    <div class="modules">
+      <section class="module" data-reveal>
+        <div class="module-head"><span class="led"></span>
+          <div class="grow"><div class="eyebrow" style="margin:0;">linha do tempo musical</div><h3>Escutas por década de lançamento</h3></div>
+          <button class="tbl-toggle" data-target="tbl-decada-d">tabela</button>
+        </div>
+        <div class="chart-wrap" id="chart-decada-d"><svg id="svg-decada-d" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-decada-d"></div></div>
+        <table class="data-table" id="tbl-decada-d" hidden><thead><tr><th>Década</th><th>Escutas</th></tr></thead><tbody></tbody></table>
+      </section>
+
+      <section class="module" data-reveal>
+        <div class="module-head"><span class="led"></span>
+          <div class="grow"><div class="eyebrow" style="margin:0;">disco antigo ou novo?</div><h3>Nota média por década</h3></div>
+          <button class="tbl-toggle" data-target="tbl-nota-decada">tabela</button>
+        </div>
+        <div class="chart-wrap" id="chart-nota-decada"><svg id="svg-nota-decada" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-nota-decada"></div></div>
+        <table class="data-table" id="tbl-nota-decada" hidden><thead><tr><th>Década</th><th>Nota média</th></tr></thead><tbody></tbody></table>
+      </section>
+    </div>
+
+    <div class="secao-titulo">⭐ avaliações</div>
+    <div class="modules">
+      <section class="module" data-reveal>
+        <div class="module-head"><span class="led"></span>
+          <div class="grow"><div class="eyebrow" style="margin:0;">avaliações</div><h3>Distribuição de notas</h3></div>
+          <button class="tbl-toggle" data-target="tbl-notas">tabela</button>
+        </div>
+        <div class="chart-wrap" id="chart-notas"><svg id="svg-notas" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-notas"></div></div>
+        <table class="data-table" id="tbl-notas" hidden><thead><tr><th>Nota</th><th>Escutas</th></tr></thead><tbody></tbody></table>
+      </section>
+
+      <section class="module" data-reveal>
+        <div class="module-head"><span class="led"></span>
+          <div class="grow"><div class="eyebrow" style="margin:0;">diário</div><h3>Discos ouvidos no período</h3></div>
+        </div>
+        <div class="tabela-rolavel">
+          <table class="data-table" id="tbl-discos-periodo">
+            <thead><tr><th>Álbum</th><th>Nota</th><th>Data</th><th>Gênero</th></tr></thead>
+            <tbody><tr><td colspan="4" class="empty-state">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   </div>
 
   <section class="module" data-reveal id="secaoRelatorio" style="display:none;margin-bottom:1rem;">
@@ -147,55 +178,61 @@
     </div>
   </section>
 
-  <div class="modules" id="modulesSpotify" style="display:none;">
-    <section class="module" data-reveal>
-      <div class="module-head"><span class="led"></span>
-        <div class="grow"><div class="eyebrow" style="margin:0;">consumo real</div><h3>Artistas mais tocados de verdade</h3></div>
-        <button class="tbl-toggle" data-target="tbl-artistas-s">tabela</button>
-      </div>
-      <div class="chart-wrap" id="chart-artistas-s"><svg id="svg-artistas-s" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-artistas-s"></div></div>
-      <table class="data-table" id="tbl-artistas-s" hidden><thead><tr><th>Artista</th><th>Faixas</th></tr></thead><tbody></tbody></table>
-    </section>
+  <div id="modulesSpotify" style="display:none;">
+    <div class="secao-titulo">🎧 consumo real</div>
+    <div class="modules">
+      <section class="module" data-reveal>
+        <div class="module-head"><span class="led"></span>
+          <div class="grow"><div class="eyebrow" style="margin:0;">consumo real</div><h3>Artistas mais tocados de verdade</h3></div>
+          <button class="tbl-toggle" data-target="tbl-artistas-s">tabela</button>
+        </div>
+        <div class="chart-wrap" id="chart-artistas-s"><svg id="svg-artistas-s" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-artistas-s"></div></div>
+        <table class="data-table" id="tbl-artistas-s" hidden><thead><tr><th>Artista</th><th>Faixas</th></tr></thead><tbody></tbody></table>
+      </section>
 
-    <section class="module" data-reveal>
-      <div class="module-head"><span class="led"></span>
-        <div class="grow"><div class="eyebrow" style="margin:0;">consumo real</div><h3>Faixas mais tocadas de verdade</h3></div>
-        <button class="tbl-toggle" data-target="tbl-faixas-s">tabela</button>
-      </div>
-      <div class="chart-wrap" id="chart-faixas-s"><svg id="svg-faixas-s" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-faixas-s"></div></div>
-      <table class="data-table" id="tbl-faixas-s" hidden><thead><tr><th>Faixa</th><th>Tocada</th></tr></thead><tbody></tbody></table>
-    </section>
+      <section class="module" data-reveal>
+        <div class="module-head"><span class="led"></span>
+          <div class="grow"><div class="eyebrow" style="margin:0;">consumo real</div><h3>Faixas mais tocadas de verdade</h3></div>
+          <button class="tbl-toggle" data-target="tbl-faixas-s">tabela</button>
+        </div>
+        <div class="chart-wrap" id="chart-faixas-s"><svg id="svg-faixas-s" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-faixas-s"></div></div>
+        <table class="data-table" id="tbl-faixas-s" hidden><thead><tr><th>Faixa</th><th>Tocada</th></tr></thead><tbody></tbody></table>
+      </section>
 
-    <section class="module span2" data-reveal>
-      <div class="module-head"><span class="led"></span>
-        <div class="grow"><div class="eyebrow" style="margin:0;">gosto musical</div><h3>Gêneros mais escutados de verdade</h3></div>
-        <button class="tbl-toggle" data-target="tbl-generos-s">tabela</button>
-      </div>
-      <div id="generosSStatus" class="empty-state">carregando gêneros (uma chamada por artista, pode demorar um pouco)…</div>
-      <div class="donut-row" id="generosSWrap" style="display:none;gap:1.4rem;align-items:center;flex-wrap:wrap;">
-        <div class="chart-wrap" style="width:170px;flex:none;"><svg id="svg-generos-s" viewBox="0 0 170 170"></svg><div class="tt" id="tt-generos-s"></div></div>
-        <div class="legend" id="legendGenerosS" style="flex:1;min-width:180px;"></div>
-      </div>
-      <table class="data-table" id="tbl-generos-s" hidden><thead><tr><th>Gênero</th><th>Faixas</th></tr></thead><tbody></tbody></table>
-    </section>
+      <section class="module span2" data-reveal>
+        <div class="module-head"><span class="led"></span>
+          <div class="grow"><div class="eyebrow" style="margin:0;">gosto musical</div><h3>Gêneros mais escutados de verdade</h3></div>
+          <button class="tbl-toggle" data-target="tbl-generos-s">tabela</button>
+        </div>
+        <div id="generosSStatus" class="empty-state">carregando gêneros (uma chamada por artista, pode demorar um pouco)…</div>
+        <div class="donut-row" id="generosSWrap" style="display:none;gap:1.4rem;align-items:center;flex-wrap:wrap;">
+          <div class="chart-wrap" style="width:170px;flex:none;"><svg id="svg-generos-s" viewBox="0 0 170 170"></svg><div class="tt" id="tt-generos-s"></div></div>
+          <div class="legend" id="legendGenerosS" style="flex:1;min-width:180px;"></div>
+        </div>
+        <table class="data-table" id="tbl-generos-s" hidden><thead><tr><th>Gênero</th><th>Faixas</th></tr></thead><tbody></tbody></table>
+      </section>
+    </div>
 
-    <section class="module" data-reveal>
-      <div class="module-head"><span class="led"></span>
-        <div class="grow"><div class="eyebrow" style="margin:0;">hábito de escuta · radar 24h</div><h3>Horário em que você mais escuta</h3></div>
-        <button class="tbl-toggle" data-target="tbl-horas">tabela</button>
-      </div>
-      <div class="chart-wrap" id="chart-radial" style="max-width:320px;margin:0 auto;"><svg id="svg-radial" viewBox="0 0 320 320"></svg><div class="tt" id="tt-radial"></div></div>
-      <table class="data-table" id="tbl-horas" hidden><thead><tr><th>Hora</th><th>Faixas</th></tr></thead><tbody></tbody></table>
-    </section>
+    <div class="secao-titulo">🕐 hábito de escuta</div>
+    <div class="modules">
+      <section class="module" data-reveal>
+        <div class="module-head"><span class="led"></span>
+          <div class="grow"><div class="eyebrow" style="margin:0;">radar 24h</div><h3>Horário em que você mais escuta</h3></div>
+          <button class="tbl-toggle" data-target="tbl-horas">tabela</button>
+        </div>
+        <div class="chart-wrap" id="chart-radial" style="max-width:320px;margin:0 auto;"><svg id="svg-radial" viewBox="0 0 320 320"></svg><div class="tt" id="tt-radial"></div></div>
+        <table class="data-table" id="tbl-horas" hidden><thead><tr><th>Hora</th><th>Faixas</th></tr></thead><tbody></tbody></table>
+      </section>
 
-    <section class="module" data-reveal>
-      <div class="module-head"><span class="led"></span>
-        <div class="grow"><div class="eyebrow" style="margin:0;">hábito de escuta</div><h3>Dia da semana em que você mais escuta</h3></div>
-        <button class="tbl-toggle" data-target="tbl-dias">tabela</button>
-      </div>
-      <div class="chart-wrap" id="chart-dias"><svg id="svg-dias" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-dias"></div></div>
-      <table class="data-table" id="tbl-dias" hidden><thead><tr><th>Dia</th><th>Faixas</th></tr></thead><tbody></tbody></table>
-    </section>
+      <section class="module" data-reveal>
+        <div class="module-head"><span class="led"></span>
+          <div class="grow"><div class="eyebrow" style="margin:0;">semana</div><h3>Dia da semana em que você mais escuta</h3></div>
+          <button class="tbl-toggle" data-target="tbl-dias">tabela</button>
+        </div>
+        <div class="chart-wrap" id="chart-dias"><svg id="svg-dias" viewBox="0 0 520 260" preserveAspectRatio="none"></svg><div class="tt" id="tt-dias"></div></div>
+        <table class="data-table" id="tbl-dias" hidden><thead><tr><th>Dia</th><th>Faixas</th></tr></thead><tbody></tbody></table>
+      </section>
+    </div>
   </div>
 
   <section class="module" data-reveal style="margin-top:1rem;">
@@ -478,8 +515,28 @@ async function carregarDiario() {
   renderLollipopV('svg-nota-decada', 'tt-nota-decada', 'tbl-nota-decada', data.nota_media_por_decada.map(d => d.decada), data.nota_media_por_decada.map(d => d.nota_media), notaLabel);
   renderDonut('svg-generos-d', 'tt-generos-d', 'tbl-generos-d', 'legendGenerosD', data.escutas_por_genero.map(d => [d.genero, d.total]));
   renderLollipopH('svg-nota-genero', 'tt-nota-genero', 'tbl-nota-genero', data.nota_media_por_genero.map(d => [d.genero, d.nota_media]), notaLabel);
+  carregarDiscosPeriodo(data.periodo.inicio, data.periodo.fim);
 
   window._contextoInsights = { fonte: 'diario', inicio: data.periodo.inicio, fim: data.periodo.fim };
+}
+
+async function carregarDiscosPeriodo(inicio, fim) {
+  const tbody = document.querySelector('#tbl-discos-periodo tbody');
+  const q = inicio ? `?inicio=${inicio}&fim=${fim}` : '';
+  try {
+    const escutas = await L.api(`/api/musica/diario${q}`);
+    if (!escutas.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Nenhum disco ouvido nesse período.</td></tr>'; return; }
+    tbody.innerHTML = escutas.map(e => `
+      <tr>
+        <td><div class="disco-linha-album">${e.album_nome}</div><div class="disco-linha-artista">${e.artista_nome}</div></td>
+        <td>${notaLabel(e.nota)}</td>
+        <td>${e.data.split('-').reverse().join('/')}</td>
+        <td>${e.album_genero || '—'}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="4" class="empty-state">${e.message}</td></tr>`;
+  }
 }
 
 let spotifySincronizado = false;
@@ -529,8 +586,8 @@ async function carregarSpotify() {
 }
 
 async function carregar() {
-  document.getElementById('modulesDiario').style.display = state.fonte === 'diario' ? 'grid' : 'none';
-  document.getElementById('modulesSpotify').style.display = state.fonte === 'spotify' ? 'grid' : 'none';
+  document.getElementById('modulesDiario').style.display = state.fonte === 'diario' ? 'block' : 'none';
+  document.getElementById('modulesSpotify').style.display = state.fonte === 'spotify' ? 'block' : 'none';
   document.getElementById('secaoRelatorio').style.display = state.fonte === 'spotify' ? 'block' : 'none';
   // troca de fonte (Diário/Spotify) reaproveita as mesmas 4 células de KPI —
   // sem isso, um fetch mais lento (ou que falha) deixa o rótulo/valor da
@@ -618,7 +675,6 @@ L.initTableToggles();
 L.initReveal();
 L.initClock();
 L.initModuleSwitcher('musica');
-L.initGlow();
 document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
 carregar();
 })();

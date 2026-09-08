@@ -73,7 +73,7 @@ def listar_albuns() -> pd.DataFrame:
     pra listar; ver obter_capa_album() pra servir a capa sob demanda."""
     conn = get_connection()
     return pd.read_sql_query(
-        f"""SELECT {_COLUNAS_ALBUM}, artistas.nome AS artista_nome
+        f"""SELECT {_COLUNAS_ALBUM}, artistas.nome AS artista_nome, artistas.spotify_id AS artista_spotify_id
            FROM albuns
            JOIN artistas ON artistas.id = albuns.artista_id
            ORDER BY albuns.created_at DESC, albuns.id DESC""",
@@ -84,7 +84,7 @@ def listar_albuns() -> pd.DataFrame:
 def obter_album(album_id: int) -> dict | None:
     conn = get_connection()
     cursor = conn.execute(
-        f"""SELECT {_COLUNAS_ALBUM}, artistas.nome AS artista_nome
+        f"""SELECT {_COLUNAS_ALBUM}, artistas.nome AS artista_nome, artistas.spotify_id AS artista_spotify_id
            FROM albuns JOIN artistas ON artistas.id = albuns.artista_id
            WHERE albuns.id = ?""",
         (album_id,),
@@ -193,19 +193,29 @@ def obter_escuta_com_album(escuta_id: int) -> dict | None:
     return linha_para_dict(cursor, cursor.fetchone())
 
 
-def listar_escutas_com_album() -> pd.DataFrame:
-    """Todas as escutas já com álbum e artista resolvidos (join)."""
+def listar_escutas_com_album(data_inicio: str | None = None, data_fim: str | None = None) -> pd.DataFrame:
+    """Escutas já com álbum e artista resolvidos (join). Sem
+    data_inicio/data_fim, traz tudo (comportamento original, usado pela
+    página Diário); com período, filtra — usado pela tabela de discos das
+    Estatísticas."""
     conn = get_connection()
-    return pd.read_sql_query(
-        """SELECT escutas.*, albuns.nome AS album_nome, albuns.capa_mime,
-                  albuns.spotify_id AS album_spotify_id, albuns.ano_lancamento AS album_ano,
-                  albuns.genero AS album_genero, artistas.nome AS artista_nome
-           FROM escutas
-           JOIN albuns ON albuns.id = escutas.album_id
-           JOIN artistas ON artistas.id = albuns.artista_id
-           ORDER BY escutas.data DESC, escutas.id DESC""",
-        conn,
-    )
+    query = """SELECT escutas.*, albuns.nome AS album_nome, albuns.capa_mime,
+                      albuns.spotify_id AS album_spotify_id, albuns.ano_lancamento AS album_ano,
+                      albuns.genero AS album_genero, artistas.nome AS artista_nome
+               FROM escutas
+               JOIN albuns ON albuns.id = escutas.album_id
+               JOIN artistas ON artistas.id = albuns.artista_id"""
+    condicoes, params = [], []
+    if data_inicio:
+        condicoes.append("escutas.data >= ?")
+        params.append(data_inicio)
+    if data_fim:
+        condicoes.append("escutas.data <= ?")
+        params.append(data_fim)
+    if condicoes:
+        query += " WHERE " + " AND ".join(condicoes)
+    query += " ORDER BY escutas.data DESC, escutas.id DESC"
+    return pd.read_sql_query(query, conn, params=params)
 
 
 def intervalo_datas_escutas() -> tuple[str, str] | None:

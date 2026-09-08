@@ -37,9 +37,13 @@
 .field-question{ font-size:.95rem; color:var(--ink); margin-bottom:.55rem; font-weight:500; }
 
 .chip-row{ display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.55rem; }
-.chip{ font-size:.78rem; padding:.35rem .7rem; border-radius:20px; border:1px solid var(--hair); color:var(--ink-muted); cursor:pointer; background:var(--panel-raised); transition:all .15s ease; }
+.chip{ display:inline-flex; align-items:center; gap:.4rem; font-size:.78rem; padding:.35rem .55rem .35rem .7rem; border-radius:20px; border:1px solid var(--hair); color:var(--ink-muted); cursor:pointer; background:var(--panel-raised); transition:all .15s ease; }
 .chip:hover{ border-color:var(--hair-bright); color:var(--ink); }
 .chip.selected{ border-color:var(--accent); background:var(--accent-soft); color:var(--accent-bright); }
+.chip-remove{ color:var(--ink-dim); font-size:.9em; line-height:1; padding:.1rem .25rem; border-radius:50%; }
+.chip-remove:hover{ color:var(--danger); background:rgba(194,85,120,.15); }
+.nova-tag-row{ display:flex; gap:.5rem; margin-top:.7rem; max-width:360px; }
+.nova-tag-row input{ flex:1; }
 
 .badge-lista{ display:flex; flex-direction:column; gap:.5rem; }
 .badge-item{ display:flex; gap:.6rem; align-items:center; padding:.65rem .9rem; border:1px solid var(--hair-bright); border-radius:12px; background:var(--accent-soft); font-size:.9rem; }
@@ -93,6 +97,7 @@
 
   <section class="module" data-reveal style="margin-top:1rem;">
     <div class="module-head"><span class="led"></span><div class="grow"><div class="eyebrow" style="margin:0;">painel diário</div><h3>🌱 Como cuidei de mim hoje?</h3></div></div>
+    <p class="field-hint" style="margin-bottom:1.1rem;">Cada resposta já salva sozinha assim que você marca — pode ir voltando aqui ao longo do dia, não precisa preencher tudo de uma vez.</p>
     <div class="field" style="max-width:220px;margin-bottom:1.4rem;">
       <label>Dia</label>
       <input type="date" id="frData" />
@@ -150,11 +155,17 @@
     <div class="field" style="margin-top:1.4rem;">
       <div class="field-eyebrow">❤️ Uma coisa boa para mim</div>
       <div class="field-question">Fiz ou vou fazer alguma coisa que me faz bem hoje?</div>
-      <input type="text" id="frCoisaBoa" placeholder="pode escolher uma ou escrever outra" />
+      <p class="field-hint" style="margin:0 0 .3rem;">Pode escolher mais de uma, criar novas tags ou só escrever aqui embaixo.</p>
       <div class="chip-row" id="chipsCoisaBoa"></div>
+      <div class="nova-tag-row">
+        <input type="text" id="frNovaTag" placeholder="criar uma tag nova..." />
+        <button type="button" class="btn" id="btnNovaTag">+ tag</button>
+      </div>
+      <input type="text" id="frCoisaBoa" placeholder="quer escrever mais alguma coisa? (opcional)" style="margin-top:.8rem;" />
       <p class="lembrete-descanso">Lazer não precisa ser merecido depois de um dia produtivo. Só não pode virar a forma de fugir da sua vida. Fazer um beat, jogar, descansar deitado: se não é fuga, já é um dia válido.</p>
     </div>
-    <div class="btn-row"><button class="btn btn-primary" id="btnSalvar">guardar o dia</button></div>
+    <p class="field-hint" id="statusSalvo" style="margin-bottom:.6rem;"></p>
+    <div class="btn-row"><button class="btn btn-primary" id="btnSalvar">salvar tudo de novo</button></div>
   </section>
 
   <section class="module" data-reveal style="margin-top:1rem;">
@@ -177,17 +188,41 @@
 "use strict";
 const L = LifeOS;
 
-const CATEGORIAS = {
-  album: "🎵 Ouvir um álbum inteiro", basquete: "🏀 Jogar basquete", jogo: "🎮 Jogar sem culpa",
-  leitura: "📖 Ler algumas páginas", caminhada: "🚶 Dar uma caminhada", amor: "❤️ Fazer algo legal com quem você gosta",
-  quarto: "🧹 Arrumar seu quarto", beat: "🎹 Fazer um beat", cafe: "☕ Sair para tomar um café",
-  unhas: "🧼 Cuidar das unhas", dormir: "😴 Dormir mais cedo", filme: "🎬 Assistir um filme",
-  descansar: "🛋️ Simplesmente descansar", cozinhar: "🍳 Cozinhar algo gostoso",
-  amigo: "📱 Mandar mensagem pra um amigo", familia: "👨‍👩‍👧 Passar um tempo com a família",
-};
 const ICONE = { sono: "😴", agua: "💧", academia: "🏋️", leitura: "📖", responsabilidades: "✅", cigarros: "🚬", dinheiro: "💰", maconha: "🌿" };
 
 let form = {}; // campo -> valor selecionado no painel do dia
+let TAGS = []; // [{chave, rotulo}] — tags de "coisa boa", vêm do backend (dá pra criar/excluir)
+let coisaBoaSelecionadas = new Set(); // chaves das tags marcadas no dia atual
+let hojeIso = null;
+
+function contarPreenchidos(r) {
+  if (!r) return 0;
+  const campos = ['hora_dormir', 'agua', 'academia', 'leitura', 'responsabilidades', 'dinheiro', 'maconha'];
+  let n = campos.filter(c => r[c] !== null && r[c] !== undefined && r[c] !== '').length;
+  if (r.cigarros !== null && r.cigarros !== undefined) n++;
+  if ((r.coisa_boa_chaves && r.coisa_boa_chaves.length) || r.coisa_boa_texto) n++;
+  return n;
+}
+
+// Cada campo já autosalva sozinho (ver salvarAgora) — essa linha só deixa
+// visível, de forma permanente (ao contrário do toast, que passa rápido),
+// que já foi salvo até aqui e que dá pra ir voltando ao longo do dia.
+function atualizarStatusSalvo(r, dataSelecionada) {
+  const status = document.getElementById('statusSalvo');
+  const n = contarPreenchidos(r);
+  if (dataSelecionada === hojeIso) {
+    status.textContent = n > 0
+      ? `✓ ${n} coisa(s) já salva(s) hoje. Pode voltar e marcar mais ao longo do dia, sem pressa.`
+      : 'Vai marcando o que fizer ao longo do dia — cada resposta já salva sozinha.';
+  } else {
+    status.textContent = n > 0 ? '✓ Esse dia já tem registro salvo.' : 'Preenchendo um dia passado — também salva sozinho.';
+  }
+}
+
+function rotuloTag(chave) {
+  const t = TAGS.find(x => x.chave === chave);
+  return t ? t.rotulo : chave;
+}
 
 function montarToggles() {
   document.querySelectorAll('.toggle-row').forEach(row => {
@@ -196,9 +231,11 @@ function montarToggles() {
       btn.addEventListener('click', () => {
         const jaAtivo = btn.classList.contains('active');
         row.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
-        if (jaAtivo) { delete form[campo]; return; }
-        btn.classList.add('active');
-        form[campo] = row.dataset.tipo === 'bool' ? (btn.dataset.val === '1') : btn.dataset.val;
+        if (jaAtivo) { delete form[campo]; } else {
+          btn.classList.add('active');
+          form[campo] = row.dataset.tipo === 'bool' ? (btn.dataset.val === '1') : btn.dataset.val;
+        }
+        salvarAgora();
       });
     });
   });
@@ -210,7 +247,8 @@ function limparForm() {
   document.getElementById('frHoraDormir').value = '';
   document.getElementById('frCigarros').value = '';
   document.getElementById('frCoisaBoa').value = '';
-  document.querySelectorAll('#chipsCoisaBoa .chip.selected').forEach(c => c.classList.remove('selected'));
+  coisaBoaSelecionadas = new Set();
+  renderChipsCoisaBoa();
 }
 
 function carregarDiaNoForm(r) {
@@ -230,27 +268,63 @@ function carregarDiaNoForm(r) {
   });
   if (r.cigarros !== null && r.cigarros !== undefined) document.getElementById('frCigarros').value = r.cigarros;
   if (r.coisa_boa_texto) document.getElementById('frCoisaBoa').value = r.coisa_boa_texto;
-  if (r.coisa_boa_categoria) {
-    const chip = document.querySelector(`#chipsCoisaBoa .chip[data-cat="${r.coisa_boa_categoria}"]`);
-    if (chip) chip.classList.add('selected');
-  }
+  coisaBoaSelecionadas = new Set((r.coisa_boa_chaves || '').split(',').filter(Boolean));
+  renderChipsCoisaBoa();
+  atualizarStatusSalvo(r, r.data);
   window.scrollTo({ top: document.querySelector('.painel-grid').closest('.module').offsetTop - 20, behavior: 'smooth' });
 }
 
-function montarChipsCoisaBoa() {
+async function carregarTags() {
+  TAGS = await L.api('/api/voltar/tags-coisa-boa');
+  renderChipsCoisaBoa();
+}
+
+function renderChipsCoisaBoa() {
   const wrap = document.getElementById('chipsCoisaBoa');
-  wrap.innerHTML = Object.entries(CATEGORIAS).map(([chave, label]) => `<button type="button" class="chip" data-cat="${chave}">${label}</button>`).join('');
+  wrap.innerHTML = TAGS.map(t => `
+    <button type="button" class="chip ${coisaBoaSelecionadas.has(t.chave) ? 'selected' : ''}" data-chave="${t.chave}">
+      <span class="chip-label">${t.rotulo}</span>
+      <span class="chip-remove" data-chave="${t.chave}" title="excluir essa tag">×</span>
+    </button>
+  `).join('');
   wrap.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => {
-      wrap.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
-      chip.classList.add('selected');
-      document.getElementById('frCoisaBoa').value = CATEGORIAS[chip.dataset.cat].replace(/^\S+\s/, '');
+      const chave = chip.dataset.chave;
+      if (coisaBoaSelecionadas.has(chave)) coisaBoaSelecionadas.delete(chave); else coisaBoaSelecionadas.add(chave);
+      chip.classList.toggle('selected');
+      salvarAgora();
+    });
+  });
+  wrap.querySelectorAll('.chip-remove').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const chave = btn.dataset.chave;
+      if (!confirm(`Excluir a tag "${rotuloTag(chave)}"? Isso não apaga os dias que já usaram ela.`)) return;
+      try {
+        await L.api(`/api/voltar/tags-coisa-boa/${chave}`, { method: 'DELETE' });
+        coisaBoaSelecionadas.delete(chave);
+        await carregarTags();
+      } catch (err) { L.toast(err.message, true); }
     });
   });
 }
 
+document.getElementById('btnNovaTag').addEventListener('click', async () => {
+  const input = document.getElementById('frNovaTag');
+  const rotulo = input.value.trim();
+  if (!rotulo) { L.toast('Escreve um nome pra tag.', true); return; }
+  try {
+    const nova = await L.api('/api/voltar/tags-coisa-boa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rotulo }) });
+    input.value = '';
+    coisaBoaSelecionadas.add(nova.chave);
+    await carregarTags();
+  } catch (err) { L.toast(err.message, true); }
+});
+document.getElementById('frNovaTag').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('btnNovaTag').click(); } });
+
 async function carregarPainel() {
   const p = await L.api('/api/voltar/painel');
+  hojeIso = p.hoje;
   document.getElementById('faseTag').textContent = `fase ${p.fase.numero} · ${p.fase.nome} · dia ${p.fase.dia_do_projeto}`;
   document.getElementById('faseFoco').textContent = p.fase.foco;
   document.getElementById('fraseMomento').textContent = p.frase;
@@ -265,6 +339,7 @@ async function carregarPainel() {
   if (!document.getElementById('frData').value) {
     document.getElementById('frData').value = p.hoje;
     if (p.registro_hoje) carregarDiaNoForm(p.registro_hoje);
+    else atualizarStatusSalvo(null, p.hoje);
   }
 
   const badgesEl = document.getElementById('badgesLista');
@@ -284,17 +359,20 @@ document.getElementById('btnSemVontade').addEventListener('click', () => {
 });
 
 document.getElementById('btnOutraCoisaBoa').addEventListener('click', () => {
-  const chaves = Object.keys(CATEGORIAS);
-  const chave = chaves[Math.floor(Math.random() * chaves.length)];
-  document.getElementById('coisaBoaSugerida').textContent = CATEGORIAS[chave];
+  if (!TAGS.length) return;
+  const t = TAGS[Math.floor(Math.random() * TAGS.length)];
+  document.getElementById('coisaBoaSugerida').textContent = t.rotulo;
 });
 
-document.getElementById('btnSalvar').addEventListener('click', async () => {
-  const btn = document.getElementById('btnSalvar');
+// Salva o formulário inteiro (snapshot atual de `form`/campos/tags) — é
+// chamada tanto pelo autosave de cada campo quanto pelo botão manual.
+// Como o back faz upsert e o form já mantém tudo que foi carregado/editado
+// em memória, reenviar o snapshot inteiro a cada clique é seguro: nunca
+// apaga um campo que não foi tocado nesta chamada.
+async function salvarAgora(afirmativo) {
   const data = document.getElementById('frData').value;
-  if (!data) { L.toast('Escolhe o dia primeiro.', true); return; }
+  if (!data) return;
   const cigarrosVal = document.getElementById('frCigarros').value;
-  const chipSelecionado = document.querySelector('#chipsCoisaBoa .chip.selected');
   const body = {
     data,
     hora_dormir: document.getElementById('frHoraDormir').value || null,
@@ -306,16 +384,23 @@ document.getElementById('btnSalvar').addEventListener('click', async () => {
     maconha: form.maconha ?? null,
     cigarros: cigarrosVal === '' ? null : parseInt(cigarrosVal, 10),
     coisa_boa_texto: document.getElementById('frCoisaBoa').value.trim(),
-    coisa_boa_categoria: chipSelecionado ? chipSelecionado.dataset.cat : null,
+    coisa_boa_chaves: Array.from(coisaBoaSelecionadas),
   };
-  btn.disabled = true;
   try {
-    await L.api('/api/voltar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    L.toast('Dia guardado. Isso já conta.');
-    carregarPainel();
+    const salvo = await L.api('/api/voltar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    L.toast(afirmativo ? 'Dia guardado. Isso já conta.' : '✓ salvo');
+    atualizarStatusSalvo(salvo, data);
     carregarHistorico();
-  } catch (e) { L.toast(e.message, true); } finally { btn.disabled = false; }
-});
+    if (afirmativo && data === hojeIso) carregarPainel();
+  } catch (e) {
+    L.toast(e.message, true);
+  }
+}
+
+document.getElementById('btnSalvar').addEventListener('click', () => salvarAgora(true));
+document.getElementById('frHoraDormir').addEventListener('change', () => salvarAgora());
+document.getElementById('frCigarros').addEventListener('blur', () => salvarAgora());
+document.getElementById('frCoisaBoa').addEventListener('blur', () => salvarAgora());
 
 function resumoDia(r) {
   const partes = [];
@@ -335,13 +420,17 @@ async function carregarHistorico() {
   const lista = document.getElementById('historicoLista');
   const registros = await L.api('/api/voltar/registros?limite=30');
   if (!registros.length) { lista.innerHTML = '<p class="empty-state">Nenhum dia registrado ainda — o de hoje pode ser o primeiro.</p>'; return; }
-  lista.innerHTML = registros.map(r => `
+  lista.innerHTML = registros.map(r => {
+    const tags = (r.coisa_boa_chaves || '').split(',').filter(Boolean).map(rotuloTag);
+    const coisaBoa = [...tags, r.coisa_boa_texto].filter(Boolean).join(' · ');
+    return `
     <div class="dia-row" data-data="${r.data}">
       <div class="data">${r.data.split('-').reverse().join('/')}</div>
       <div class="resumo">${resumoDia(r).map(p => `<span>${p}</span>`).join('') || '<span style="color:var(--ink-dim);">dia registrado</span>'}</div>
-      ${r.coisa_boa_texto ? `<div class="coisa-boa">❤️ ${r.coisa_boa_texto}</div>` : ''}
+      ${coisaBoa ? `<div class="coisa-boa">❤️ ${coisaBoa}</div>` : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
   lista.querySelectorAll('.dia-row').forEach(row => {
     const r = registros.find(x => x.data === row.dataset.data);
     row.addEventListener('click', () => carregarDiaNoForm(r));
@@ -349,13 +438,13 @@ async function carregarHistorico() {
 }
 
 montarToggles();
-montarChipsCoisaBoa();
 L.initReveal();
 L.initClock();
 L.initModuleSwitcher('voltar');
 document.getElementById('genTime').textContent = 'carregado ' + new Date().toLocaleTimeString('pt-BR');
 
 (async function boot() {
+  await carregarTags();
   await carregarPainel();
   carregarHistorico();
 })();

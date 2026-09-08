@@ -44,7 +44,7 @@ class RegistroIn(BaseModel):
     cigarros: Optional[int] = None
     responsabilidades: Optional[bool] = None
     coisa_boa_texto: str = ""
-    coisa_boa_categoria: Optional[str] = None
+    coisa_boa_chaves: list[str] = []
     dinheiro: Optional[str] = None  # 'dentro' | 'fora'
     maconha: Optional[str] = None  # 'nao_usei' | 'usei_cuidei' | 'usei_sem_cuidar'
 
@@ -64,17 +64,32 @@ def salvar_registro(body: RegistroIn):
         raise HTTPException(400, "Dinheiro precisa ser 'dentro' ou 'fora' do planejado.")
     if body.maconha not in _MACONHA_VALIDOS:
         raise HTTPException(400, "Maconha precisa ser 'não usei', 'usei e cuidei antes' ou 'usei antes de cuidar'.")
-    if body.coisa_boa_categoria and body.coisa_boa_categoria not in models.CATEGORIAS_COISA_BOA:
-        raise HTTPException(400, "Categoria de coisa boa inválida.")
 
     registro = models.upsert_registro(
         body.data, body.hora_dormir, body.agua, body.academia, body.leitura, body.cigarros,
-        body.responsabilidades, body.coisa_boa_texto.strip(), body.coisa_boa_categoria, body.dinheiro,
+        body.responsabilidades, body.coisa_boa_texto.strip(), body.coisa_boa_chaves, body.dinheiro,
         body.maconha,
     )
     return registro
 
 
-@router.get("/categorias-coisa-boa")
-def categorias_coisa_boa():
-    return models.CATEGORIAS_COISA_BOA
+@router.get("/tags-coisa-boa")
+def listar_tags_coisa_boa():
+    return _df_records(models.listar_tags_coisa_boa())
+
+
+class TagIn(BaseModel):
+    rotulo: str
+
+
+@router.post("/tags-coisa-boa", status_code=201)
+def criar_tag_coisa_boa(body: TagIn):
+    rotulo = body.rotulo.strip()
+    if not rotulo:
+        raise HTTPException(400, "Escreve um nome pra tag.")
+    return models.criar_tag_coisa_boa(rotulo)
+
+
+@router.delete("/tags-coisa-boa/{chave}", status_code=204)
+def excluir_tag_coisa_boa(chave: str):
+    models.excluir_tag_coisa_boa(chave)

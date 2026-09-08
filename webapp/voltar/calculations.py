@@ -78,10 +78,12 @@ def sugerir_pequeno(registro_hoje: dict | None, campo_prioridade: str | None) ->
     return "Beber um copo de água a mais, só isso."
 
 
-def sugestao_coisa_boa(hoje: date) -> tuple[str, str]:
-    chaves = [k for k in models.CATEGORIAS_COISA_BOA if k != "outro"]
-    chave = chaves[hoje.toordinal() % len(chaves)]
-    return chave, models.CATEGORIAS_COISA_BOA[chave]
+def sugestao_coisa_boa(hoje: date) -> str:
+    tags = models.listar_tags_coisa_boa()
+    if tags.empty:
+        return "Escolha alguma coisa boa pra você hoje."
+    idx = hoje.toordinal() % len(tags)
+    return tags.iloc[idx]["rotulo"]
 
 
 def badges_identidade(df_30d: pd.DataFrame) -> list[str]:
@@ -132,7 +134,7 @@ def painel(hoje: date | None = None) -> dict:
 
     prioridade = sugerir_prioridade(fase["numero"], hoje.weekday(), registro_hoje)
     pequeno = sugerir_pequeno(registro_hoje, prioridade["campo"])
-    _, coisa_boa_sugerida = sugestao_coisa_boa(hoje)
+    coisa_boa_sugerida = sugestao_coisa_boa(hoje)
 
     df30 = models.listar_registros(data_inicio=(hoje - timedelta(days=29)).isoformat())
     badges = badges_identidade(df30)
